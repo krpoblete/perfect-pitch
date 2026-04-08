@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+.env
+.vscode/
+*.egg-info/
+dist/
+build/
+check_db.py

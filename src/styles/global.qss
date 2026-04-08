@@ -1,0 +1,492 @@
+/* Base */
+QWidget {
+    background-color: #0d0d0d;
+    color: #e8e8e8;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+/* WINDOW BUTTONS (minimize + close) */
+
+#dragZone {
+    background-color: transparent;
+}
+
+#windowButtons {
+    background: transparent;
+}
+
+#winMinBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: #555555;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+#winMinBtn:hover {
+    border: 1px solid #3a3a3a;
+    color: #aaaaaa;
+}
+
+#winCloseBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: #555555;
+    font-size: 11px;
+}
+
+#winCloseBtn:hover {
+    border: 1px solid #7a1f1f;
+    color: #e05555;
+}
+
+#loginContent {
+    background-color: transparent;
+}
+
+/* LOGIN | SIGNUP WINDOWS */
+
+#loginRoot {
+    background-color: #0d0d0d;
+}
+
+#loginLeft {
+    background-color: #0d0d0d;
+}
+
+#loginRight {
+    background-color: #0d0d0d;
+    border-left: 1px solid #1a1a1a;
+}
+
+#rightPanelImage {
+    background-color: #0d0d0d;
+}
+
+#collagePlaceholder {
+    background-color: transparent;
+}
+
+/* Logo */
+#logoIcon {
+    background: transparent;
+}
+
+#logoText {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #ffffff;
+    background: transparent;
+}
+
+/* Login titles */
+#loginTitle {
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+    margin-bottom: 6px;
+}
+
+#loginSubtitle {
+    font-size: 13px;
+    color: #777777;
+    background: transparent;
+}
+
+/* Field labels */
+#fieldLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #aaaaaa;
+    background: transparent;
+    letter-spacing: 0.4px;
+}
+
+/* Inputs */
+#authInput {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 0 14px;
+    color: #e8e8e8;
+    font-size: 13px;
+    selection-background-color: #444;
+}
+
+#authInput:focus {
+    border: 1px solid #555555;
+    background-color: #1e1e1e;
+}
+
+#authInput:hover {
+    border: 1px solid #3a3a3a;
+}
+
+QLineEdit#authInput::placeholder {
+    color: #444444;
+}
+
+/* Login button */
+#loginBtn {
+    background-color: #d4d4d4;
+    color: #0d0d0d;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+#loginBtn:hover {
+    background-color: #efefef;
+}
+
+#loginBtn:pressed {
+    background-color: #bbbbbb;
+}
+
+/* Link-style button */
+#linkBtn {
+    background: transparent;
+    border: none;
+    color: #e8e8e8;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 0 2px;
+    text-decoration: underline;
+}
+
+#linkBtn:hover {
+    color: #ffffff;
+}
+
+#forgotLink {
+    background: transparent;
+    font-size: 12px;
+}
+
+/* Date picker */
+QDateEdit#authInput {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 0 14px;
+    color: #e8e8e8;
+    font-size: 13px;
+}
+
+QDateEdit#authInput:focus {
+    border: 1px solid #555555;
+}
+
+QDateEdit#authInput:hover {
+    border: 1px solid #3a3a3a;
+}
+
+QDateEdit#authInput::drop-down {
+    border: none;
+    border-left: 1px solid #2a2a2a;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    width: 32px;
+    background-color: #181818;
+}
+
+QDateEdit#authInput::drop-down:hover {
+    background-color: #222222;
+}
+
+QDateEdit#authInput::down-arrow {
+    image: url(assets/icons/calendar-week.svg);
+    width: 20px;
+    height: 20px;
+}
+
+QCalendarWidget {
+    background-color: #1a1a1a;
+    color: #e8e8e8;
+    border: 1px solid #333;
+    border-radius: 6px;
+}
+
+QCalendarWidget QToolButton {
+    background-color: #252525;
+    color: #e8e8e8;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+QCalendarWidget QToolButton:hover {
+    background-color: #333;
+}
+
+QCalendarWidget QAbstractItemView {
+    background-color: #1a1a1a;
+    color: #e8e8e8;
+    selection-background-color: #444;
+    selection-color: #fff;
+}
+
+/* Signup scroll area */
+#signupScroll {
+    background-color: transparent;
+    border: none;
+}
+
+#signupScroll QScrollBar:vertical {
+    background: #111;
+    width: 6px;
+    border-radius: 3px;
+}
+
+#signupScroll QScrollBar::handle:vertical {
+    background: #333;
+    border-radius: 3px;
+}
+
+#signupScroll QScrollBar::add-line:vertical,
+#signupScroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* MAIN WINDOW */
+
+#mainRoot {
+    background-color: #161616;
+}
+
+/* Sidebar */
+#sidebar {
+    background-color: #111111;
+    border-right: 1px solid #1e1e1e;
+}
+
+#sidebarLogo {
+    background-color: transparent;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+#sidebarLogoIcon {
+    font-size: 17px;
+    color: #e8e8e8;
+    background: transparent;
+}
+
+#sidebarLogoText {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    color: #e8e8e8;
+    background: transparent;
+}
+
+/* Role badges */
+#roleBadgePitcher {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #4a9eff;
+    background: transparent;
+}
+
+#roleBadgeCoach {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #4ecb71;
+    background: transparent;
+}
+
+#roleBadgeAdmin {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #f0a500;
+    background: transparent;
+}
+
+/* Nav section label */
+#navSectionLabel {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #444444;
+    background: transparent;
+}
+
+/* Nav buttons */
+#navBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 7px;
+    color: #666666;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+#navBtn:hover {
+    background-color: #1a1a1a;
+    color: #bbbbbb;
+}
+
+#navBtnActive {
+    background-color: #202020;
+    border: none;
+    border-radius: 7px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+/* Sidebar bottom user area */
+#sidebarBottom {
+    background-color: transparent;
+    border-top: 1px solid #1e1e1e;
+}
+
+#userAvatar {
+    background-color: #2a2a2a;
+    border-radius: 17px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #cccccc;
+    letter-spacing: 0.5px;
+}
+
+#userInfoLabel {
+    background: transparent;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+#logoutBtn {
+    background-color: transparent;
+    border: none;
+    color: #555555;
+    font-size: 15px;
+    border-radius: 5px;
+}
+
+#logoutBtn:hover {
+    background-color: #1e1e1e;
+    color: #bbbbbb;
+}
+
+/* Content stack */
+#contentStack {
+    background-color: #161616;
+}
+
+#contentPage {
+    background-color: #161616;
+}
+
+/* Page title */
+#pageTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+    margin-bottom: 8px;
+}
+
+
+/* CONFIRM DIALOG */
+
+#confirmRoot {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+}
+
+#confirmTitle {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+}
+
+#confirmMessage {
+    font-size: 13px;
+    color: #777777;
+    background: transparent;
+}
+
+#confirmNoBtn {
+    background-color: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 7px;
+    color: #aaaaaa;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+#confirmNoBtn:hover {
+    background-color: #252525;
+    border-color: #3a3a3a;
+    color: #cccccc;
+}
+
+#confirmNoBtn:pressed {
+    background-color: #181818;
+}
+
+#confirmYesBtn {
+    background-color: #d4d4d4;
+    border: none;
+    border-radius: 7px;
+    color: #0d0d0d;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#confirmYesBtn:hover {
+    background-color: #efefef;
+}
+
+#confirmYesBtn:pressed {
+    background-color: #bbbbbb;
+}
+
+/* Forgot password lockout label */
+#lockoutLabel {
+    font-size: 12px;
+    color: #c0392b;
+    background: transparent;
+}
+
+/* Sidebar divider */
+#sidebarDivider {
+    background-color: transparent;
+}
+
+/* Password toggle button */
+#pwToggleBtn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    outline: none;
+}
+
+#pwToggleBtn:hover {
+    background: transparent;
+    border: none;
+}
+
+#pwToggleBtn:focus {
+    border: none;
+    outline: none;
+}
