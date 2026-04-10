@@ -1,8 +1,7 @@
 import os
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QIcon, QPixmap, QPainter
 from PyQt6.QtCore import Qt
 from PyQt6.QtSvg import QSvgRenderer
-from PyQt6.QtGui import QPainter
 from src.config import ICONS_DIR
 
 def get_icon(name: str, color: str = "#888888", size: int = 18) -> QIcon:
