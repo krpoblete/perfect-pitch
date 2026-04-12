@@ -37,7 +37,14 @@ def init_db():
 
     conn.commit()
     _seed_admin(conn)
+    _migrate(conn)
     conn.close()
+
+def _migrate(conn):
+    existing = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
+    if "pitch_threshold" not in existing:
+        conn.execute("ALTER TABLE users ADD COLUMN pitch_threshold INTEGER DEFAULT NULL")
+    conn.commit()
 
 def _seed_admin(conn):
     """CREATE the default Admin account if it doesn't exist yet."""
@@ -126,6 +133,37 @@ def update_user_role(user_id: int, role: str) -> bool:
     return True
 
 # Session helpers
+def update_user_profile(user_id: int, first_name: str, last_name: str) -> bool:
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
+        (first_name, last_name, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def update_user_password(user_id: int, new_password: str) -> bool:
+    hashed = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt())
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET password = ? WHERE id = ?",
+        (hashed.decode("utf-8"), user_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def update_pitch_threshold(user_id: int, threshold: int) -> bool:
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET pitch_threshold = ? WHERE id = ?",
+        (threshold, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
 def get_sessions_for_user(user_id):
     conn = get_connection()
     rows = conn.execute(

@@ -209,6 +209,9 @@ class MainWindow(FramelessMainWindow):
         for page in self.pages.values():
             self.stack.addWidget(page)
 
+        # Connect account settings signal to sidebar refresh
+        self.pages["account_settings"].profile_updated.connect(self._reload_user_info)
+
         layout.addWidget(sidebar)
         layout.addWidget(self.stack)
 
@@ -267,6 +270,13 @@ class MainWindow(FramelessMainWindow):
         row.addStretch()
         row.addWidget(logout_btn)
         sb_layout.addWidget(bottom)
+        self._sidebar_bottom = bottom
+        self._sb_layout = sb_layout
+
+    def _reload_user_info(self):
+        """Rebuild the sidebar bottom user info after a profile update."""
+        self._sidebar_bottom.deleteLater()
+        self._load_user_info(self._sb_layout)
 
     def _switch_page(self, key: str, icon_name: str = None):
         icon_map = {k: i for k, i, _ in self.nav_items}
