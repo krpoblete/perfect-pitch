@@ -132,13 +132,11 @@ class SignupPage(QWidget):
         lbl.setObjectName("fieldLabel")
         return lbl
     
-    def _input(self, placeholder, password=False):
+    def _input(self, placeholder):
         inp = QLineEdit()
         inp.setObjectName("authInput")
         inp.setPlaceholderText(placeholder)
         inp.setFixedHeight(48)
-        if password:
-            inp.setEchoMode(QLineEdit.EchoMode.Password)
         return inp
     
     def clear(self):
