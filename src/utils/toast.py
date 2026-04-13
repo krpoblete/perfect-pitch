@@ -1,37 +1,13 @@
 from pyqttoast import Toast, ToastPreset, ToastPosition
 from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 
 _LABEL_OVERHEAD = 110
 _TOAST_MIN_WIDTH = 400
 _DURATION = 3500
 
-_active_toast: Toast | None = None
-
-def _restart_duration(toast: Toast):
-    timers = toast.findChildren(QTimer)
-    for timer in timers:
-        if timer.isSingleShot():
-            timer.stop()
-            timer.start(_DURATION)
-            break
-
 def show_toast(parent, message: str, preset: ToastPreset = ToastPreset.ERROR_DARK):
-    global _active_toast
-
-    if _active_toast is not None:
-        try:
-            for label in _active_toast.findChildren(QLabel):
-                if label.text() and label.text() != "":
-                    label.setText(message)
-                    label.updateGeometry()
-                    break
-            _restart_duration(_active_toast)
-            return
-        except RuntimeError:
-            _active_toast = None
-
     Toast.setPosition(ToastPosition.BOTTOM_LEFT)
     Toast.setPositionRelativeToWidget(parent)
 
@@ -67,14 +43,6 @@ def show_toast(parent, message: str, preset: ToastPreset = ToastPreset.ERROR_DAR
             )
             label.updateGeometry()
             break
-
-    _active_toast = toast
-
-    def _on_close():
-        global _active_toast
-        _active_toast = None
-
-    toast.closed.connect(_on_close)
 
 def toast_error(parent, message: str):
     show_toast(parent, message, ToastPreset.ERROR_DARK)
