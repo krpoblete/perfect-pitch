@@ -1,59 +1,90 @@
 from pyqttoast import Toast, ToastPreset, ToastPosition
-from PyQt6.QtWidgets import QLabel, QSizePolicy, QDialog
+from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import QSize
+from PyQt6.QtCore import Qt, QTimer
 
-def show_toast(parent, title: str, message: str, 
-               preset: ToastPreset = ToastPreset.ERROR_DARK):
-    """Show a toast with title + message."""
+_LABEL_OVERHEAD = 110
+_TOAST_MIN_WIDTH = 400
+_DURATION = 3500
+
+_active_toast: Toast | None = None
+
+def _restart_duration(toast: Toast):
+    timers = toast.findChildren(QTimer)
+    for timer in timers:
+        if timer.isSingleShot():
+            timer.stop()
+            timer.start(_DURATION)
+            break
+
+def show_toast(parent, message: str, preset: ToastPreset = ToastPreset.ERROR_DARK):
+    global _active_toast
+
+    if _active_toast is not None:
+        try:
+            for label in _active_toast.findChildren(QLabel):
+                if label.text() and label.text() != "":
+                    label.setText(message)
+                    label.updateGeometry()
+                    break
+            _restart_duration(_active_toast)
+            return
+        except RuntimeError:
+            _active_toast = None
+
     Toast.setPosition(ToastPosition.BOTTOM_LEFT)
     Toast.setPositionRelativeToWidget(parent)
 
     toast = Toast(parent)
     toast.applyPreset(preset)
-    toast.setTitle(title)
+
+    toast.setTitle("")
     toast.setText(message)
-    toast.setTitleFont(QFont("Arial", 9, QFont.Weight.Bold))
-    toast.setTextFont(QFont("Arial", 9))
-    toast.setDuration(3500)
+    toast.setTextFont(QFont("Segoe UI", 12))
+
+    toast.setDuration(_DURATION)
     toast.setShowDurationBar(True)
-    toast.setShowCloseButton(False)
+    # toast.setShowCloseButton(False)
     toast.setStayOnTop(False)
-    toast.setTextSectionMarginBottom(8)
+
+    toast.setMinimumWidth(_TOAST_MIN_WIDTH)
+    toast.setMaximumWidth(_TOAST_MIN_WIDTH)
+    toast.setTextSectionMarginBottom(14)
+
     toast.show()
 
+    label_w = toast.width() - _LABEL_OVERHEAD
     for label in toast.findChildren(QLabel):
-        if label.text() in (title, message) and label.text():
+        if label.text() == message:
             label.setWordWrap(True)
-            label.setMinimumWidth(310)
-            label.setMaximumWidth(310)
+            label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            label.setMinimumWidth(label_w)
+            label.setMaximumWidth(label_w)
             label.setMinimumHeight(0)
             label.setMaximumHeight(16777215)
             label.setSizePolicy(
                 QSizePolicy.Policy.Preferred,
-                QSizePolicy.Policy.Preferred
+                QSizePolicy.Policy.MinimumExpanding
             )
+            label.updateGeometry()
+            break
 
-    cur_w = toast.width()
-    cur_h = toast.height()
-    QDialog.setFixedSize(toast, QSize(cur_w, cur_h + 6))
+    _active_toast = toast
 
-    # for child in toast.children():
-    #     from PyQt6.QtWidgets import QWidget as _QW
-    #     if isinstance(child, _QW) and child is not toast:
-    #         iw, ih = child.width(), child.height()
-    #         if iw > 0 and ih > 0:
-    #             child.setFixedSize(iw, ih + EXTRA_H)
-    #             break
+    def _on_close():
+        global _active_toast
+        _active_toast = None
+
+    toast.closed.connect(_on_close)
 
 def toast_error(parent, message: str):
-    show_toast(parent, "Error", message, ToastPreset.ERROR_DARK)
+    show_toast(parent, message, ToastPreset.ERROR_DARK)
 
 def toast_success(parent, message: str):
-    show_toast(parent, "Success", message, ToastPreset.SUCCESS_DARK)
+    show_toast(parent, message, ToastPreset.SUCCESS_DARK)
 
 def toast_warning(parent, message: str):
-    show_toast(parent, "Warning", message, ToastPreset.WARNING_DARK)
+    show_toast(parent, message, ToastPreset.WARNING_DARK)
 
 def toast_info(parent, message: str):
-    show_toast(parent, "Info", message, ToastPreset.INFORMATION_DARK)
+    show_toast(parent, message, ToastPreset.INFORMATION_DARK)
