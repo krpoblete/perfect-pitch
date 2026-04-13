@@ -21,6 +21,8 @@ def init_db():
             password TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'Pitcher'
                 CHECK(role IN ('Admin', 'Coach', 'Pitcher')),
+            pitch_threshold INTEGER DEFAULT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now'))
         );
                          
@@ -30,7 +32,7 @@ def init_db():
             date TEXT DEFAULT (datetime('now')),
             total_pitch INTEGER DEFAULT 0,
             mistakes INTEGER DEFAULT 0,
-            accuracy INTEGER DEFAULT 0.0, 
+            accuracy REAL DEFAULT 0.0, 
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
     """)
@@ -44,10 +46,12 @@ def _migrate(conn):
     existing = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
     if "pitch_threshold" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN pitch_threshold INTEGER DEFAULT NULL")
+    if "is_active" not in existing:
+        conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1") 
     conn.commit()
 
 def _seed_admin(conn):
-    """CREATE the default Admin account if it doesn't exist yet."""
+    """Create the default Admin account if it doesn't exist yet."""
     existing = conn.execute(
         "SELECT id FROM users WHERE role = 'Admin' LIMIT 1"
     ).fetchone()
@@ -117,10 +121,18 @@ def get_pitchers():
     """Coach: fetch all users with role Pitcher."""
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM users WHERE role = 'Pitcher' ORDER BY last_name"
+        "SELECT * FROM users WHERE role = 'Pitcher' AND is_active = 1 ORDER BY last_name"
     ).fetchall()
     conn.close()
     return rows
+
+def deactivate_user(user_id: int) -> bool:
+    """Soft-delete a user by marking them inactive."""
+    conn = get_connection()
+    conn.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True
 
 def update_user_role(user_id: int, role: str) -> bool:
     """Admin: assign a role to a user."""
@@ -132,8 +144,9 @@ def update_user_role(user_id: int, role: str) -> bool:
     conn.close()
     return True
 
-# Session helpers
+# Profile helpers
 def update_user_profile(user_id: int, first_name: str, last_name: str) -> bool:
+    """Update a user's first and last name.""" 
     conn = get_connection()
     conn.execute(
         "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
@@ -144,6 +157,7 @@ def update_user_profile(user_id: int, first_name: str, last_name: str) -> bool:
     return True
 
 def update_user_password(user_id: int, new_password: str) -> bool:
+    """Hash and update a user's password.""" 
     hashed = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt())
     conn = get_connection()
     conn.execute(
@@ -155,6 +169,7 @@ def update_user_password(user_id: int, new_password: str) -> bool:
     return True
 
 def update_pitch_threshold(user_id: int, threshold: int) -> bool:
+    """Update a user's pitch threshold."""
     conn = get_connection()
     conn.execute(
         "UPDATE users SET pitch_threshold = ? WHERE id = ?",
@@ -164,6 +179,7 @@ def update_pitch_threshold(user_id: int, threshold: int) -> bool:
     conn.close()
     return True
 
+# Session helpers
 def get_sessions_for_user(user_id):
     conn = get_connection()
     rows = conn.execute(

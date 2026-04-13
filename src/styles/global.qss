@@ -7,7 +7,6 @@ QWidget {
 }
 
 /* WINDOW BUTTONS (minimize + close) */
-
 #dragZone {
     background-color: transparent;
 }
@@ -48,7 +47,6 @@ QWidget {
 }
 
 /* LOGIN | SIGNUP WINDOWS */
-
 #loginRoot {
     background-color: #0d0d0d;
 }
@@ -256,7 +254,6 @@ QCalendarWidget QAbstractItemView {
 }
 
 /* MAIN WINDOW */
-
 #mainRoot {
     background-color: #161616;
 }
@@ -405,7 +402,6 @@ QCalendarWidget QAbstractItemView {
 
 
 /* CONFIRM DIALOG */
-
 #confirmRoot {
     background-color: #161616;
     border: 1px solid #2a2a2a;
@@ -492,7 +488,6 @@ QCalendarWidget QAbstractItemView {
 }
 
 /* ACCOUNT SETTINGS PAGE */
-
 #settingsScroll {
     background: transparent;
     border: none;
@@ -674,4 +669,292 @@ QCalendarWidget QAbstractItemView {
     width: 0;
     height: 0;
     border: none;
+}
+
+/* START SESSION PAGE */
+#feedWrapper {
+    background-color: #0a0a0a;
+}
+
+#feedLabel {
+    background-color: #0a0a0a;
+    color: transparent;
+}
+
+#feedLabelIdle {
+    background-color: #0a0a0a;
+    color: #333333;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+#sessionPanel {
+    background-color: #111111;
+    border-left: 1px solid #1e1e1e;
+}
+
+#sessionStatCard {
+    background-color: #161616;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#statIcon {
+    background: transparent;
+}
+
+#statTitle {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+#statValue {
+    font-size: 42px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+}
+
+#thresholdWarning {
+    font-size: 12px;
+    color: #e05555;
+    background: transparent;
+    padding: 4px 0;
+}
+
+#sessionStartBtn {
+    background-color: #1a4a1a;
+    border: 1px solid #2a6a2a;
+    border-radius: 8px;
+    color: #4ecb71;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+#sessionStartBtn:hover {
+    background-color: #1f5a1f;
+    border-color: #3a7a3a;
+}
+
+#sessionStartBtn:pressed {
+    background-color: #143a14;
+}
+
+#sessionStartBtn:disabled {
+    background-color: #1a1a1a;
+    border-color: #2a2a2a;
+    color: #333333;
+}
+
+#sessionEndBtn {
+    background-color: #4a1a1a;
+    border: 1px solid #6a2a2a;
+    border-radius: 8px;
+    color: #e05555;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+#sessionEndBtn:hover {
+    background-color: #5a1f1f;
+    border-color: #7a3a3a;
+}
+
+#sessionEndBtn:pressed {
+    background-color: #3a1414;
+}
+
+#sessionEndBtn:disabled {
+    background-color: #1a1a1a;
+    border-color: #2a2a2a;
+    color: #333333;
+}
+
+/* Session Summary Dialog */
+#summaryRoot {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+}
+
+#summaryTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+}
+
+#summarySubtitle {
+    font-size: 12px;
+    color: #555555;
+    background: transparent;
+}
+
+#summaryStatCard {
+    background-color: #111111;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+}
+
+#summaryStatValue {
+    font-size: 26px;
+    font-weight: 700;
+    background: transparent;
+}
+
+#summaryStatLabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: #555555;
+    background: transparent;
+    letter-spacing: 0.3px;
+}
+
+#summarySaveBtn {
+    background-color: #d4d4d4;
+    color: #0d0d0d;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+#summarySaveBtn:hover {
+    background-color: #efefef;
+}
+
+#summarySaveBtn:pressed {
+    background-color: #bbbbbb;
+}
+
+/* PITCHERS PAGE */
+#pitchersCountLabel {
+    font-size: 12px;
+    color: #444444;
+    background: transparent;
+}
+
+#searchWrapper {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+}
+
+#searchWrapper:focus-within {
+    border: 1px solid #555555;
+}
+
+#searchInput {
+    background: transparent;
+    border: none;
+    color: #e8e8e8;
+    font-size: 13px;
+}
+
+#searchInput:focus {
+    border: none;
+    background: transparent;
+}
+
+#tableContainer {
+    background-color: #111111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#tableHeaderRow {
+    background-color: transparent;
+    border-radius: 10px;
+}
+
+#tableHeaderCell {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #444444;
+    background: transparent;
+}
+
+#tableDivider {
+    background-color: #1a1a1a;
+}
+
+#tableRow {
+    background-color: transparent;
+}
+
+#tableRowAlt {
+    background-color: #0e0e0e;
+}
+
+#tableRowDivider {
+    background-color: #161616;
+}
+
+#tableCell {
+    font-size: 13px;
+    color: #cccccc;
+    background: transparent;
+}
+
+#tableDeleteBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+#tableDeleteBtn:hover {
+    background-color: #2a1a1a;
+    border-color: #4a2a2a;
+}
+
+#tableDeleteBtn:pressed {
+    background-color: #1a1010;
+}
+
+#tableEmptyRow {
+    background: transparent;
+}
+
+#tableEmptyLabel {
+    font-size: 13px;
+    color: #444444;
+    background: transparent;
+}
+
+#paginationBtn {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 7px;
+    color: #aaaaaa;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 14px;
+}
+
+#paginationBtn:hover {
+    background-color: #222222;
+    border-color: #3a3a3a;
+    color: #cccccc;
+}
+
+#paginationBtn:pressed {
+    background-color: #141414;
+}
+
+#paginationBtn:disabled {
+    background-color: #141414;
+    border-color: #1e1e1e;
+    color: #333333;
+}
+
+#pageLabel {
+    font-size: 12px;
+    color: #555555;
+    background: transparent;
 }
