@@ -159,7 +159,7 @@ class AccountSettingsPage(QWidget):
         self.threshold_input = QSpinBox()
         self.threshold_input.setObjectName("thresholdSpinBox")
         self.threshold_input.setFixedSize(120, 44)
-        self.threshold_input.setRange(1, 999)
+        self.threshold_input.setRange(1, 120)
         self.threshold_input.setSuffix(" pitches")
         self.threshold_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.threshold_input.valueChanged.connect(self._on_profile_changed)

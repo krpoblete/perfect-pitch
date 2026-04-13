@@ -491,9 +491,7 @@ QCalendarWidget QAbstractItemView {
     outline: none;
 }
 
-/* ══════════════════════════════════════════════════
-   ACCOUNT SETTINGS PAGE
-   ══════════════════════════════════════════════════ */
+/* ACCOUNT SETTINGS PAGE */
 
 #settingsScroll {
     background: transparent;

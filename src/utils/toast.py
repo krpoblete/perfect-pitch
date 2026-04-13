@@ -44,7 +44,6 @@ def show_toast(parent, message: str, preset: ToastPreset = ToastPreset.ERROR_DAR
 
     toast.setDuration(_DURATION)
     toast.setShowDurationBar(True)
-    # toast.setShowCloseButton(False)
     toast.setStayOnTop(False)
 
     toast.setMinimumWidth(_TOAST_MIN_WIDTH)
