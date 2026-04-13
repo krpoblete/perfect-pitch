@@ -1,0 +1,235 @@
+/* Auth Window (Login, Signup, Forgot Password) */
+#loginContent {
+    background-color: transparent;
+}
+
+#loginRoot {
+    background-color: #0d0d0d;
+}
+
+#loginLeft {
+    background-color: #0d0d0d;
+}
+
+#loginRight {
+    background-color: #0d0d0d;
+    border-left: 1px solid #1a1a1a;
+}
+
+#rightPanelImage {
+    background-color: #0d0d0d;
+}
+
+#collagePlaceholder {
+    background-color: transparent;
+}
+
+/* Logo */
+#logoIcon {
+    background: transparent;
+}
+
+#logoText {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #ffffff;
+    background: transparent;
+}
+
+/* Titles */
+#loginTitle {
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+    margin-bottom: 6px;
+}
+
+#loginSubtitle {
+    font-size: 13px;
+    color: #777777;
+    background: transparent;
+}
+
+/* Field labels */
+#fieldLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #aaaaaa;
+    background: transparent;
+    letter-spacing: 0.4px;
+}
+
+/* Text inputs */
+#authInput {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 0 14px;
+    color: #e8e8e8;
+    font-size: 13px;
+    selection-background-color: #444;
+}
+
+#authInput:focus {
+    border: 1px solid #555555;
+    background-color: #1e1e1e;
+}
+
+#authInput:hover {
+    border: 1px solid #3a3a3a;
+}
+
+QLineEdit#authInput::placeholder {
+    color: #444444;
+}
+
+/* Primary button */
+#loginBtn {
+    background-color: #d4d4d4;
+    color: #0d0d0d;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+#loginBtn:hover {
+    background-color: #efefef;
+}
+
+#loginBtn:pressed {
+    background-color: #bbbbbb;
+}
+
+/* Link button */
+#linkBtn {
+    background: transparent;
+    border: none;
+    color: #e8e8e8;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 0 2px;
+    text-decoration: underline;
+}
+
+#linkBtn:hover {
+    color: #ffffff;
+}
+
+#forgotLink {
+    background: transparent;
+    font-size: 12px;
+}
+
+/* Date picker */
+QDateEdit#authInput {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 0 14px;
+    color: #e8e8e8;
+    font-size: 13px;
+}
+
+QDateEdit#authInput:focus {
+    border: 1px solid #555555;
+}
+
+QDateEdit#authInput:hover {
+    border: 1px solid #3a3a3a;
+}
+
+QDateEdit#authInput::drop-down {
+    border: none;
+    border-left: 1px solid #2a2a2a;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    width: 32px;
+    background-color: #181818;
+}
+
+QDateEdit#authInput::drop-down:hover {
+    background-color: #222222;
+}
+
+QDateEdit#authInput::down-arrow {
+    image: url(assets/icons/calendar-week.svg);
+    width: 20px;
+    height: 20px;
+}
+
+QCalendarWidget {
+    background-color: #1a1a1a;
+    color: #e8e8e8;
+    border: 1px solid #333;
+    border-radius: 6px;
+}
+
+QCalendarWidget QToolButton {
+    background-color: #252525;
+    color: #e8e8e8;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+QCalendarWidget QToolButton:hover {
+    background-color: #333;
+}
+
+QCalendarWidget QAbstractItemView {
+    background-color: #1a1a1a;
+    color: #e8e8e8;
+    selection-background-color: #444;
+    selection-color: #fff;
+}
+
+/* Signup scroll area */
+#signupScroll {
+    background-color: transparent;
+    border: none;
+}
+
+#signupScroll QScrollBar:vertical {
+    background: #111;
+    width: 6px;
+    border-radius: 3px;
+}
+
+#signupScroll QScrollBar::handle:vertical {
+    background: #333;
+    border-radius: 3px;
+}
+
+#signupScroll QScrollBar::add-line:vertical,
+#signupScroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* Forgot password lockout label */
+#lockoutLabel {
+    font-size: 12px;
+    color: #c0392b;
+    background: transparent;
+}
+
+/* Password toggle button */
+#pwToggleBtn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    outline: none;
+}
+
+#pwToggleBtn:hover {
+    background: transparent;
+    border: none;
+}
+
+#pwToggleBtn:focus {
+    border: none;
+    outline: none;
+}

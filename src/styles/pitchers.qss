@@ -1,0 +1,126 @@
+/* Pitchers Page */
+#pitchersCountLabel {
+    font-size: 12px;
+    color: #444444;
+    background: transparent;
+}
+
+#searchWrapper {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+}
+
+#searchWrapper:focus-within {
+    border: 1px solid #555555;
+}
+
+#searchInput {
+    background: transparent;
+    border: none;
+    color: #e8e8e8;
+    font-size: 13px;
+}
+
+#searchInput:focus {
+    border: none;
+    background: transparent;
+}
+
+#tableContainer {
+    background-color: #111111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#tableHeaderRow {
+    background-color: transparent;
+    border-radius: 10px;
+}
+
+#tableHeaderCell {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #444444;
+    background: transparent;
+}
+
+#tableDivider {
+    background-color: #1a1a1a;
+}
+
+#tableRow {
+    background-color: transparent;
+}
+
+#tableRowAlt {
+    background-color: #0e0e0e;
+}
+
+#tableRowDivider {
+    background-color: #161616;
+}
+
+#tableCell {
+    font-size: 13px;
+    color: #cccccc;
+    background: transparent;
+}
+
+#tableDeleteBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+#tableDeleteBtn:hover {
+    background-color: #2a1a1a;
+    border-color: #4a2a2a;
+}
+
+#tableDeleteBtn:pressed {
+    background-color: #1a1010;
+}
+
+#tableEmptyRow {
+    background: transparent;
+}
+
+#tableEmptyLabel {
+    font-size: 13px;
+    color: #444444;
+    background: transparent;
+}
+
+#paginationBtn {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 7px;
+    color: #aaaaaa;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 14px;
+}
+
+#paginationBtn:hover {
+    background-color: #222222;
+    border-color: #3a3a3a;
+    color: #cccccc;
+}
+
+#paginationBtn:pressed {
+    background-color: #141414;
+}
+
+#paginationBtn:disabled {
+    background-color: #141414;
+    border-color: #1e1e1e;
+    color: #333333;
+}
+
+#pageLabel {
+    font-size: 12px;
+    color: #555555;
+    background: transparent;
+}

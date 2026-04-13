@@ -1,0 +1,23 @@
+/* Base */
+QWidget {
+    background-color: #0d0d0d;
+    color: #e8e8e8;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+#pageTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+    margin-bottom: 8px;
+}
+
+#contentStack {
+    background-color: #161616;
+}
+
+#contentPage {
+    background-color: #161616;
+}

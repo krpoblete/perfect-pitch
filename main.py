@@ -20,10 +20,23 @@ def main():
     # App icon — applied globally to all windows
     app.setWindowIcon(QIcon(os.path.join(ASSETS_DIR, "app_icon.ico")))
 
-    # Load global stylesheet
-    style_path = os.path.join(os.path.dirname(__file__), 'src', 'styles', 'global.qss')
-    with open(style_path, 'r', encoding='utf-8') as f:
-        app.setStyleSheet(f.read())
+    # Load stylesheets
+    style_dir = os.path.join(os.path.dirname(__file__), 'src', 'styles')
+    style_files = [
+        'base.qss',
+        'window_buttons.qss',
+        'auth.qss',
+        'main.qss',
+        'dialogs.qss',
+        'account_settings.qss',
+        'start_session.qss',
+        'pitchers.qss',
+    ]
+    combined = ""
+    for f in style_files:
+        with open(os.path.join(style_dir, f), 'r', encoding='utf-8') as fp:
+            combined += fp.read() + "\n"
+    app.setStyleSheet(combined)
 
     # Initialize database
     init_db()

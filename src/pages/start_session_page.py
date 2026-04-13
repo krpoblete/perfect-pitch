@@ -219,7 +219,18 @@ class StartSessionPage(QWidget):
 
     def update_frame(self, frame):
         """Called by live_capture to push a new frame (numpy BGR array)."""
-        # import cv2
+        import cv2
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb.shape
+        img = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
+        scaled = img.scaled(
+            self.feed_label.width(),
+            self.feed_label.height(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.feed_label.setObjectName("feedLabel")
+        self.feed_label.setPixmap(QPixmap.fromImage(scaled))
 
     # Stats update (called by live_capture)
     def update_stats(self, pitch_count: int, mistakes: int):

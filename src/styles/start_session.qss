@@ -1,0 +1,102 @@
+/* Start Session Page */
+#feedWrapper {
+    background-color: #0a0a0a;
+}
+
+#feedLabel {
+    background-color: #0a0a0a;
+    color: transparent;
+}
+
+#feedLabelIdle {
+    background-color: #0a0a0a;
+    color: #333333;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+#sessionPanel {
+    background-color: #111111;
+    border-left: 1px solid #1e1e1e;
+}
+
+#sessionStatCard {
+    background-color: #161616;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#statIcon {
+    background: transparent;
+}
+
+#statTitle {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+#statValue {
+    font-size: 42px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+}
+
+#thresholdWarning {
+    font-size: 12px;
+    color: #e05555;
+    background: transparent;
+    padding: 4px 0;
+}
+
+#sessionStartBtn {
+    background-color: #1a4a1a;
+    border: 1px solid #2a6a2a;
+    border-radius: 8px;
+    color: #4ecb71;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+#sessionStartBtn:hover {
+    background-color: #1f5a1f;
+    border-color: #3a7a3a;
+}
+
+#sessionStartBtn:pressed {
+    background-color: #143a14;
+}
+
+#sessionStartBtn:disabled {
+    background-color: #1a1a1a;
+    border-color: #2a2a2a;
+    color: #333333;
+}
+
+#sessionEndBtn {
+    background-color: #4a1a1a;
+    border: 1px solid #6a2a2a;
+    border-radius: 8px;
+    color: #e05555;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+#sessionEndBtn:hover {
+    background-color: #5a1f1f;
+    border-color: #7a3a3a;
+}
+
+#sessionEndBtn:pressed {
+    background-color: #3a1414;
+}
+
+#sessionEndBtn:disabled {
+    background-color: #1a1a1a;
+    border-color: #2a2a2a;
+    color: #333333;
+}

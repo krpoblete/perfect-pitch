@@ -1,0 +1,133 @@
+/* Main Window (Sidebar + Nav) */
+#mainRoot {
+    background-color: #161616;
+}
+
+/* Sidebar */
+#sidebar {
+    background-color: #111111;
+    border-right: 1px solid #1e1e1e;
+}
+
+#sidebarLogo {
+    background-color: transparent;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+#sidebarLogoIcon {
+    font-size: 17px;
+    color: #e8e8e8;
+    background: transparent;
+}
+
+#sidebarLogoText {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    color: #e8e8e8;
+    background: transparent;
+}
+
+/* Role badges */
+#roleBadgePitcher {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #4a9eff;
+    background: transparent;
+}
+
+#roleBadgeCoach {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #4ecb71;
+    background: transparent;
+}
+
+#roleBadgeAdmin {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #f0a500;
+    background: transparent;
+}
+
+/* Nav section label */
+#navSectionLabel {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #444444;
+    background: transparent;
+}
+
+/* Nav buttons */
+#navBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 7px;
+    color: #666666;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+#navBtn:hover {
+    background-color: #1a1a1a;
+    color: #bbbbbb;
+}
+
+#navBtnActive {
+    background-color: #202020;
+    border: none;
+    border-radius: 7px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+/* Sidebar divider */
+#sidebarDivider {
+    background-color: transparent;
+}
+
+/* Sidebar bottom user area */
+#sidebarBottom {
+    background-color: transparent;
+    border-top: 1px solid #1e1e1e;
+}
+
+#userAvatar {
+    background-color: #2a2a2a;
+    border-radius: 17px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #cccccc;
+    letter-spacing: 0.5px;
+}
+
+#userInfoLabel {
+    background: transparent;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+#logoutBtn {
+    background-color: transparent;
+    border: none;
+    color: #555555;
+    font-size: 15px;
+    border-radius: 5px;
+}
+
+#logoutBtn:hover {
+    background-color: #1e1e1e;
+    color: #bbbbbb;
+}

@@ -1,0 +1,35 @@
+/* Window Buttons */
+#dragZone {
+    background-color: transparent;
+}
+
+#windowButtons {
+    background: transparent;
+}
+
+#winMinBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: #555555;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+#winMinBtn:hover {
+    border: 1px solid #3a3a3a;
+    color: #aaaaaa;
+}
+
+#winCloseBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: #555555;
+    font-size: 11px;
+}
+
+#winCloseBtn:hover {
+    border: 1px solid #7a1f1f;
+    color: #e05555;
+}
