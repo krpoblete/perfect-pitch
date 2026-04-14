@@ -66,7 +66,7 @@ class PitchersPage(QWidget):
 
         search_icon = QLabel()
         search_icon.setFixedSize(16, 16)
-        search_icon.setPixmap(get_icon("users", color="#555555", size=16).pixmap(16, 16))
+        search_icon.setPixmap(get_icon("search", color="#555555", size=16).pixmap(16, 16))
 
         self.search_input = QLineEdit()
         self.search_input.setObjectName("searchInput")
@@ -180,7 +180,7 @@ class PitchersPage(QWidget):
         del_btn = QPushButton()
         del_btn.setObjectName("tableDeleteBtn")
         del_btn.setFixedSize(30, 30)
-        del_btn.setIcon(get_icon("logout", color="#555555", size=15))
+        del_btn.setIcon(get_icon("trash", color="#555555", size=15))
         del_btn.setIconSize(QSize(15, 15))
         del_btn.setToolTip(f"Remove {full_name}")
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -43,6 +43,7 @@ def init_db():
     conn.close()
 
 def _migrate(conn):
+    """Add new columns to existing databases without breaking them."""
     existing = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
     if "pitch_threshold" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN pitch_threshold INTEGER DEFAULT NULL")
@@ -72,16 +73,40 @@ def _seed_admin(conn):
     conn.commit()
 
 # User helpers
+def _calc_threshold(date_of_birth: str) -> int:
+    """Calculate the default pitch threshold from DOB using USA Baseball guidelines."""
+    from datetime import date
+    PITCH_LIMITS = [
+        (7, 8, 50),
+        (9, 10, 75),
+        (11, 12, 85),
+        (13, 14, 95),
+        (15, 16, 95),
+        (17, 18, 105),
+        (19, 22, 120),
+    ]
+    try:
+        dob = date.fromisoformat(date_of_birth)
+        today = date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        for min_age, max_age, limit in PITCH_LIMITS:
+            if min_age <= age <= max_age:
+                return limit
+    except Exception:
+        pass
+    return 50
+
 def create_user(first_name, last_name, date_of_birth, email, password):
     """Register a new user. Default role is Pitcher — Admin assigns later"""
     conn = get_connection()
     try:
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        threshold = _calc_threshold(date_of_birth)
         conn.execute(
             """INSERT INTO users
-                (first_name, last_name, date_of_birth, email, password, role) 
-                VALUES (?, ?, ?, ?, ?, 'Pitcher')""",
-            (first_name, last_name, date_of_birth, email, hashed.decode('utf-8')),
+                (first_name, last_name, date_of_birth, email, password, role, pitch_threshold) 
+                VALUES (?, ?, ?, ?, ?, 'Pitcher', ?)""",
+            (first_name, last_name, date_of_birth, email, hashed.decode('utf-8'), threshold),
         )
         conn.commit()
         return True, "Account created successfully." 

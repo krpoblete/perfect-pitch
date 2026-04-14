@@ -20,7 +20,8 @@ PITCH_LIMITS = [
 ]
 
 def get_pitch_limit(dob_str: str) -> int | None:
-    """Return the recommended daily pitch limit based on date of birth.""" 
+    """Return the recommended daily pitch limit based on date of birth.
+    Defaults to 50 if age is outside all USA Baseball brackets.""" 
     try:
         dob = date.fromisoformat(dob_str)
         today = date.today()
@@ -28,9 +29,23 @@ def get_pitch_limit(dob_str: str) -> int | None:
         for min_age, max_age, limit in PITCH_LIMITS:
             if min_age <= age <= max_age:
                 return limit
-        return None
     except Exception:
-        return None
+        pass
+    return 50
+
+def get_pitch_max(dob_str: str) -> int:
+    """Return the USA Baseball max cap for the user's age (spinbox ceiling).
+    Always 120 for ages outside all brackets."""
+    try:
+        dob = date.fromisoformat(dob_str)
+        today = date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        for min_age, max_age, limit in PITCH_LIMITS:
+            if min_age <= age <= max_age:
+                return limit
+    except Exception:
+        pass
+    return 120
 
 class AccountSettingsPage(QWidget):
     # Emitted after a successful save so MainWindow can refresh the sidebar
@@ -151,7 +166,7 @@ class AccountSettingsPage(QWidget):
         threshold_col.setSpacing(4)
         threshold_lbl = QLabel("Daily Pitch Threshold")
         threshold_lbl.setObjectName("settingsFieldLabel")
-        threshold_sub = QLabel("Auto-calculated from your age (USA Baseball guidelines). You may adjust it.")
+        threshold_sub = QLabel("Auto-calculated from your age (USA Baseball guidelines). Max is capped by your age bracket.")
         threshold_sub.setObjectName("settingsSubtitle")
         threshold_col.addWidget(threshold_lbl)
         threshold_col.addWidget(threshold_sub)
@@ -159,7 +174,6 @@ class AccountSettingsPage(QWidget):
         self.threshold_input = QSpinBox()
         self.threshold_input.setObjectName("thresholdSpinBox")
         self.threshold_input.setFixedSize(120, 44)
-        self.threshold_input.setRange(1, 120)
         self.threshold_input.setSuffix(" pitches")
         self.threshold_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.threshold_input.valueChanged.connect(self._on_profile_changed)
@@ -314,10 +328,12 @@ class AccountSettingsPage(QWidget):
         # Threshold — use saved value or auto-calculate from DOB
         saved = user["pitch_threshold"]
         recommended = get_pitch_limit(self._dob)
-        threshold = saved if saved else (recommended if recommended else 50)
+        cap = get_pitch_max(self._dob)
+        threshold = min(saved if saved else recommended, cap) 
         self._original_threshold = threshold
 
         self.threshold_input.blockSignals(True)
+        self.threshold_input.setRange(1, cap)
         self.threshold_input.setValue(threshold)
         self.threshold_input.blockSignals(False)
 
@@ -334,7 +350,7 @@ class AccountSettingsPage(QWidget):
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
-        threshold = self.threshold_input.value()
+        threshold = min(self.threshold_input.value(), get_pitch_max(self._dob)) 
 
         if not first_name or not last_name:
             toast_error(self, "First and last name cannot be empty.")
