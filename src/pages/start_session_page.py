@@ -11,7 +11,7 @@ from src.utils.toast import toast_warning
 class SessionSummaryDialog(QDialog):
     """Summary popup shown after END is clicked."""
     def __init__(self, parent, pitch_count: int, mistakes: int, accuracy: float):
-        super().__init__(None)
+        super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setObjectName("summaryRoot")

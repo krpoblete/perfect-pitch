@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
@@ -20,6 +19,7 @@ class ForgotPasswordPage(QWidget):
         
         self._attempts = 0
         self._locked_until = None
+        self._verified_user_id = None
         self._lockout_timer = QTimer(self)
         self._lockout_timer.timeout.connect(self._update_lockout) 
         

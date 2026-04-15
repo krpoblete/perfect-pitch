@@ -153,7 +153,7 @@ def create_user(first_name, last_name, date_of_birth, email, password):
         
         # Check for an already active account
         active = conn.execute(
-            "SELECT id FROM users WHERE email = ? AND is_active 1",
+            "SELECT id FROM users WHERE email = ? AND is_active = 1",
             (email,)
         ).fetchone()
         if active:

@@ -7,7 +7,7 @@ from PyQt6.QtGui import QKeyEvent
 
 class ConfirmDialog(QDialog):
     def __init__(self, parent=None, title: str = "Confirm", message: str = "Are you sure?"):
-        super().__init__(None)
+        super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint) 
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setObjectName("confirmRoot")
