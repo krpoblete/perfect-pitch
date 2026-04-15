@@ -23,6 +23,7 @@ def init_db():
                 CHECK(role IN ('Admin', 'Coach', 'Pitcher')),
             pitch_threshold INTEGER DEFAULT NULL,
             is_active INTEGER NOT NULL DEFAULT 1,
+            deleted_at TEXT DEFAULT NULL,
             created_at TEXT DEFAULT (datetime('now'))
         );
                          
@@ -40,6 +41,7 @@ def init_db():
     conn.commit()
     _seed_admin(conn)
     _migrate(conn)
+    _purge_expired(conn)
     conn.close()
 
 def _migrate(conn):
@@ -48,7 +50,29 @@ def _migrate(conn):
     if "pitch_threshold" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN pitch_threshold INTEGER DEFAULT NULL")
     if "is_active" not in existing:
-        conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1") 
+        conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    if "deleted_at" not in existing:
+        conn.execute("ALTER TABLE users ADD COLUMN deleted_at TEXT DEFAULT NULL")  
+    conn.commit()
+
+RETENTION_DAYS = 90
+
+def _purge_expired(conn):
+    """Permanently delete users inactive for longer than RETENTION_DAYS."""
+    conn.execute("""
+        DELETE FROM sessions WHERE user_id IN (
+            SELECT id from users
+            WHERE is_active = 0
+            AND deleted_at IS NOT NULL
+            AND julianday('now') - julianday(deleted_at) > ?
+        )
+    """, (RETENTION_DAYS,))
+    conn.execute("""
+        DELETE FROM users
+        WHERE is_active = 0
+        AND deleted_at IS NOT NULL
+        AND julianday('now') - julianday(deleted_at) > ?
+    """, (RETENTION_DAYS,))
     conn.commit()
 
 def _seed_admin(conn):
@@ -97,11 +121,45 @@ def _calc_threshold(date_of_birth: str) -> int:
     return 50
 
 def create_user(first_name, last_name, date_of_birth, email, password):
-    """Register a new user. Default role is Pitcher — Admin assigns later"""
+    """Register a new user. If a soft-deleted account exists with the same
+    email, restore it with the new credentials instead."""
     conn = get_connection()
     try:
+        # Check for an inactive account with the same email
+        existing = conn.execute(
+            "SELECT * FROM users WHERE email = ? AND is_active = 0",
+            (email,)
+        ).fetchone()
+
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         threshold = _calc_threshold(date_of_birth)
+
+        if existing:
+            # Restore the account with fresh credentials and profile
+            conn.execute("""
+                UPDATE users SET
+                    first_name = ?,
+                    last_name = ?,
+                    date_of_birth = ?,
+                    password = ?,
+                    pitch_threshold = ?,
+                    is_active = 1,
+                    deleted_at = NULL
+                WHERE email = ? AND is_active = 0
+            """, (first_name, last_name, date_of_birth,
+                  hashed.decode('utf-8'), threshold, email))
+            conn.commit()
+            return True, "restored"
+        
+        # Check for an already active account
+        active = conn.execute(
+            "SELECT id FROM users WHERE email = ? AND is_active 1",
+            (email,)
+        ).fetchone()
+        if active:
+            return False, "Email already registered."
+
+        # Brand new account
         conn.execute(
             """INSERT INTO users
                 (first_name, last_name, date_of_birth, email, password, role, pitch_threshold) 
@@ -117,13 +175,17 @@ def create_user(first_name, last_name, date_of_birth, email, password):
 
 def get_user_by_email(email):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM users WHERE email = ? AND is_active = 1", (email,)
+    ).fetchone()
     conn.close()
     return row
 
 def get_user_by_id(user_id):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM users WHERE id = ? AND is_active = 1", (user_id,)
+    ).fetchone()
     conn.close()
     return row
 
@@ -143,7 +205,7 @@ def get_all_users():
     return rows
 
 def get_pitchers():
-    """Coach: fetch all users with role Pitcher."""
+    """Coach: fetch all active users with role Pitcher."""
     conn = get_connection()
     rows = conn.execute(
         "SELECT * FROM users WHERE role = 'Pitcher' AND is_active = 1 ORDER BY last_name"
@@ -152,9 +214,12 @@ def get_pitchers():
     return rows
 
 def deactivate_user(user_id: int) -> bool:
-    """Soft-delete a user by marking them inactive."""
+    """Soft-delete a user by marking them inactive and stamping deleted_at."""
     conn = get_connection()
-    conn.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+    conn.execute(
+        "UPDATE users SET is_active = 0, deleted_at = datetime('now') WHERE id = ?",
+        (user_id,)
+    )
     conn.commit()
     conn.close()
     return True

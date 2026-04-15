@@ -29,7 +29,7 @@ class PasswordInput(QWidget):
         self.toggle_btn.setObjectName("pwToggleBtn")
         self.toggle_btn.setFixedSize(36, 36)
         self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.toggle_btn.setIcon(get_icon("eye-closed", color=EYE_COLOR, size=18))
+        self.toggle_btn.setIcon(get_icon("eye", color=EYE_COLOR, size=18))
         self.toggle_btn.setIconSize(QSize(18, 18))
         self.toggle_btn.clicked.connect(self._toggle)
 
@@ -56,10 +56,10 @@ class PasswordInput(QWidget):
         self._visible = not self._visible
         if self._visible:
             self.line_edit.setEchoMode(QLineEdit.EchoMode.Normal)
-            self.toggle_btn.setIcon(get_icon("eye", color=EYE_COLOR, size=18))
+            self.toggle_btn.setIcon(get_icon("eye-closed", color=EYE_COLOR, size=18))
         else:
             self.line_edit.setEchoMode(QLineEdit.EchoMode.Password)
-            self.toggle_btn.setIcon(get_icon("eye-closed", color=EYE_COLOR, size=18))
+            self.toggle_btn.setIcon(get_icon("eye", color=EYE_COLOR, size=18))
 
     def text(self) -> str:
         return self.line_edit.text()
