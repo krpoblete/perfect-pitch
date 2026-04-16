@@ -21,8 +21,8 @@ def main():
     app.setWindowIcon(QIcon(os.path.join(ASSETS_DIR, "app_icon.ico")))
 
     # Load stylesheets
-    style_dir = os.path.join(os.path.dirname(__file__), 'src', 'styles')
-    style_files = [
+    styles_dir = os.path.join(os.path.dirname(__file__), 'src', 'styles')
+    styles_files = [
         'base.qss',
         'window_buttons.qss',
         'auth.qss',
@@ -34,9 +34,10 @@ def main():
         'users.qss',
     ]
     combined = ""
-    for f in style_files:
-        with open(os.path.join(style_dir, f), 'r', encoding='utf-8') as fp:
-            combined += fp.read() + "\n"
+    for styles_file in styles_files:
+        path =  os.path.join(styles_dir, styles_file)
+        with open(path, 'r', encoding='utf-8') as f:
+            combined += f.read() + "\n"
     app.setStyleSheet(combined)
 
     # Initialize database

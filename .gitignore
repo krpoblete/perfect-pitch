@@ -1,11 +1,35 @@
+# Virtual environment
 venv/
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
-*.db
+
+# Environment variables
 .env
+
+# Database
+*.db
+
+# Model & ML binaries
+models/
+pose_landmarker_heavy.task
+*.pt
+*.pkl
+*.npy
+*.task
+
+# Output folder
+output/
+
+# IDE 
 .vscode/
+
+# Build artifacts
 *.egg-info/
 dist/
 build/
+
+# Dev tools
 check_db.py

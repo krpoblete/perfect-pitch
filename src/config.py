@@ -13,6 +13,10 @@ ASSETS_DIR = str(ROOT_DIR / "assets")
 ICONS_DIR = str(ROOT_DIR / "assets" / "icons")
 STYLES_DIR = str(ROOT_DIR / "src" / "styles")
 
+# Model paths
+MODELS_DIR = str(ROOT_DIR / "models")
+POSE_MODEL_PATH = str(ROOT_DIR / "pose_landmarker_heavy.task")
+
 # Database
 DB_NAME = os.getenv("DB_NAME", "perfect_pitch.db")
 DB_PATH = str(ROOT_DIR / DB_NAME)
