@@ -136,7 +136,6 @@ class PitchersPage(QWidget):
         pag_row.addWidget(self.page_lbl)
         pag_row.addWidget(self.next_btn)
         layout.addLayout(pag_row)
-
         layout.addStretch()
 
     # Table builders
@@ -147,7 +146,6 @@ class PitchersPage(QWidget):
         h = QHBoxLayout(row)
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
-
         stretches = [3, 3, 1, 2, 2, 1]
         for col, stretch in zip(COLUMNS, stretches):
             lbl = QLabel(col)
@@ -226,7 +224,6 @@ class PitchersPage(QWidget):
         else:
             for i, user in enumerate(page_rows):
                 self.rows_layout.addWidget(self._make_data_row(user, alternate=i % 2 == 1))
-
                 if i < len(page_rows) - 1:
                     div = QFrame()
                     div.setObjectName("tableRowDivider")

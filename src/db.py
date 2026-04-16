@@ -196,7 +196,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 def get_all_users():
-    """Admin: fetch all users."""
+    """Admin: fetch all users regardless of active status."""
     conn = get_connection()
     rows = conn.execute(
         "SELECT * FROM users ORDER BY created_at DESC"

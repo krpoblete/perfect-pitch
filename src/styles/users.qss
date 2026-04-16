@@ -1,0 +1,72 @@
+/* Users Page */
+
+#roleCombo {
+    background-color: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 8px;
+    max-width: 110px;
+}
+
+#roleCombo:hover {
+    border-color: #3a3a3a;
+}
+
+#roleCombo:focus {
+    border-color: #555555;
+}
+
+#roleCombo::drop-down {
+    border: none;
+    width: 20px;
+}
+
+#roleCombo QAbstractItemView {
+    background-color: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #cccccc;
+    selection-background-color: #2a2a2a;
+    selection-color: #ffffff;
+    font-size: 12px;
+}
+
+#roleComboDisabled {
+    background-color: #161616;
+    border: 1px solid #1e1e1e;
+    border-radius: 6px;
+    color: #444444;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 8px;
+    max-width: 110px;
+}
+
+#statusBadgeActive {
+    background-color: #1a2a1a;
+    border: 1px solid #2a4a2a;
+    border-radius: 6px;
+    color: #4ecb71;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 10px;
+}
+
+#statusBadgeInactive {
+    background-color: #2a1a1a;
+    border: 1px solid #4a2a2a;
+    border-radius: 6px;
+    color: #e05555;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 10px;
+}
+
+#tableCellMuted {
+    font-size: 13px;
+    color: #e05555;
+    background: transparent;
+}

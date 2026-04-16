@@ -31,6 +31,7 @@ def main():
         'account_settings.qss',
         'start_session.qss',
         'pitchers.qss',
+        'users.qss',
     ]
     combined = ""
     for f in style_files:
