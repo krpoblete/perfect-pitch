@@ -25,13 +25,14 @@ def main():
     styles_files = [
         'base.qss',
         'window_buttons.qss',
+        'dialogs.qss',
         'auth.qss',
         'main.qss',
-        'dialogs.qss',
-        'account_settings.qss',
-        'start_session.qss',
-        'pitchers.qss',
+        'dashboard.qss',
         'users.qss',
+        'pitchers.qss',
+        'start_session.qss',
+        'account_settings.qss',
     ]
     combined = ""
     for styles_file in styles_files:

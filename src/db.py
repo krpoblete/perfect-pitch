@@ -279,6 +279,7 @@ def get_sessions_for_user(user_id):
     conn.close()
     return rows
 
+# Dashboard helpers
 def get_dashboard_stats(user_id):
     conn = get_connection()
     row = conn.execute("""
@@ -294,3 +295,54 @@ def get_dashboard_stats(user_id):
     """, (user_id,)).fetchone()
     conn.close()
     return row
+
+def get_coach_dashboard_stats():
+    """Coach: combined stats across all active pitchers."""
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT 
+            COUNT(DISTINCT s.id) AS total_sessions,
+            COALESCE(SUM(s.total_pitch), 0) AS total_pitches,
+            COALESCE(SUM(s.mistakes), 0) AS total_mistakes,
+            COALESCE(AVG(s.total_pitch), 0) AS avg_pitch,
+            COALESCE(AVG(s.mistakes), 0) AS avg_mistakes,
+            COALESCE(AVG(s.accuracy), 0.0) AS avg_accuracy
+        FROM sessions s
+        INNER JOIN users u ON s.user_id = u.id
+        WHERE u.role = 'Pitcher' AND u.is_active = 1 
+    """).fetchone()
+    conn.close()
+    return row
+
+def get_admin_dashboard_stats():
+    """Admin: app-wide overview."""
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT 
+            COUNT(*) AS total_users,
+            SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_users,
+            SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive_users,
+            SUM(CASE WHEN role = 'Pitcher' AND is_active = 1 THEN 1 ELSE 0 END) AS total_pitchers,
+            SUM(CASE WHEN role = 'Coach' AND is_active = 1 THEN 1 ELSE 0 END) AS total_coaches
+        FROM users 
+    """).fetchone()
+    sessions = conn.execute(
+        "SELECT COUNT(*) AS total_sessions FROM sessions"
+    ).fetchone()
+    conn.close()
+    return row, sessions
+
+def get_coach_pitcher_sessions():
+    """Coach: recent sessions across all active pitchers with pitcher name."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            s.*,
+            u.first_name || ' ' || u.last_name AS pitcher_name
+        FROM sessions s
+        INNER JOIN users u ON s.user_id = u.id
+        WHERE u.role = 'Pitcher' AND u.is_active = 1
+        ORDER BY s.date DESC
+    """).fetchall()
+    conn.close()
+    return rows

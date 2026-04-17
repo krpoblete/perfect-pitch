@@ -25,15 +25,14 @@ NAV_PITCHER = [
 
 NAV_COACH = [
     ("dashboard", "home", "Dashboard"),
-    ("pitchers", "users", "Pitchers"),
     ("tutorial", "help", "Tutorial"),
-    ("start_session", "play-handball", "Start Session"),
+    ("pitchers", "users", "Pitchers"),
 ]
 
 NAV_ADMIN = [
     ("dashboard", "home", "Dashboard"),
-    ("users", "users-group", "Users"),
     ("tutorial", "help", "Tutorial"),
+    ("users", "users-group", "Users"),
     ("start_session", "play-handball", "Start Session"),
 ]
 
