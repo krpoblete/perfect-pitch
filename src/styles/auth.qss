@@ -233,3 +233,35 @@ QCalendarWidget QAbstractItemView {
     border: none;
     outline: none;
 }
+
+/* Throwing hand toggle buttons (shared: auth + account settings) */
+#handBtn {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    color: #555555;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+#handBtn:hover {
+    background-color: #222222;
+    border-color: #3a3a3a;
+    color: #aaaaaa;
+}
+
+#handBtnActive {
+    background-color: #1a2a3a;
+    border: 1px solid #2a5a8a;
+    border-radius: 8px;
+    color: #4a9eff;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+#handBtnActive:hover {
+    background-color: #1e3248;
+    border-color: #3a6a9a;
+}

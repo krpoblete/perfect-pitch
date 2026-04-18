@@ -65,9 +65,13 @@ class SignupPage(QWidget):
         layout.addLayout(name_row)
         layout.addSpacing(16)
 
-        # Date of Birth
-        layout.addWidget(self._label("Date of Birth"))
-        layout.addSpacing(7)
+        # Date of Birth | Throwing Hand
+        dob_hand_row = QHBoxLayout()
+        dob_hand_row.setSpacing(16)
+
+        dob_col = QVBoxLayout()
+        dob_col.setSpacing(7)
+        dob_col.addWidget(self._label("Date of Birth"))
         self.dob_input = QDateEdit()
         self.dob_input.setObjectName("authInput")
         self.dob_input.setFixedHeight(48)
@@ -75,7 +79,33 @@ class SignupPage(QWidget):
         self.dob_input.setDisplayFormat("MMMM/dd/yyyy")
         self.dob_input.setDate(QDate(2000, 1, 1))
         self.dob_input.setMaximumDate(QDate.currentDate())
-        layout.addWidget(self.dob_input)
+        dob_col.addWidget(self.dob_input)
+
+        hand_col = QVBoxLayout()
+        hand_col.setSpacing(7) 
+        hand_col.addWidget(self._label("Throwing Hand"))
+        hand_btn_row = QHBoxLayout()
+        hand_btn_row.setSpacing(10)
+        self.rhp_btn = QPushButton("RHP")
+        self.rhp_btn.setObjectName("handBtnActive")
+        self.rhp_btn.setFixedHeight(42)
+        self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rhp_btn.setCheckable(True)
+        self.rhp_btn.setChecked(True)
+        self.rhp_btn.clicked.connect(lambda: self._select_hand("RHP"))
+        self.lhp_btn = QPushButton("LHP")
+        self.lhp_btn.setObjectName("handBtn")
+        self.lhp_btn.setFixedHeight(42)
+        self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lhp_btn.setCheckable(True)
+        self.lhp_btn.clicked.connect(lambda: self._select_hand("LHP"))
+        hand_btn_row.addWidget(self.rhp_btn)
+        hand_btn_row.addWidget(self.lhp_btn)
+        hand_col.addLayout(hand_btn_row)
+
+        dob_hand_row.addLayout(dob_col)
+        dob_hand_row.addLayout(hand_col)
+        layout.addLayout(dob_hand_row)
         layout.addSpacing(16)
 
         # Email
@@ -127,6 +157,16 @@ class SignupPage(QWidget):
         
         layout.addStretch()
 
+    def _select_hand(self, hand: str):
+        self.rhp_btn.setChecked(hand == "RHP")
+        self.lhp_btn.setChecked(hand == "LHP")
+        self.rhp_btn.setObjectName("handBtnActive" if hand == "RHP" else "handBtn")
+        self.lhp_btn.setObjectName("handBtnActive" if hand == "LHP" else "handBtn")
+        self.rhp_btn.style().unpolish(self.rhp_btn)
+        self.rhp_btn.style().polish(self.rhp_btn)
+        self.lhp_btn.style().unpolish(self.lhp_btn)
+        self.lhp_btn.style().polish(self.lhp_btn)
+
     def _label(self, text):
         lbl = QLabel(text)
         lbl.setObjectName("fieldLabel")
@@ -146,6 +186,7 @@ class SignupPage(QWidget):
         self.pw_input.clear()
         self.confirm_pw_input.clear()
         self.dob_input.setDate(QDate(2000, 1, 1))
+        self._select_hand("RHP")
     
     def _is_valid_email(self, email):
         return bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email))
@@ -159,6 +200,7 @@ class SignupPage(QWidget):
         email = self.email_input.text().strip()
         password = self.pw_input.text()
         confirm_pw = self.confirm_pw_input.text()
+        throwing_hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
 
         if not all([first_name, last_name, email, password, confirm_pw]):
             toast_error(self, "Please fill in all fields.")
@@ -177,7 +219,7 @@ class SignupPage(QWidget):
             toast_error(self, "You must be at least 7 years old to register.")
             return
         
-        ok, msg = create_user(first_name, last_name, dob, email, password)
+        ok, msg = create_user(first_name, last_name, dob, email, password, throwing_hand)
         if ok:
             if msg == "restored":
                 toast_success(self, f"Welcome back, {first_name}! Your account has been restored.")

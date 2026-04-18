@@ -22,6 +22,8 @@ def init_db():
             role TEXT NOT NULL DEFAULT 'Pitcher'
                 CHECK(role IN ('Admin', 'Coach', 'Pitcher')),
             pitch_threshold INTEGER DEFAULT NULL,
+            throwing_hand TEXT NOT NULL DEFAULT 'RHP'
+                CHECK(throwing_hand IN ('RHP', 'LHP')),
             is_active INTEGER NOT NULL DEFAULT 1,
             deleted_at TEXT DEFAULT NULL,
             created_at TEXT DEFAULT (datetime('now'))
@@ -52,7 +54,9 @@ def _migrate(conn):
     if "is_active" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     if "deleted_at" not in existing:
-        conn.execute("ALTER TABLE users ADD COLUMN deleted_at TEXT DEFAULT NULL")  
+        conn.execute("ALTER TABLE users ADD COLUMN deleted_at TEXT DEFAULT NULL")
+    if "throwing_hand" not in existing:
+        conn.execute("ALTER TABLE users ADD COLUMN throwing_hand TEXT NOT NULL DEFAULT 'RHP' CHECK(throwing_hand IN ('RHP', 'LHP'))")
     conn.commit()
 
 RETENTION_DAYS = 90
@@ -120,7 +124,8 @@ def _calc_threshold(date_of_birth: str) -> int:
         pass
     return 50
 
-def create_user(first_name, last_name, date_of_birth, email, password):
+def create_user(first_name, last_name, date_of_birth, email, password,
+                throwing_hand: str = "RHP"):
     """Register a new user. If a soft-deleted account exists with the same
     email, restore it with the new credentials instead."""
     conn = get_connection()
@@ -143,11 +148,12 @@ def create_user(first_name, last_name, date_of_birth, email, password):
                     date_of_birth = ?,
                     password = ?,
                     pitch_threshold = ?,
+                    throwing_hand = ?,
                     is_active = 1,
                     deleted_at = NULL
                 WHERE email = ? AND is_active = 0
             """, (first_name, last_name, date_of_birth,
-                  hashed.decode('utf-8'), threshold, email))
+                  hashed.decode('utf-8'), threshold, throwing_hand, email))
             conn.commit()
             return True, "restored"
         
@@ -162,9 +168,11 @@ def create_user(first_name, last_name, date_of_birth, email, password):
         # Brand new account
         conn.execute(
             """INSERT INTO users
-                (first_name, last_name, date_of_birth, email, password, role, pitch_threshold) 
-                VALUES (?, ?, ?, ?, ?, 'Pitcher', ?)""",
-            (first_name, last_name, date_of_birth, email, hashed.decode('utf-8'), threshold),
+                (first_name, last_name, date_of_birth, email, password,
+                 role, pitch_threshold, throwing_hand) 
+                VALUES (?, ?, ?, ?, ?, 'Pitcher', ?, ?)""",
+            (first_name, last_name, date_of_birth, email, 
+             hashed.decode('utf-8'), threshold, throwing_hand),
         )
         conn.commit()
         return True, "Account created successfully." 
@@ -264,6 +272,19 @@ def update_pitch_threshold(user_id: int, threshold: int) -> bool:
     conn.execute(
         "UPDATE users SET pitch_threshold = ? WHERE id = ?",
         (threshold, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def update_throwing_hand(user_id: int, hand: str) -> bool:
+    """Update a user's throwing hand (RHP or LHP)."""
+    if hand not in ("RHP", "LHP"):
+        return False
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET throwing_hand = ? WHERE id = ?",
+        (hand, user_id),
     )
     conn.commit()
     conn.close()

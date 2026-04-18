@@ -124,3 +124,20 @@
     color: #555555;
     background: transparent;
 }
+
+/* Throwing hand badges in table */
+#handBadgeRHP {
+    font-size: 11px;
+    font-weight: 700;
+    color: #4a9eff;
+    background: transparent;
+    letter-spacing: 0.5px;
+}
+
+#handBadgeLHP {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f0a500;
+    background: transparent;
+    letter-spacing: 0.5px;
+}

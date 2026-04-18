@@ -12,7 +12,7 @@ from src.utils.toast import toast_success, toast_error
 from src.widgets.confirm_dialog import ConfirmDialog
 
 ROWS_PER_PAGE = 10
-COLUMNS = ["Full Name", "Email", "Age", "Pitch Threshold", "Date Joined", ""]
+COLUMNS = ["Full Name", "Email", "Age", "Throwing Hand", "Pitch Threshold", "Date Joined", ""]
 
 def _calc_age(dob_str: str) -> str:
     try:
@@ -146,7 +146,8 @@ class PitchersPage(QWidget):
         h = QHBoxLayout(row)
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
-        stretches = [3, 3, 1, 2, 2, 1]
+
+        stretches = [3, 3, 1, 2, 2, 2, 1]
         for col, stretch in zip(COLUMNS, stretches):
             lbl = QLabel(col)
             lbl.setObjectName("tableHeaderCell")
@@ -164,14 +165,19 @@ class PitchersPage(QWidget):
         full_name = f"{user['first_name']} {user['last_name']}"
         threshold = str(user["pitch_threshold"]) if user["pitch_threshold"] else "—"
         age = _calc_age(user["date_of_birth"])
+        hand = user["throwing_hand"] if user["throwing_hand"] else "—"
         joined = _fmt_date(user["created_at"])
 
-        values = [full_name, user["email"], age, threshold, joined]
-        stretches = [3, 3, 1, 2, 2, 1]
+        values = [full_name, user["email"], age, hand, threshold, joined]
+        stretches = [3, 3, 1, 2, 2, 2, 1]
 
         for val, stretch in zip(values, stretches[:-1]):
             lbl = QLabel(str(val))
             lbl.setObjectName("tableCell")
+            if val in ("RHP", "LHP"):
+                lbl.setObjectName(
+                    "handBadgeRHP" if val == "RHP" else "handBadgeLHP"
+                )
             h.addWidget(lbl, stretch=stretch)
 
         # Delete button
