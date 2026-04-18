@@ -277,7 +277,7 @@ class AccountSettingsPage(QWidget):
         btn_col.addWidget(change_pw_btn)
 
         confirm_row.addLayout(confirm_col, stretch=1)
-        confirm_col.addLayout(btn_col)
+        confirm_row.addLayout(btn_col)
         sec_layout.addLayout(confirm_row)
 
         layout.addWidget(security_card)
