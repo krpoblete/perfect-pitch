@@ -347,7 +347,7 @@ class DashboardPage(QWidget):
         layout.addWidget(sub)
         layout.setSpacing(28)
 
-        # Users card — spans full width with active/inactive breakdown
+        # Users card — wide with active/inactive breakdown
         users_card = QWidget()
         users_card.setObjectName("dashStatCardWide")
         ul = QHBoxLayout(users_card)
@@ -403,6 +403,7 @@ class DashboardPage(QWidget):
         bottom_cards = [
             ("users", "Total Pitchers", str(int(user_stats["total_pitchers"])), "#4ecb71"),
             ("users", "Total Coaches", str(int(user_stats["total_coaches"])), "#f0a500"),
+            ("user", "Total Admins", str(int(user_stats["total_admins"])), "#cc77ff"),
             ("play-handball", "Total Sessions", str(int(session_stats["total_sessions"])), "#4a9eff"),
         ]
         for i, (icon, label, value, color) in enumerate(bottom_cards):

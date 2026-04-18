@@ -327,11 +327,12 @@ class AccountSettingsPage(QWidget):
     # Change detection
     def _on_profile_changed(self):
         hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
+        is_coach = self._role == "Coach"
         changed = (
             self.first_name_input.text().strip() != self._original_first or
             self.last_name_input.text().strip() != self._original_last or
-            self.threshold_input.value() != self._original_threshold or
-            hand != self._original_hand
+            (not is_coach and self.threshold_input.value() != self._original_threshold) or
+            (not is_coach and hand != self._original_hand)
         )
         self._set_save_enabled(changed)
     
@@ -391,16 +392,19 @@ class AccountSettingsPage(QWidget):
         self.rhp_btn.blockSignals(False)
         self.lhp_btn.blockSignals(False)
 
-        # Coaches don't pitch — disable hand toggle
+        # Coaches don't pitch — disable hand toggle and threshold
         is_coach = self._role == "Coach"
         self.rhp_btn.setEnabled(not is_coach)
         self.lhp_btn.setEnabled(not is_coach)
+        self.threshold_input.setEnabled(not is_coach)
         if is_coach:
             self.rhp_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
             self.lhp_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
+            self.threshold_input.setCursor(Qt.CursorShape.ForbiddenCursor)
         else:
             self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.threshold_input.setCursor(Qt.CursorShape.IBeamCursor)
 
         self._set_save_enabled(False)
 

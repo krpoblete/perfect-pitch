@@ -355,7 +355,8 @@ def get_admin_dashboard_stats():
             SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_users,
             SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive_users,
             SUM(CASE WHEN role = 'Pitcher' AND is_active = 1 THEN 1 ELSE 0 END) AS total_pitchers,
-            SUM(CASE WHEN role = 'Coach' AND is_active = 1 THEN 1 ELSE 0 END) AS total_coaches
+            SUM(CASE WHEN role = 'Coach' AND is_active = 1 THEN 1 ELSE 0 END) AS total_coaches,
+            SUM(CASE WHEN role = 'Admin' AND is_active = 1 THEN 1 ELSE 0 END) as total_admins
         FROM users 
     """).fetchone()
     sessions = conn.execute(
