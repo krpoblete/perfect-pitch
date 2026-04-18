@@ -57,6 +57,8 @@ class AccountSettingsPage(QWidget):
         self._original_first = ""
         self._original_last = ""
         self._original_threshold = 0
+        self._original_hand = "RHP"
+        self._role = "Pitcher"
         self._dob = ""
         self.setObjectName("contentPage")
         self.build_ui()
@@ -125,7 +127,7 @@ class AccountSettingsPage(QWidget):
         card_layout.addWidget(self._divider())
         card_layout.addSpacing(24)
 
-        # Editable fields grid
+        # First Name | Last Name 
         grid = QGridLayout()
         grid.setSpacing(16)
         grid.setColumnStretch(0, 1)
@@ -143,18 +145,47 @@ class AccountSettingsPage(QWidget):
         card_layout.addLayout(grid)
         card_layout.addSpacing(16)
 
-        # Email — read only
-        card_layout.addWidget(self._field_label("Email"))
-        card_layout.addSpacing(6)
-        self.email_display = self._field_input(read_only=True)
-        card_layout.addWidget(self.email_display)
-        card_layout.addSpacing(16)
+        # Email | DOB | Throwing Hand
+        info_row = QHBoxLayout()
+        info_row.setSpacing(16)
 
-        # DOB — read only
-        card_layout.addWidget(self._field_label("Date of Birth"))
-        card_layout.addSpacing(6)
+        email_col = QVBoxLayout()
+        email_col.setSpacing(6)
+        email_col.addWidget(self._field_label("Email"))
+        self.email_display = self._field_input(read_only=True)
+        email_col.addWidget(self.email_display)
+
+        dob_col = QVBoxLayout()
+        dob_col.setSpacing(6)
+        dob_col.addWidget(self._field_label("Date of Birth"))
         self.dob_display = self._field_input(read_only=True)
-        card_layout.addWidget(self.dob_display)
+        dob_col.addWidget(self.dob_display)
+
+        hand_col = QVBoxLayout()
+        hand_col.setSpacing(6) 
+        hand_col.addWidget(self._field_label("Throwing Hand"))
+        hand_btn_row = QHBoxLayout()
+        hand_btn_row.setSpacing(10)
+        self.rhp_btn = QPushButton("RHP")
+        self.rhp_btn.setObjectName("handBtnActive")
+        self.rhp_btn.setFixedHeight(44)
+        self.rhp_btn.setCheckable(True)
+        self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rhp_btn.clicked.connect(lambda: self._select_hand("RHP"))
+        self.lhp_btn = QPushButton("LHP")
+        self.lhp_btn.setObjectName("handBtn")
+        self.lhp_btn.setFixedHeight(44)
+        self.lhp_btn.setCheckable(True)
+        self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lhp_btn.clicked.connect(lambda: self._select_hand("LHP"))
+        hand_btn_row.addWidget(self.rhp_btn)
+        hand_btn_row.addWidget(self.lhp_btn)
+        hand_col.addLayout(hand_btn_row)
+        
+        info_row.addLayout(email_col, stretch=3)
+        info_row.addLayout(dob_col, stretch=2)
+        info_row.addLayout(hand_col, stretch=2)
+        card_layout.addLayout(info_row)
         card_layout.addSpacing(24)
 
         # Pitch threshold display
@@ -248,6 +279,17 @@ class AccountSettingsPage(QWidget):
         outer.addWidget(scroll)
 
     # Helpers
+    def _select_hand(self, hand: str):
+        self.rhp_btn.setChecked(hand == "RHP")
+        self.lhp_btn.setChecked(hand == "LHP")
+        self.rhp_btn.setObjectName("handBtnActive" if hand == "RHP" else "handBtn")
+        self.lhp_btn.setObjectName("handBtnActive" if hand == "LHP" else "handBtn")
+        self.rhp_btn.style().unpolish(self.rhp_btn)
+        self.rhp_btn.style().polish(self.rhp_btn)
+        self.lhp_btn.style().unpolish(self.lhp_btn)
+        self.lhp_btn.style().polish(self.lhp_btn)
+        self._on_profile_changed()
+    
     def _section_label(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setObjectName("settingsSectionLabel")
@@ -284,10 +326,12 @@ class AccountSettingsPage(QWidget):
 
     # Change detection
     def _on_profile_changed(self):
+        hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
         changed = (
             self.first_name_input.text().strip() != self._original_first or
             self.last_name_input.text().strip() != self._original_last or
-            self.threshold_input.value() != self._original_threshold
+            self.threshold_input.value() != self._original_threshold or
+            hand != self._original_hand
         )
         self._set_save_enabled(changed)
     
@@ -304,6 +348,9 @@ class AccountSettingsPage(QWidget):
         self._original_first = first
         self._original_last = last
         self._dob = user["date_of_birth"]
+        self._role = user["role"]
+        hand = user["throwing_hand"] if user["throwing_hand"] else "RHP"
+        self._original_hand = hand
 
         # Avatar 
         initials = f"{first[0]}{last[0]}".upper() if first and last else "?"
@@ -337,6 +384,24 @@ class AccountSettingsPage(QWidget):
         self.threshold_input.setValue(threshold)
         self.threshold_input.blockSignals(False)
 
+        # Throwing hand — block signals to avoid triggering change detection
+        self.rhp_btn.blockSignals(True)
+        self.lhp_btn.blockSignals(True)
+        self._select_hand(hand)
+        self.rhp_btn.blockSignals(False)
+        self.lhp_btn.blockSignals(False)
+
+        # Coaches don't pitch — disable hand toggle
+        is_coach = self._role == "Coach"
+        self.rhp_btn.setEnabled(not is_coach)
+        self.lhp_btn.setEnabled(not is_coach)
+        if is_coach:
+            self.rhp_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
+            self.lhp_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
+        else:
+            self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
         self._set_save_enabled(False)
 
         # Clear password fields
@@ -346,11 +411,12 @@ class AccountSettingsPage(QWidget):
 
     # Handlers
     def _handle_save_profile(self):
-        from src.db import update_user_profile, update_pitch_threshold
+        from src.db import update_user_profile, update_pitch_threshold, update_throwing_hand
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
-        threshold = min(self.threshold_input.value(), get_pitch_max(self._dob)) 
+        threshold = min(self.threshold_input.value(), get_pitch_max(self._dob))
+        hand = "RHP" if self.rhp_btn.isChecked() else "LHP" 
 
         if not first_name or not last_name:
             toast_error(self, "First and last name cannot be empty.")
@@ -358,10 +424,12 @@ class AccountSettingsPage(QWidget):
         
         update_user_profile(self.user_id, first_name, last_name)
         update_pitch_threshold(self.user_id, threshold)
+        update_throwing_hand(self.user_id, hand)
 
         self._original_first = first_name
         self._original_last = last_name
         self._original_threshold = threshold
+        self._original_hand = hand
 
         # Update avatar and header in this page immediately
         initials = f"{first_name[0]}{last_name[0]}".upper()

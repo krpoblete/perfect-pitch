@@ -313,12 +313,13 @@ class StartSessionPage(QWidget):
         # self._capture.stop()
 
     def _save_session(self, accuracy: float):
-        from src.db import get_connection
+        from src.db import get_connection, _manila_now
         conn = get_connection()
         conn.execute(
-            """INSERT INTO sessions (user_id, total_pitch, mistakes, accuracy)
-               VALUES (?, ?, ?, ?)""",
-            (self.user_id, self._pitch_count, self._mistakes, round(accuracy, 2)),
+            """INSERT INTO sessions (user_id, date, total_pitch, mistakes, accuracy)
+               VALUES (?, ?, ?, ?, ?)""",
+            (self.user_id, _manila_now(),
+             self._pitch_count, self._mistakes, round(accuracy, 2)),
         )
         conn.commit()
         conn.close()

@@ -330,8 +330,10 @@ class DashboardPage(QWidget):
         self._render_rows()
 
     def _build_admin_dashboard(self):
-        from src.db import get_admin_dashboard_stats
+        from src.db import get_admin_dashboard_stats, get_dashboard_stats, get_sessions_for_user
         user_stats, session_stats = get_admin_dashboard_stats()
+        personal_stats = get_dashboard_stats(self.user_id)
+        sessions = get_sessions_for_user(self.user_id)
 
         layout = self._layout
 
@@ -340,7 +342,7 @@ class DashboardPage(QWidget):
         title.setObjectName("pageTitle")
         layout.addWidget(title)
         layout.addSpacing(6)
-        sub = QLabel("App-wide overview")
+        sub = QLabel("App-wide overview and your personal session history")
         sub.setObjectName("dashSubtitle")
         layout.addWidget(sub)
         layout.setSpacing(28)
@@ -368,7 +370,6 @@ class DashboardPage(QWidget):
         ul.addWidget(icon_lbl)
         ul.addSpacing(14)
         ul.addLayout(total_col)
-
         ul.addStretch()
 
         # Active / Inactive breakdown
@@ -396,7 +397,7 @@ class DashboardPage(QWidget):
         layout.addWidget(users_card)
         layout.addSpacing(14)
 
-        # Bottom stat grid
+        # App-wide bottom stat grid
         grid = QGridLayout()
         grid.setSpacing(14)
         bottom_cards = [
@@ -406,9 +407,18 @@ class DashboardPage(QWidget):
         ]
         for i, (icon, label, value, color) in enumerate(bottom_cards):
             grid.addWidget(self._stat_card(icon, label, value, color), 0, i)
-
         layout.addLayout(grid)
-        layout.addStretch()
+        layout.addSpacing(32)
+
+        # Personal session history
+        self._sessions_filtered = list(sessions)
+        columns = ["Date", "Pitches", "Mistakes", "Accuracy"]
+        stretches = [4, 2, 2, 2]
+        self._build_history_table(
+            layout, columns, stretches, sessions,
+            lambda s, alternate: self._make_session_row(s, alternate, stretches)
+        ) 
+        self._render_rows()
 
     # Lifecycle
     def refresh(self):

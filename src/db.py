@@ -2,6 +2,13 @@ import sqlite3
 import bcrypt
 from src.config import DB_PATH
 
+def _manila_now() -> str:
+    """Return the current datetime in Manila time (UTC+8) as ISO string."""
+    from datetime import timezone, timedelta
+    utc8 = timezone(timedelta(hours=8))
+    from datetime import datetime
+    return datetime.now(utc8).strftime("%Y-%m-%d %H:%M:%S")
+
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -57,6 +64,9 @@ def _migrate(conn):
         conn.execute("ALTER TABLE users ADD COLUMN deleted_at TEXT DEFAULT NULL")
     if "throwing_hand" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN throwing_hand TEXT NOT NULL DEFAULT 'RHP' CHECK(throwing_hand IN ('RHP', 'LHP'))")
+    conn.execute(
+        "UPDATE users SET pitch_threshold = 50 WHERE role = 'Admin' AND pitch_threshold IS NULL"
+    )
     conn.commit()
 
 RETENTION_DAYS = 90
@@ -91,12 +101,13 @@ def _seed_admin(conn):
     hashed = bcrypt.hashpw("admin1234".encode("utf-8"), bcrypt.gensalt())
     conn.execute(
         """INSERT INTO users
-            (first_name, last_name, date_of_birth, email, password, role)
-            VALUES (?, ?, ?, ?, ?, ?)""",
-        ("Admin", "User", "2000-01-01",
-        "admin",
-        hashed.decode("utf-8"),
-        "Admin"),
+            (first_name, last_name, date_of_birth, email, password, role, pitch_threshold)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        ("Admin", "User", "2000-01-01", 
+         "admin",
+         hashed.decode("utf-8"),
+         "Admin",
+         50),
     )
     conn.commit()
 
@@ -169,10 +180,10 @@ def create_user(first_name, last_name, date_of_birth, email, password,
         conn.execute(
             """INSERT INTO users
                 (first_name, last_name, date_of_birth, email, password,
-                 role, pitch_threshold, throwing_hand) 
-                VALUES (?, ?, ?, ?, ?, 'Pitcher', ?, ?)""",
+                 role, pitch_threshold, throwing_hand, created_at) 
+                VALUES (?, ?, ?, ?, ?, 'Pitcher', ?, ?, ?)""",
             (first_name, last_name, date_of_birth, email, 
-             hashed.decode('utf-8'), threshold, throwing_hand),
+             hashed.decode('utf-8'), threshold, throwing_hand, _manila_now()),
         )
         conn.commit()
         return True, "Account created successfully." 
@@ -225,8 +236,8 @@ def deactivate_user(user_id: int) -> bool:
     """Soft-delete a user by marking them inactive and stamping deleted_at."""
     conn = get_connection()
     conn.execute(
-        "UPDATE users SET is_active = 0, deleted_at = datetime('now') WHERE id = ?",
-        (user_id,)
+        "UPDATE users SET is_active = 0, deleted_at = ? WHERE id = ?",
+        (_manila_now(), user_id),
     )
     conn.commit()
     conn.close()
