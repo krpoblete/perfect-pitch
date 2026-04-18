@@ -165,30 +165,38 @@ class UsersPage(QWidget):
         email_lbl.setObjectName("tableCell")
         h.addWidget(email_lbl, stretch=stretches[1])
 
-        # Role — inline dropdown (disabled for inactive users and Admin)
-        role_combo = QComboBox()
-        role_combo.setObjectName("roleCombo")
-        role_combo.setFixedHeight(32)
-        role_combo.addItems(ROLE_OPTIONS)
+        # Role — inline dropdown for non-admins, plain label for Admin
         current_role = user["role"]
-        if current_role in ROLE_OPTIONS:
-            role_combo.setCurrentText(current_role)
-
         is_admin = current_role == "Admin"
-        role_combo.setEnabled(is_active and not is_admin)
+        
         if is_admin:
-            role_combo.setObjectName("roleComboDisabled")
-        role_combo.currentTextChanged.connect(
-            lambda role, uid=user["id"], name=full_name:
-            self._handle_role_change(uid, name, role)
-        )
-
-        role_wrapper = QHBoxLayout()
-        role_wrapper.setContentsMargins(0, 0, 16, 0)
-        role_wrapper.addWidget(role_combo)
-        role_wrapper.addStretch()
-        h.addLayout(role_wrapper)
-        h.setStretch(h.count() - 1, stretches[2])
+            role_lbl = QLabel("Admin")
+            role_lbl.setObjectName("roleAdminLabel")
+            role_lbl.setFixedHeight(32)
+            role_wrapper = QHBoxLayout()
+            role_wrapper.setContentsMargins(0, 0, 16, 0)
+            role_wrapper.addWidget(role_lbl)
+            role_wrapper.addStretch()
+            h.addLayout(role_wrapper)
+            h.setStretch(h.count() - 1, stretches[2])
+        else:
+            role_combo = QComboBox()
+            role_combo.setObjectName("roleCombo")
+            role_combo.setFixedHeight(32)
+            role_combo.addItems(ROLE_OPTIONS)
+            if current_role in ROLE_OPTIONS:
+                role_combo.setCurrentText(current_role)
+            role_combo.setEnabled(is_active)
+            role_combo.currentTextChanged.connect(
+                lambda role, uid=user["id"], name=full_name, combo=role_combo:
+                    self._handle_role_change(uid, name, role, combo)
+            )
+            role_wrapper = QHBoxLayout()
+            role_wrapper.setContentsMargins(0, 0, 16, 0)
+            role_wrapper.addWidget(role_combo)
+            role_wrapper.addStretch()
+            h.addLayout(role_wrapper)
+            h.setStretch(h.count() - 1, stretches[2])
 
         # Status badge
         status_lbl = QLabel("Active" if is_active else "Inactive")
@@ -283,8 +291,26 @@ class UsersPage(QWidget):
         self._render_page()
 
     # Role change
-    def _handle_role_change(self, user_id: int, name: str, role: str):
+    def _handle_role_change(self, user_id: int, name: str, role: str, combo: "QComboBox"):
         from src.db import update_user_role
+        from src.widgets.confirm_dialog import ConfirmDialog
+
+        dlg = ConfirmDialog(
+            self.window(),
+            title="Change Role",
+            message=f"Set {name}'s role to {role}?"
+        )
+        dlg.exec()
+        if not dlg.result_yes():
+            # Revert combo to the current DB value without triggering signal
+            combo.blockSignals(True)
+            from src.db import get_user_by_id
+            user = get_user_by_id(user_id)
+            if user and user["role"] in ROLE_OPTIONS:
+                combo.setCurrentText(user["role"])
+            combo.blockSignals(False)
+            return
+
         if update_user_role(user_id, role):
             toast_success(self, f"{name}'s role updated to {role}.")
             self.refresh()

@@ -1,4 +1,3 @@
-import re
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QDateEdit 
@@ -187,9 +186,29 @@ class SignupPage(QWidget):
         self.confirm_pw_input.clear()
         self.dob_input.setDate(QDate(2000, 1, 1))
         self._select_hand("RHP")
+
+    ALLOWED_DOMAINS = {"cvsu.edu.ph", "gmail.com", "yahoo.com", "outlook.com"}
     
     def _is_valid_email(self, email):
-        return bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email))
+        import re
+        if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email):
+            return False, "Please enter a valid email address."
+        domain = email.split("@")[-1].lower()
+        if domain not in self.ALLOWED_DOMAINS:
+            return False, f"Only @cvsu.edu.ph, @gmail.com, @yahoo.com, and @outlook.com emails are allowed."
+        return True, ""
+    
+    def _is_strong_password(self, password):
+        import re
+        if len(password) < 8:
+            return False, "Password must be at least 8 characters long."
+        if not re.search(r"[a-z]", password):
+            return False, "Password must contain at least one lowercase letter."
+        if not re.search(r"[A-Z]", password):
+            return False, "Password must contain at least one uppercase letter."
+        if not re.search(r"\d", password):
+            return False, "Password must contain at least one number."
+        return True, ""
 
     def _handle_signup(self):
         from src.db import create_user
@@ -205,12 +224,14 @@ class SignupPage(QWidget):
         if not all([first_name, last_name, email, password, confirm_pw]):
             toast_error(self, "Please fill in all fields.")
             return
-        if not self._is_valid_email(email):
-            toast_error(self, "Please enter a valid email address.")
+        valid_email, email_msg = self._is_valid_email(email)
+        if not valid_email:
+            toast_error(self, email_msg)
             return
-        if len(password) < 8:
-            toast_error(self, "Password must be at least 8 characters long.")
-            return
+        valid_pw, pw_msg = self._is_strong_password(password)
+        if not valid_pw:
+            toast_error(self, pw_msg)
+            return 
         if password != confirm_pw:
             toast_error(self, "Passwords do not match. Please try again.")
             return

@@ -188,7 +188,7 @@ class AccountSettingsPage(QWidget):
         card_layout.addLayout(info_row)
         card_layout.addSpacing(24)
 
-        # Pitch threshold display
+        # Pitch threshold — editable spinbox 
         card_layout.addWidget(self._divider())
         card_layout.addSpacing(20)
 
@@ -247,7 +247,6 @@ class AccountSettingsPage(QWidget):
 
         self.current_pw_input = PasswordInput("Enter current password")
         self.new_pw_input = PasswordInput("Minimum 8 characters")
-        self.confirm_pw_input = PasswordInput("Re-enter new password")
 
         pw_grid.addWidget(self._field_label("Current Password"), 0, 0)
         pw_grid.addWidget(self.current_pw_input, 1, 0)
@@ -256,21 +255,30 @@ class AccountSettingsPage(QWidget):
 
         sec_layout.addLayout(pw_grid)
         sec_layout.addSpacing(16)
-        sec_layout.addWidget(self._field_label("Confirm New Password"))
-        sec_layout.addSpacing(6)
-        sec_layout.addWidget(self.confirm_pw_input)
-        sec_layout.addSpacing(24)
+        confirm_row = QHBoxLayout()
+        confirm_row.setSpacing(14)
+
+        confirm_col = QVBoxLayout()
+        confirm_col.setSpacing(6)
+        confirm_col.addWidget(self._field_label("Confirm New Password"))
+        self.confirm_pw_input = PasswordInput("Re-enter new password")
+        confirm_col.addWidget(self.confirm_pw_input)
 
         change_pw_btn = QPushButton('Change Password')
         change_pw_btn.setObjectName("settingsSaveBtn")
         change_pw_btn.setFixedHeight(44)
+        change_pw_btn.setFixedWidth(180)
         change_pw_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         change_pw_btn.clicked.connect(self._handle_change_password)
 
-        pw_btn_row = QHBoxLayout()
-        pw_btn_row.addStretch()
-        pw_btn_row.addWidget(change_pw_btn)
-        sec_layout.addLayout(pw_btn_row)
+        btn_col = QVBoxLayout()
+        btn_col.setSpacing(6)
+        btn_col.addWidget(QLabel())
+        btn_col.addWidget(change_pw_btn)
+
+        confirm_row.addLayout(confirm_col, stretch=1)
+        confirm_col.addLayout(btn_col)
+        sec_layout.addLayout(confirm_row)
 
         layout.addWidget(security_card)
         layout.addStretch()
@@ -449,6 +457,7 @@ class AccountSettingsPage(QWidget):
 
     def _handle_change_password(self):
         from src.db import get_user_by_id, verify_password, update_user_password
+        import re
 
         current = self.current_pw_input.text()
         new_pw = self.new_pw_input.text()
@@ -464,6 +473,15 @@ class AccountSettingsPage(QWidget):
             return
         if len(new_pw) < 8:
             toast_error(self, "New password must be at least 8 characters long.")
+            return
+        if not re.search(r"[a-z]", new_pw):
+            toast_error(self, "Password must contain at least one lowercase letter.")
+            return
+        if not re.search(r"[A-Z]", new_pw):
+            toast_error(self, "Password must contain at least one uppercase letter.")
+            return
+        if not re.search(r"\d", new_pw):
+            toast_error(self, "Password must contain at least one number.")
             return
         if new_pw != confirm:
             toast_error(self, "Passwords do not match. Pleast try again.")

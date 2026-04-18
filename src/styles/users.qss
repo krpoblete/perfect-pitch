@@ -70,3 +70,11 @@
     color: #e05555;
     background: transparent;
 }
+
+#roleAdminLabel {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f0a500;
+    background: transparent;
+    letter-spacing: 0.5px;
+}

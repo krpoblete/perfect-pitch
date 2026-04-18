@@ -98,16 +98,17 @@ def _seed_admin(conn):
     if existing:
         return
 
-    hashed = bcrypt.hashpw("admin1234".encode("utf-8"), bcrypt.gensalt())
+    hashed = bcrypt.hashpw("Admin1234".encode("utf-8"), bcrypt.gensalt())
     conn.execute(
         """INSERT INTO users
-            (first_name, last_name, date_of_birth, email, password, role, pitch_threshold)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (first_name, last_name, date_of_birth, email, password, role, pitch_threshold, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         ("Admin", "User", "2000-01-01", 
          "admin",
          hashed.decode("utf-8"),
          "Admin",
-         50),
+         50,
+         _manila_now()),
     )
     conn.commit()
 
