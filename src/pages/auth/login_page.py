@@ -101,6 +101,10 @@ class LoginPage(QWidget):
 
         layout.addStretch()
 
+        # Enter key navigation
+        self.email_input.returnPressed.connect(self.pw_input.line_edit.setFocus)
+        self.pw_input.line_edit.returnPressed.connect(self._handle_login)
+
     def _label(self, text):
         lbl = QLabel(text)
         lbl.setObjectName("fieldLabel")

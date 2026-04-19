@@ -228,6 +228,10 @@ class AccountSettingsPage(QWidget):
         btn_row.addWidget(self.save_btn)
         card_layout.addLayout(btn_row)
 
+        # Enter key navigation
+        self.first_name_input.returnPressed.connect(self.last_name_input.setFocus)
+        self.last_name_input.returnPressed.connect(self._try_save_from_enter)
+
         layout.addWidget(profile_card)
         layout.addSpacing(28)
 
@@ -279,6 +283,11 @@ class AccountSettingsPage(QWidget):
         confirm_row.addLayout(confirm_col, stretch=1)
         confirm_row.addLayout(btn_col)
         sec_layout.addLayout(confirm_row)
+
+        # Enter key navigation
+        self.current_pw_input.line_edit.returnPressed.connect(self.new_pw_input.line_edit.setFocus)
+        self.new_pw_input.line_edit.returnPressed.connect(self.confirm_pw_input.line_edit.setFocus)
+        self.confirm_pw_input.line_edit.returnPressed.connect(self._handle_change_password)
 
         layout.addWidget(security_card)
         layout.addStretch()
@@ -422,6 +431,22 @@ class AccountSettingsPage(QWidget):
         self.confirm_pw_input.clear()
 
     # Handlers
+    def _try_save_from_enter(self):
+        """Called when Enter is pressed on Last Name — only saves if there are changes."""
+        is_coach = self._role == "Coach"
+        hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
+        has_changes = (
+            self.first_name_input.text().strip() != self._original_first or
+            self.last_name_input.text().strip() != self._original_last or
+            (not is_coach and self.threshold_input.value() != self._original_threshold) or
+            (not is_coach and hand != self._original_hand)
+        )
+        if not has_changes:
+            toast_info(self, "No changes to save.")
+            return
+        self._handle_save_profile()
+
+
     def _handle_save_profile(self):
         from src.db import update_user_profile, update_pitch_threshold, update_throwing_hand
 

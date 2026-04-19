@@ -156,6 +156,13 @@ class SignupPage(QWidget):
         
         layout.addStretch()
 
+        # Enter key navigation
+        self.first_name_input.returnPressed.connect(self.last_name_input.setFocus)
+        self.last_name_input.returnPressed.connect(self.email_input.setFocus)
+        self.email_input.returnPressed.connect(self.pw_input.line_edit.setFocus)
+        self.pw_input.line_edit.returnPressed.connect(self.confirm_pw_input.line_edit.setFocus)
+        self.confirm_pw_input.line_edit.returnPressed.connect(self._handle_signup)
+
     def _select_hand(self, hand: str):
         self.rhp_btn.setChecked(hand == "RHP")
         self.lhp_btn.setChecked(hand == "LHP")

@@ -9,7 +9,7 @@ from src.utils.toast import toast_error, toast_success
 from src.widgets.password_input import PasswordInput
 
 MAX_ATTEMPTS = 3
-LOCKOUT_MINUTES = 30
+LOCKOUT_MINUTES = 15 
 
 class ForgotPasswordPage(QWidget):
     def __init__(self, auth_window):
@@ -118,6 +118,10 @@ class ForgotPasswordPage(QWidget):
         layout.addLayout(back_row)
 
         layout.addStretch()
+
+        # Enter key navigation
+        self.verify_email_input.returnPressed.connect(self._handle_verify)
+
         return page
     
     # Page 2: Set new password
@@ -183,6 +187,11 @@ class ForgotPasswordPage(QWidget):
         layout.addLayout(back_row)
 
         layout.addStretch()
+
+        # Enter key navigation
+        self.new_pw_input.line_edit.returnPressed.connect(self.confirm_pw_input.line_edit.setFocus)
+        self.confirm_pw_input.line_edit.returnPressed.connect(self._handle_reset)
+
         return page
     
     # Handlers
