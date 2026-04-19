@@ -6,7 +6,10 @@ from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
 
 from src.utils.icons import get_icon
-from src.utils.toast import toast_warning
+from src.utils.toast import toast_warning, toast_error, toast_success
+from src.pitch_worker import PitchWorker
+
+CAMERA_ID = 0
 
 class SessionSummaryDialog(QDialog):
     """Summary popup shown after END is clicked."""
@@ -98,7 +101,7 @@ class StartSessionPage(QWidget):
         self._mistakes = 0
         self._threshold = None
         self._throwing_hand = "RHP"
-        self._capture = None
+        self._worker = None
         self.setObjectName("contentPage")
         self.build_ui()
 
@@ -395,8 +398,18 @@ class StartSessionPage(QWidget):
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
 
-        # live_capture will be wired here
-        # self._capture.start()
+        # Start PitchWorker
+        self._worker = PitchWorker(
+            camera_id=CAMERA_ID,
+            throwing_hand=self._throwing_hand,
+            parent=self,
+        )
+        self._worker.frame_ready.connect(self.update_frame)
+        self._worker.stats_updated.connect(self.update_stats)
+        self._worker.pitch_done.connect(self._on_pitch_done)
+        self._worker.error_occurred.connect(self._on_worker_error)
+        self._worker.session_ended.connect(self._on_session_ended)
+        self._worker.start()
 
     def _handle_end(self):
         self._stop_capture()
@@ -421,7 +434,10 @@ class StartSessionPage(QWidget):
         self.end_btn.setEnabled(False)
         self._show_idle_feed()
         self._update_camera_guide()
-        # self._capture.stop()
+        if self._worker and self._worker.isRunning():
+            self._worker.stop()
+            self._worker.wait()
+            self._worker = None
 
     def _save_session(self, accuracy: float):
         from src.db import get_connection, _manila_now
@@ -442,6 +458,25 @@ class StartSessionPage(QWidget):
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
         self.threshold_lbl.hide()
+
+    # PitchWorker signal handlers
+    def _on_pitch_done(self, result: dict):
+        """Receives full pitch result after each pitch is analyzed."""
+        verdict = result.get("verdict", "")
+        issue = result.get("main_issue") or "None"
+        mse = result.get("mse", 0.0)
+        pitch = result.get("pitch_number", self._pitch_count)
+        print(f"Pitch {pitch}: {verdict} | Issue: {issue} | MSE: {mse:.5f}")
+
+    def _on_worker_error(self, message: str):
+        """Called when PitchWorker hits a fatal error."""
+        self._stop_capture()
+        toast_error(self, f"Camera error: {message}")
+
+    def _on_session_ended(self, log_path: str):
+        """Called when PitchWorker finishes — log path is ready."""
+        toast_success(self, f"Session log saved.")
+        print(f"Session log → {log_path}")
 
     # Lifecycle
     def refresh(self):

@@ -1,0 +1,398 @@
+"""
+QThread wrapper around live_capture.run_live().
+Emits Qt signals instead of calling cv2.imshow(), so the feed
+and pitch results flow into StartSessionPage without blocking
+the PyQt6 event loop.
+"""
+
+import time
+import warnings
+import queue
+import threading
+import json
+import numpy as np
+
+from datetime import datetime
+from pathlib import Path
+
+import cv2
+
+from PyQt6.QtCore import QThread, pyqtSignal
+
+warnings.filterwarnings("ignore")
+
+class PitchWorker(QThread):
+    # Signals
+    frame_ready = pyqtSignal(object)      # numpy BGR frame → feed_label
+    pitch_done = pyqtSignal(dict)         # full pitch result dict
+    stats_updated = pyqtSignal(int, int)  # (pitch_count, mistakes)
+    state_changed = pyqtSignal(str)       # WAITING | COUNTDOWN | COLLECTING | ANALYZING | POST_PITCH
+    error_occurred = pyqtSignal(str)      # fatal error message
+    session_ended = pyqtSignal(str)       # log_path when thread finishes
+
+    def __init__(self, camera_id: int = 0, width: int = 1920,
+                 height: int = 1080, throwing_hand: str = "RHP",
+                 parent = None):
+        super().__init__(parent)
+        self.camera_id = camera_id
+        self.width = width
+        self.height = height
+        self.throwing_hand = throwing_hand
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        self._stop_event.set()
+
+    # Main thread body
+    def run(self):
+        try:
+            self._run_capture()
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+    def _run_capture(self):
+        import torch
+        import mediapipe as mp
+        from mediapipe.tasks import python as mp_tasks
+        from mediapipe.tasks.python import vision as mp_vision
+        from mediapipe.tasks.python.vision import RunningMode
+
+        from src.analyze import (
+            LSTMAutoencoder, FRAMES, POSE_MODEL_DIR, MODEL_DIR, DEVICE,
+            NUM_JOINTS, JOINT_NAMES, FEEDBACK,
+            extract_features, compute_scores, check_verdict,
+            risk_rank, resample, smooth, build_feedback_table,
+        )
+        from src.live_capture import (
+            CameraThread, LandmarkSmoother,
+            DETECT_WIDTH, DETECT_HEIGHT,
+            EMA_ALPHA, VELOCITY_GAIN,
+            COUNTDOWN_SECS, MAX_PITCH_FRAMES,
+            INFER_EVERY, ALERT_RISK_RATIO, COOLDOWN,
+            SHORT_NAMES, LOG_DIR,
+            WAITING, COUNTDOWN, COLLECTING, ANALYZING, POST_PITCH,
+            draw_waiting_overlay, draw_countdown_overlay,
+            draw_collecting_overlay, draw_keypoints,
+            draw_post_pitch_overlay,
+            landmark_colors, severity_color,
+        )
+        import pickle
+
+        # Load model
+        checkpoint = torch.load(
+            MODEL_DIR / "lstm_autoencoder.pt",
+            map_location=DEVICE, weights_only=False,
+        )
+        cfg = checkpoint["config"]
+        threshold = checkpoint["threshold"]
+        thresholds = np.array(
+            checkpoint.get("joint_thresholds",
+                           [threshold] * NUM_JOINTS),
+            dtype=np.float32,
+        )
+        ae = LSTMAutoencoder(
+            cfg["input_size"], cfg["hidden_size"], cfg["latent_dim"],
+            cfg["seq_len"], cfg["num_layers"],
+        ).to(DEVICE)
+        ae.load_state_dict(checkpoint["model_state_dict"])
+        ae.eval()
+
+        with open(MODEL_DIR / "scaler.pkl", "rb") as f:
+            scaler = pickle.load(f)
+
+        # Camera
+        cap = cv2.VideoCapture(self.camera_id)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        if not cap.isOpened():
+            self.error_occurred.emit(
+                f"Could not open camera {self.camera_id}."
+            )
+            return
+        
+        # Mirror LHP so the model always see the same side-view
+        flip = (self.throwing_hand == "RHP")
+
+        cam_thread = CameraThread(cap)
+        cam_thread.start()
+
+        # Pose landmarker (LIVE_STREAM)
+        result_list = [None]
+        result_ts_list = [0]
+        result_lock = threading.Lock()
+
+        def _on_result(result, _img, ts_ms):
+            with result_lock:
+                result_list[0] = result
+                result_ts_list[0] = ts_ms
+
+        options = mp_vision.PoseLandmarkerOptions(
+            base_options=mp_tasks.BaseOptions(
+                model_asset_path=str(POSE_MODEL_DIR)
+            ),
+            running_mode=RunningMode.LIVE_STREAM,
+            result_callback=_on_result,
+            num_poses=1,
+            min_pose_detection_confidence=0.7,
+            min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+        landmarker = mp_vision.PoseLandmarker.create_from_options(options)
+
+        # Session log
+        from src.config import ROOT_DIR
+        log_dir = ROOT_DIR / "output"
+        log_dir.mkdir(exist_ok=True)
+        session_start = datetime.now()
+        log_path = log_dir / f"session_{session_start.strftime('%Y%m%d_%H%M%S')}.json"
+        session_log = []
+
+        # State
+        smoother = LandmarkSmoother(EMA_ALPHA, VELOCITY_GAIN)
+        state = WAITING
+        cd_start = None
+        post_start = None
+        world_pts = None
+        image_pts = None
+        world_frames = []
+        screen_frames = []
+        since_infer = 0
+        early_risk = None
+        alert_joint = None
+        lastresult = None
+        seen_ts = [0]
+        frame_count = 0
+        t0 = time.perf_counter()
+        n_pitches = 0
+        n_correct = 0
+        n_mistakes = 0
+
+        def reset():
+            nonlocal state, cd_start, post_start, world_pts, image_pts
+            nonlocal world_frames, screen_frames, since_infer
+            nonlocal early_risk, alert_joint, lastresult
+            state = WAITING
+            cd_start = None
+            post_start = None
+            world_pts = None
+            image_pts = None
+            world_frames = []
+            screen_frames = []
+            since_infer = 0
+            early_risk = None
+            alert_joint = None
+            lastresult = None
+            smoother.reset()
+
+        self.state_changed.emit(WAITING)
+
+        # Main loop
+        while not self._stop_event.is_set():
+            cam_ok, frame = cam_thread.read()
+            if not cam_ok:
+                break
+            if frame is None:
+                continue
+
+            if flip:
+                frame = cv2.flip(frame, 1)
+
+            frame_count += 1
+            ts_ms = int((time.perf_counter() - t0) * 1000)
+
+            small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
+            mp_img = mp.Image(
+                image_format=mp.ImageFormat.SRGB,
+                data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
+            )
+            landmarker.detect_async(mp_img, ts_ms)
+
+            with result_lock:
+                detection = result_list[0]
+                result_ts = result_ts_list[0]
+
+            new_detection = (result_ts > seen_ts[0])
+            if new_detection:
+                seen_ts[0] = result_ts
+
+            person_seen = bool(
+                detection
+                and detection.pose_world_landmarks
+                and detection.pose_landmarks
+            )
+
+            if person_seen:
+                world_pts = np.array(
+                    [[lm.x, lm.y, lm.z] for lm in detection.pose_world_landmarks[0]],
+                    dtype=np.float32,
+                )
+                image_pts = np.array(
+                    [[lm.x, lm.y] for lm in detection.pose_landmarks[0]],
+                    dtype=np.float32,
+                )
+
+            if person_seen and new_detection:
+                display_lm = smoother.update(image_pts)
+            elif smoother.ready:
+                display_lm = smoother.predict()
+            else:
+                display_lm = None
+
+            fps_live = frame_count / max(time.perf_counter() - t0, 1e-6)
+
+            # State machine
+            prev_state = state
+
+            if state == WAITING:
+                if person_seen:
+                    state = COUNTDOWN
+                    cd_start = time.perf_counter()
+
+            elif state == COUNTDOWN:
+                if not person_seen:
+                    state = WAITING
+                elif time.perf_counter() - cd_start >= COUNTDOWN_SECS:
+                    state = COLLECTING
+                    world_frames = []
+                    screen_frames = []
+                    since_infer = 0
+                    early_risk = None
+                    alert_joint  = None
+
+            elif state == COLLECTING:
+                if person_seen:
+                    world_frames.append(world_pts)
+                    screen_frames.append(image_pts)
+
+                n = len(world_frames)
+                since_infer += 1
+                if n >= FRAMES // 2 and since_infer >= INFER_EVERY:
+                    since_infer = 0
+                    arr = smooth(resample(np.stack(world_frames), FRAMES))
+                    feat = extract_features(arr)
+                    feat_sc = scaler.transform(feat)
+                    _, early_risk, _ = compute_scores(feat_sc, ae)
+                    worst = int(np.argmax(early_risk / (thresholds + 1e-10)))
+                    alert_joint = (
+                        SHORT_NAMES[worst]
+                        if early_risk[worst] >= ALERT_RISK_RATIO * thresholds[worst]
+                        else None
+                    )
+
+                if n >= MAX_PITCH_FRAMES:
+                    state = ANALYZING
+
+            elif state == ANALYZING:
+                arr = smooth(resample(np.stack(world_frames), FRAMES))
+                feat = extract_features(arr)
+                feat_sc = scaler.transform(feat)
+                _, joint_risks, mse = compute_scores(feat_sc, ae)
+
+                is_incorrect, reason, *_ = check_verdict(
+                    mse, threshold, joint_risks, thresholds
+                )
+                verdict = "Incorrect Form" if is_incorrect else "Correct Form"
+                worst_joint = risk_rank(joint_risks, thresholds) if is_incorrect else None
+                main_issue = JOINT_NAMES[worst_joint] if worst_joint is not None else None
+                feedback_df = build_feedback_table(joint_risks, thresholds)
+
+                n_pitches += 1
+                if verdict == "Correct Form":
+                    n_correct += 1
+                else:
+                    n_mistakes +=1
+
+                # Emit pitch result to UI
+                pitch_result = {
+                    "pitch_number": n_pitches,
+                    "verdict": verdict,
+                    "main_issue": main_issue,
+                    "reason": reason,
+                    "mse": round(float(mse), 6),
+                    "threshold": round(float(threshold), 6),
+                    "joint_risks": [round(float(r), 6) for r in joint_risks],
+                    "joint_thresholds": [round(float(t), 6) for t in thresholds],
+                    "joint_names": JOINT_NAMES,
+                    "joint_severities": [
+                        str(row["Severity"])
+                        for _, row in feedback_df.sort_values("Joint").iterrows()
+                    ],
+                    "n_frames": len(world_frames),
+                }
+                self.pitch_done.emit(pitch_result)
+                self.stats_updated.emit(n_pitches, n_mistakes)
+
+                # Session JSON log
+                session_log.append({
+                    **pitch_result,
+                    "timestamp": datetime.now().isoformat(),
+                })
+                with open(log_path, "w") as f:
+                    json.dump({
+                        "session_start": session_start.isoformat(),
+                        "pitches": session_log,
+                    }, f, indent=2)
+
+                lastresult = {
+                    "verdict": verdict,
+                    "main_issue": main_issue,
+                    "joint_risks": joint_risks,
+                    "thresholds": thresholds,
+                    "feedback_df": feedback_df,
+                    "n_frames": len(world_frames),
+                }
+                state = POST_PITCH
+                post_start = time.perf_counter()
+                early_risk = None
+                alert_joint = None
+
+            elif state == POST_PITCH:
+                if time.perf_counter() - post_start >= COOLDOWN:
+                    reset()
+
+            if prev_state != state:
+                self.state_changed.emit(state)
+
+            # Build display frame
+            lm = display_lm if display_lm is not None else (
+                screen_frames[-1] if screen_frames else None
+            )
+
+            if state == WAITING:
+                display = draw_waiting_overlay(frame)
+            elif state == COUNTDOWN:
+                secs = max(0.0, COUNTDOWN_SECS - (time.perf_counter() - cd_start))
+                display = (draw_countdown_overlay(frame, lm, secs)
+                           if lm is not None else frame.copy())
+            elif state == COLLECTING:
+                display = (draw_collecting_overlay(
+                    frame, len(world_frames), fps_live, lm,
+                    thresholds, early_risk, alert_joint,
+                ) if lm is not None else frame.copy())
+            elif state == ANALYZING:
+                display = (draw_keypoints(frame, lm, np.zeros(33))
+                           if lm is not None else frame.copy())
+                cv2.putText(display, "Analyzing...",
+                            (20, display.shape[0] // 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2,
+                            (0, 215, 255), 2, cv2.LINE_AA)
+            else:
+                secs = max(0.0, COOLDOWN - (time.perf_counter() - post_start))
+                display = draw_post_pitch_overlay(
+                    frame, lastresult, secs, n_pitches, n_correct, lm
+                )
+
+            cv2.putText(display, f"FPS {fps_live:.1f}", (8, 22),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                        (200, 200, 200), 1, cv2.LINE_AA)
+            
+            # Emit frame to Qt (replaces cv2.imshow)
+            self.frame_ready.emit(display)
+
+        # Cleanup
+        cam_thread.stop()
+        landmarker.close()
+        cap.release()
+
+        if session_log:
+            self.session_ended.emit(str(log_path))

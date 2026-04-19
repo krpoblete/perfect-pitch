@@ -17,7 +17,7 @@ from mediapipe.tasks import python as mp_tasks
 from mediapipe.tasks.python import vision as mp_vision
 from mediapipe.tasks.python.vision import RunningMode
 
-from analyze import (
+from src.analyze import (
     LSTMAutoencoder,
     FRAMES,
     POSE_MODEL_DIR, MODEL_DIR, DEVICE,
@@ -119,7 +119,7 @@ ALERT_RISK_RATIO = 1.5
 COOLDOWN = 10
 
 from src.config import ROOT_DIR
-LOG_DIR = ROOT_DIR / "logs" 
+LOG_DIR = ROOT_DIR / "output" 
 
 SHORT_NAMES = [
     "L.Elbow",    "R.Elbow",
