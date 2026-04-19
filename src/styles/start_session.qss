@@ -51,6 +51,67 @@
     padding: 4px 0;
 }
 
+/* Camera Guide Card */
+#cameraGuideCard {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+}
+
+#guideIcon {
+    background: transparent;
+}
+
+#guideTitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: #aaaaaa;
+    background: transparent;
+    letter-spacing: 0.3px;
+}
+
+#guideDismissBtn {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+#guideDismissBtn:hover {
+    background: #2a2a2a;
+    border-radius: 4px;
+}
+
+#guideDivider {
+    background-color: #2a2a2a;
+}
+
+#guideLabel {
+    font-size: 11px;
+    color: #666666;
+    background: transparent;
+}
+
+#guideHandBadge {
+    font-size: 12px;
+    font-weight: 700;
+    background: transparent;
+}
+
+#guideSideLabel {
+    font-size: 12px;
+    color: #cccccc;
+    background: transparent;
+    line-height: 1.5;
+}
+
+#guideCaution {
+    font-size: 11px;
+    color: #888888;
+    background: transparent;
+    line-height: 1.4;
+}
+
+/* START | END Buttons */
 #sessionStartBtn {
     background-color: #1a4a1a;
     border: 1px solid #2a6a2a;

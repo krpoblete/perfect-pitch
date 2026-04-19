@@ -97,6 +97,7 @@ class StartSessionPage(QWidget):
         self._pitch_count = 0
         self._mistakes = 0
         self._threshold = None
+        self._throwing_hand = "RHP"
         self._capture = None
         self.setObjectName("contentPage")
         self.build_ui()
@@ -146,7 +147,7 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.mistake_card)
         panel_layout.addWidget(self.accuracy_card)
 
-        # Threshold warning label
+        # Threshold warning
         self.threshold_lbl = QLabel()
         self.threshold_lbl.setObjectName("thresholdWarning")
         self.threshold_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -155,6 +156,10 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.threshold_lbl)
 
         panel_layout.addStretch()
+
+        # Camera guide card
+        self.camera_guide_card = self._build_guide_card()
+        panel_layout.addWidget(self.camera_guide_card)
 
         # START button
         self.start_btn = QPushButton("START")
@@ -174,6 +179,88 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.end_btn)
 
         root.addWidget(panel)
+
+    # Camera guide card builder
+    def _build_guide_card(self) -> QWidget:
+        card = QWidget()
+        card.setObjectName("cameraGuideCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(6)
+
+        # Header row: title + dismiss button
+        header_row = QHBoxLayout()
+        header_row.setSpacing(0)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+
+        cam_icon = QLabel()
+        cam_icon.setObjectName("guideIcon")
+        cam_icon.setFixedSize(16, 16)
+        cam_icon.setPixmap(
+            get_icon("camera", color="#aaaaaa", size=16).pixmap(16, 16)
+        )
+
+        guide_title = QLabel("Camera Setup")
+        guide_title.setObjectName("guideTitle")
+
+        title_row.addWidget(cam_icon)
+        title_row.addWidget(guide_title)
+        title_row.addStretch()
+
+        dismiss_btn = QPushButton()
+        dismiss_btn.setObjectName("guideDismissBtn")
+        dismiss_btn.setFixedSize(18, 18)
+        dismiss_btn.setIcon(get_icon("x-mark", color="#555555", size=12))
+        dismiss_btn.setIconSize(QSize(12, 12))
+        dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        dismiss_btn.setToolTip("Dismiss")
+        dismiss_btn.clicked.connect(lambda: card.hide())
+
+        header_row.addLayout(title_row)
+        header_row.addWidget(dismiss_btn)
+        layout.addLayout(header_row)
+
+        # Divider
+        div = QFrame()
+        div.setObjectName("guideDivider")
+        div.setFixedHeight(1)
+        layout.addWidget(div)
+        layout.addSpacing(4)
+
+        # Registered as row
+        reg_row = QHBoxLayout()
+        reg_row.setSpacing(6)
+        reg_lbl = QLabel("Registered as:")
+        reg_lbl.setObjectName("guideLabel")
+        self.hand_badge = QLabel("RHP")
+        self.hand_badge.setObjectName("guideHandBadge")
+        reg_row.addWidget(reg_lbl)
+        reg_row.addWidget(self.hand_badge)
+        reg_row.addStretch()
+        layout.addLayout(reg_row)
+
+        layout.addSpacing(2)
+
+        # Camera position instruction
+        self.camera_side_lbl = QLabel()
+        self.camera_side_lbl.setObjectName("guideSideLabel")
+        self.camera_side_lbl.setWordWrap(True)
+        layout.addWidget(self.camera_side_lbl)
+
+        layout.addSpacing(4)
+
+        # Caution note
+        caution = QLabel(
+            "⚠  Your throwing arm must face\n"
+            "the camera for accurate analysis."
+        )
+        caution.setObjectName("guideCaution")
+        caution.setWordWrap(True)
+        layout.addWidget(caution)
+
+        return card
 
     # Stat card builder
     def _stat_card(self, title: str, icon_name: str, color: str) -> QWidget:
@@ -208,6 +295,25 @@ class StartSessionPage(QWidget):
         layout.addWidget(val)
 
         return card
+    
+    # Camera guide updater
+    def _update_camera_guide(self):
+        hand = self._throwing_hand
+        if hand == "RHP":
+            side = "3rd base side of the mound"
+            color = "#4a9eff"
+        else:
+            side = "1st base side of the mound"
+            color = "#f0a500"
+
+        self.hand_badge.setText(hand)
+        self.hand_badge.setStyleSheet(
+            f"color: {color}; font-weight: 700; background: transparent;"
+        )
+        self.camera_side_lbl.setText(f"Position camera at:\n{side}")
+
+        # Re-show the guide card (in case it was dismissed and user navigated away)
+        self.camera_guide_card.show()
 
     # Feed
     def _show_idle_feed(self):
@@ -237,8 +343,10 @@ class StartSessionPage(QWidget):
         """Update counters. Called from live_capture after each pitch."""
         self._pitch_count = pitch_count
         self._mistakes = mistakes
-        accuracy = ((pitch_count - mistakes) / pitch_count * 100) if pitch_count > 0 else 0.0
-
+        accuracy = (
+            (pitch_count - mistakes) / pitch_count * 100
+            if pitch_count > 0 else 0.0
+        )
         self.pitch_val.setText(str(pitch_count))
         self.mistake_val.setText(str(mistakes))
         self.accuracy_val.setText(f"{accuracy:.2f}%")
@@ -252,7 +360,8 @@ class StartSessionPage(QWidget):
         if self._running:
             self._stop_capture()
             self.threshold_lbl.setText(
-                f"⚠ Daily pitch limit of {self._threshold} reached. Session ended automatically."
+                f"⚠ Daily pitch limit of {self._threshold} reached. "
+                f"Session ended automatically."
             )
             self.threshold_lbl.show()
             self.start_btn.setEnabled(False)
@@ -274,6 +383,7 @@ class StartSessionPage(QWidget):
             return
     
         self.threshold_lbl.hide()
+        self.camera_guide_card.hide()
         self._running = True
         self.start_btn.setEnabled(False)
         self.end_btn.setEnabled(True)
@@ -310,6 +420,7 @@ class StartSessionPage(QWidget):
         self.start_btn.setEnabled(True)
         self.end_btn.setEnabled(False)
         self._show_idle_feed()
+        self._update_camera_guide()
         # self._capture.stop()
 
     def _save_session(self, accuracy: float):
@@ -333,13 +444,15 @@ class StartSessionPage(QWidget):
         self.threshold_lbl.hide()
 
     # Lifecycle
-
     def refresh(self):
         """Called each time the page is navigated to."""
         from src.db import get_user_by_id
         user = get_user_by_id(self.user_id)
         if user:
             self._threshold = user["pitch_threshold"]
+            self._throwing_hand = user["throwing_hand"]
+
+        self._update_camera_guide()
 
         # Re-check threshold in case it was updated in Account Settings
         if self._threshold and self._pitch_count >= self._threshold:
@@ -350,4 +463,5 @@ class StartSessionPage(QWidget):
             self.start_btn.setEnabled(False)
         else:
             self.threshold_lbl.hide()
-            self.start_btn.setEnabled(True)
+            if not self._running:
+                self.start_btn.setEnabled(True)
