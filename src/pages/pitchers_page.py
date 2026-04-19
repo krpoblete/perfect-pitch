@@ -12,7 +12,7 @@ from src.utils.toast import toast_success, toast_error
 from src.widgets.confirm_dialog import ConfirmDialog
 
 ROWS_PER_PAGE = 10
-COLUMNS = ["Full Name", "Email", "Age", "Throwing Hand", "Pitch Threshold", "Date Joined", ""]
+COLUMNS = ["Full Name", "Email", "Throwing Hand", "Pitch Threshold", "Date Joined", ""]
 
 def _fmt_date(dt_str: str) -> str:
     try:
