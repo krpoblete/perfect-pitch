@@ -12,12 +12,25 @@ from src.utils.toast import toast_success, toast_error
 ROWS_PER_PAGE = 10
 COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At"]
 ROLE_OPTIONS = ["Pitcher", "Coach"]
+RETENTION_DAYS = 90
 
 def _fmt_date(dt_str: str) -> str:
     try:
         return date.fromisoformat(dt_str[:10]).strftime("%b %d, %Y")
     except Exception:
         return dt_str or "—"
+    
+def _days_remaining(deleted_at_str: str) -> int:
+    """Days left before the account is permanently purged."""
+    try:
+        from datetime import datetime, timezone, timedelta
+        utc8 = timezone(timedelta(hours=8))
+        deleted = datetime.fromisoformat(deleted_at_str).replace(tzinfo=utc8)
+        now = datetime.now(utc8)
+        elapsed = (now - deleted).days
+        return max(0, RETENTION_DAYS - elapsed)
+    except Exception:
+        return RETENTION_DAYS
 
 class UsersPage(QWidget):
     def __init__(self):
@@ -153,7 +166,7 @@ class UsersPage(QWidget):
         stretches = [3, 3, 2, 2, 2, 2]
         full_name = f"{user['first_name']} {user['last_name']}"
         joined = _fmt_date(user["created_at"])
-        deleted = _fmt_date(deleted_at) if deleted_at else "—"
+        # deleted = _fmt_date(deleted_at) if deleted_at else "—"
 
         # Full Name
         name_lbl = QLabel(full_name)
@@ -217,9 +230,17 @@ class UsersPage(QWidget):
         joined_lbl.setObjectName("tableCell")
         h.addWidget(joined_lbl, stretch=stretches[4])
 
-        # Deleted At
-        deleted_lbl = QLabel(deleted)
-        deleted_lbl.setObjectName("tableCellMuted" if deleted_at else "tableCell")
+        # Deleted At + remaining days
+        if deleted_at:
+            days_left = _days_remaining(deleted_at)
+            deleted_text = f"{_fmt_date(deleted_at)} ({days_left}d left)"
+            deleted_obj = "tableCellMuted"
+        else:
+            deleted_text = "—"
+            deleted_obj = "tableCell"
+
+        deleted_lbl = QLabel(deleted_text)
+        deleted_lbl.setObjectName(deleted_obj)
         h.addWidget(deleted_lbl, stretch=stretches[5])
 
         return row
