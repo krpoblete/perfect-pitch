@@ -8,10 +8,10 @@ from qframelesswindow import FramelessMainWindow
 
 from src.pages.dashboard_page import DashboardPage
 from src.pages.tutorial_page import TutorialPage
-from src.pages.account_settings_page import AccountSettingsPage
-from src.pages.start_session_page import StartSessionPage
-from src.pages.pitchers_page import PitchersPage
 from src.pages.users_page import UsersPage
+from src.pages.pitchers_page import PitchersPage
+from src.pages.start_session_page import StartSessionPage
+from src.pages.account_settings_page import AccountSettingsPage
 from src.utils.icons import get_icon
 from src.widgets.window_buttons import WindowButtons
 from src.widgets.confirm_dialog import ConfirmDialog
@@ -200,10 +200,10 @@ class MainWindow(FramelessMainWindow):
         self.pages = {
             "dashboard": DashboardPage(self.user_id),
             "tutorial": TutorialPage(),
-            "account_settings": AccountSettingsPage(self.user_id),
-            "start_session": StartSessionPage(self.user_id),
             "pitchers": PitchersPage(),
             "users": UsersPage(),
+            "start_session": StartSessionPage(self.user_id),
+            "account_settings": AccountSettingsPage(self.user_id),
         }
         for page in self.pages.values():
             self.stack.addWidget(page)
@@ -274,6 +274,7 @@ class MainWindow(FramelessMainWindow):
 
     def _reload_user_info(self):
         """Rebuild the sidebar bottom user info after a profile update."""
+        self._sidebar_bottom.setVisible(False)
         self._sidebar_bottom.deleteLater()
         self._load_user_info(self._sb_layout)
 
@@ -311,7 +312,16 @@ class MainWindow(FramelessMainWindow):
         dlg = ConfirmDialog(self, title="Logout", message="Are you sure you want to log out?")
         dlg.exec() 
         if not dlg.result_yes():
-            return 
+            return
+        from src.utils.toast import dismiss_active_toast
+        dismiss_active_toast()
+        # try:
+        #     import src.utils.toast as _toast_mod
+        #     if _toast_mod._active_toast is not None:
+        #         _toast_mod._active_toast.hide()
+        #         _toast_mod._active_toast = None
+        # except Exception:
+        #     pass
         self._logging_out = True
         self.login = AuthWindow()
         self.login.show()

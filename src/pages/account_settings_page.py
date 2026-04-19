@@ -453,7 +453,7 @@ class AccountSettingsPage(QWidget):
         # Signal MainWindow to reload sidebar user info
         self.profile_updated.emit()
 
-        toast_success(self, "Profile updated sucessfully.")
+        toast_success(self, "Profile updated successfully.")
 
     def _handle_change_password(self):
         from src.db import get_user_by_id, verify_password, update_user_password
