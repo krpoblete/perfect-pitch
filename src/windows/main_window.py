@@ -205,6 +205,8 @@ class MainWindow(FramelessMainWindow):
             "start_session": StartSessionPage(self.user_id),
             "account_settings": AccountSettingsPage(self.user_id),
         }
+
+        self.pages["tutorial"].set_role(self.role)
         for page in self.pages.values():
             self.stack.addWidget(page)
 
@@ -279,6 +281,11 @@ class MainWindow(FramelessMainWindow):
         self._load_user_info(self._sb_layout)
 
     def _switch_page(self, key: str, icon_name: str = None):
+        # Stop tutorial video when leaving the page
+        tutorial = self.pages.get("tutorial")
+        if tutorial and key != "tutorial":
+            tutorial._player.stop()
+
         icon_map = {k: i for k, i, _ in self.nav_items}
         icon_map["account_settings"] = "settings"
 
@@ -315,13 +322,6 @@ class MainWindow(FramelessMainWindow):
             return
         from src.utils.toast import dismiss_active_toast
         dismiss_active_toast()
-        # try:
-        #     import src.utils.toast as _toast_mod
-        #     if _toast_mod._active_toast is not None:
-        #         _toast_mod._active_toast.hide()
-        #         _toast_mod._active_toast = None
-        # except Exception:
-        #     pass
         self._logging_out = True
         self.login = AuthWindow()
         self.login.show()

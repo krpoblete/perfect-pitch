@@ -1,0 +1,102 @@
+/* Tutorial Page */
+
+#tutorialSubtitle {
+    font-size: 12px;
+    color: #555555;
+    background: transparent;
+}
+
+#tutorialCard {
+    background-color: #111111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#tutorialVideo {
+    background-color: #000000;
+    border-radius: 8px;
+}
+
+#tutorialControls {
+    background: transparent;
+}
+
+#tutorialPlayBtn {
+    background-color: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+}
+
+#tutorialPlayBtn:hover {
+    background-color: #2a2a2a;
+    border-color: #3a3a3a;
+}
+
+#tutorialPlayBtn:pressed {
+    background-color: #141414;
+}
+
+#tutorialSeek {
+    height: 4px;
+}
+
+#tutorialSeek::groove:horizontal {
+    background: #2a2a2a;
+    height: 4px;
+    border-radius: 2px;
+}
+
+#tutorialSeek::sub-page:horizontal {
+    background: #4a9eff;
+    height: 4px;
+    border-radius: 2px;
+}
+
+#tutorialSeek::handle:horizontal {
+    background: #ffffff;
+    width: 12px;
+    height: 12px;
+    margin: -4px 0;
+    border-radius: 6px;
+}
+
+#tutorialTime {
+    font-size: 12px;
+    color: #555555;
+    background: transparent;
+}
+
+#tutorialVolIcon {
+    background: transparent;
+}
+
+#tutorialVol {
+    height: 4px;
+}
+
+#tutorialVol::groove:horizontal {
+    background: #2a2a2a;
+    height: 4px;
+    border-radius: 2px;
+}
+
+#tutorialVol::sub-page:horizontal {
+    background: #555555;
+    height: 4px;
+    border-radius: 2px;
+}
+
+#tutorialVol::handle:horizontal {
+    background: #888888;
+    width: 10px;
+    height: 10px;
+    margin: -3px 0;
+    border-radius: 5px;
+}
+
+#tutorialDescription {
+    font-size: 13px;
+    color: #aaaaaa;
+    line-height: 1.7;
+    background: transparent;
+}
