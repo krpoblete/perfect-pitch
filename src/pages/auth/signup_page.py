@@ -231,6 +231,15 @@ class SignupPage(QWidget):
         if not all([first_name, last_name, email, password, confirm_pw]):
             toast_error(self, "Please fill in all fields.")
             return
+        from src.utils.validators import validate_name
+        ok, msg = validate_name(first_name, "First Name")
+        if not ok:
+            toast_error(self, msg)
+            return
+        ok, msg = validate_name(last_name, "Last Name")
+        if not ok:
+            toast_error(self, msg)
+            return
         valid_email, email_msg = self._is_valid_email(email)
         if not valid_email:
             toast_error(self, email_msg)

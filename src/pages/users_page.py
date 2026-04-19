@@ -166,7 +166,6 @@ class UsersPage(QWidget):
         stretches = [3, 3, 2, 2, 2, 2]
         full_name = f"{user['first_name']} {user['last_name']}"
         joined = _fmt_date(user["created_at"])
-        # deleted = _fmt_date(deleted_at) if deleted_at else "—"
 
         # Full Name
         name_lbl = QLabel(full_name)
@@ -293,12 +292,18 @@ class UsersPage(QWidget):
     # Search & pagination
     def _on_search(self, text: str):
         q = text.strip().lower()
-        self._filtered = [
-            u for u in self._all_rows
-            if not q
-            or q in f"{u['first_name']} {u['last_name']}".lower()
-            or q in u["email"].lower()
-            or q in u["role"].lower()
+        if not q:
+            self._filtered = list(self._all_rows)
+        else:
+            matches_active = "active".startswith(q) and not "inactive".startswith(q)
+            matches_inactive = "inactive".startswith(q)
+            self._filtered = [
+                u for u in self._all_rows
+                if q in f"{u['first_name']} {u['last_name']}".lower()
+                or q in u["email"].lower()
+                or q in u["role"].lower()
+                or (matches_active and bool(u["is_active"]))
+                or (matches_inactive and not bool(u["is_active"])) 
         ] 
         self._page = 0
         self._render_page()
@@ -347,11 +352,15 @@ class UsersPage(QWidget):
         # Re-apply search if active
         q = self.search_input.text().strip().lower()
         if q:
+            matches_active = "active".startswith(q) and not "inactive".startswith(q)
+            matches_inactive = "inactive".startswith(q)
             self._filtered = [
                 u for u in self._all_rows
                 if q in f"{u['first_name']} {u['last_name']}".lower()
                 or q in u["email"].lower()
                 or q in u["role"].lower()
+                or (matches_active and bool(u["is_active"]))
+                or (matches_inactive and not bool(u["is_active"])) 
             ]
 
         self._render_page()

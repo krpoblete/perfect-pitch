@@ -449,16 +449,22 @@ class AccountSettingsPage(QWidget):
 
     def _handle_save_profile(self):
         from src.db import update_user_profile, update_pitch_threshold, update_throwing_hand
+        from src.utils.validators import validate_name
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
         threshold = min(self.threshold_input.value(), get_pitch_max(self._dob))
         hand = "RHP" if self.rhp_btn.isChecked() else "LHP" 
 
-        if not first_name or not last_name:
-            toast_error(self, "First and last name cannot be empty.")
+        ok, msg = validate_name(first_name, "First Name")
+        if not ok:
+            toast_error(self, msg)
             return
-        
+        ok, msg = validate_name(last_name, "Last Name")
+        if not ok:
+            toast_error(self, msg)
+            return
+
         update_user_profile(self.user_id, first_name, last_name)
         update_pitch_threshold(self.user_id, threshold)
         update_throwing_hand(self.user_id, hand)

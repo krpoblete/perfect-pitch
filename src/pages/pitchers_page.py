@@ -14,15 +14,6 @@ from src.widgets.confirm_dialog import ConfirmDialog
 ROWS_PER_PAGE = 10
 COLUMNS = ["Full Name", "Email", "Age", "Throwing Hand", "Pitch Threshold", "Date Joined", ""]
 
-def _calc_age(dob_str: str) -> str:
-    try:
-        dob = date.fromisoformat(dob_str)
-        today = date.today()
-        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-        return str(age)
-    except Exception:
-        return "—"
-    
 def _fmt_date(dt_str: str) -> str:
     try:
         return date.fromisoformat(dt_str[:10]).strftime("%b %d, %Y")
@@ -147,7 +138,7 @@ class PitchersPage(QWidget):
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
 
-        stretches = [3, 3, 1, 2, 2, 2, 1]
+        stretches = [3, 3, 2, 2, 2, 1]
         for col, stretch in zip(COLUMNS, stretches):
             lbl = QLabel(col)
             lbl.setObjectName("tableHeaderCell")
@@ -164,12 +155,11 @@ class PitchersPage(QWidget):
 
         full_name = f"{user['first_name']} {user['last_name']}"
         threshold = str(user["pitch_threshold"]) if user["pitch_threshold"] else "—"
-        age = _calc_age(user["date_of_birth"])
         hand = user["throwing_hand"] if user["throwing_hand"] else "—"
         joined = _fmt_date(user["created_at"])
 
-        values = [full_name, user["email"], age, hand, threshold, joined]
-        stretches = [3, 3, 1, 2, 2, 2, 1]
+        values = [full_name, user["email"], hand, threshold, joined]
+        stretches = [3, 3, 2, 2, 2, 1]
 
         for val, stretch in zip(values, stretches[:-1]):
             lbl = QLabel(str(val))
@@ -250,10 +240,15 @@ class PitchersPage(QWidget):
         if not q:
             self._filtered = list(self._all_rows)
         else:
+            matches_rhp = "rhp".startswith(q)
+            matches_lhp = "lhp".startswith(q)
             self._filtered = [
                 u for u in self._all_rows
                 if q in f"{u['first_name']} {u['last_name']}".lower()
                 or q in u["email"].lower()
+                or q in str(u["pitch_threshold"] or "")
+                or (matches_rhp and (u["throwing_hand"] or "") == "RHP")
+                or (matches_lhp and (u["throwing_hand"] or "") == "LHP")
             ]
         self._page = 0
         self._render_page()
@@ -291,10 +286,15 @@ class PitchersPage(QWidget):
         # Re-apply search if active
         q = self.search_input.text().strip().lower()
         if q:
+            matches_rhp = "rhp".startswith(q)
+            matches_lhp = "lhp".startswith(q)
             self._filtered = [
                 u for u in self._all_rows
                 if q in f"{u['first_name']} {u['last_name']}".lower()
                 or q in u["email"].lower()
+                or q in str(u["pitch_threshold"] or "")
+                or (matches_rhp and (u["throwing_hand"] or "") == "RHP")
+                or (matches_lhp and (u["throwing_hand"] or "") == "LHP")
             ]
 
         self._render_page()
