@@ -10,6 +10,8 @@ _SHORT_DURATION = 3000
 _LONG_DURATION = 5000
 _CHAR_THRESHOLD = 40
 
+Toast.setMaximumOnScreen(2)
+
 def _get_duration(message: str) -> int:
     return _LONG_DURATION if len(message) > _CHAR_THRESHOLD else _SHORT_DURATION
 
@@ -25,6 +27,7 @@ def show_toast(parent, message: str, preset: ToastPreset = ToastPreset.ERROR_DAR
     toast.setTextFont(QFont("Segoe UI", 12))
 
     toast.setDuration(_get_duration(message))
+    toast.setResetDurationOnHover(False)
     toast.setShowDurationBar(True)
     toast.setShowCloseButton(True)
     toast.setStayOnTop(False)
