@@ -206,6 +206,7 @@ class MainWindow(FramelessMainWindow):
             "account_settings": AccountSettingsPage(self.user_id),
         }
 
+        # Give tutorial page the user's role
         self.pages["tutorial"].set_role(self.role)
         for page in self.pages.values():
             self.stack.addWidget(page)
@@ -309,7 +310,10 @@ class MainWindow(FramelessMainWindow):
             return
         dlg = ConfirmDialog(self, title="Exit Perfect Pitch", message="Are you sure you want to exit?")
         dlg.exec()
-        if dlg.result_yes(): 
+        if dlg.result_yes():
+            tutorial = self.pages.get("tutorial")
+            if tutorial:
+                tutorial._player.stop() 
             event.accept()
         else:
             event.ignore()
@@ -320,6 +324,10 @@ class MainWindow(FramelessMainWindow):
         dlg.exec() 
         if not dlg.result_yes():
             return
+        # Stop tutorial video if playing
+        tutorial = self.pages.get("tutorial")
+        if tutorial:
+            tutorial._player.stop() 
         from src.utils.toast import dismiss_active_toast
         dismiss_active_toast()
         self._logging_out = True

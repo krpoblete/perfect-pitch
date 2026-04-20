@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QMouseEvent
 
 from src.config import ASSETS_DIR
 from src.utils.icons import get_icon
@@ -54,10 +54,23 @@ TUTORIAL_CONTENT = {
     },
 }
 
+class ClickableVideoWidget(QVideoWidget):
+    """QVideoWidget that emits a click on toggle play/pause."""
+    def __init__(self, on_click, parent = None):
+        super().__init__(parent)
+        self._on_click = on_click
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._on_click()
+        super().mousePressEvent(event)
+
 class TutorialPage(QWidget):
     def __init__(self):
         super().__init__()
         self._role = "Pitcher"
+        self._is_seeking = False
         self.setObjectName("contentPage")
         self.build_ui()
 
@@ -86,9 +99,9 @@ class TutorialPage(QWidget):
         card_layout.setSpacing(0)
 
         # Video player
-        self._video_widget = QVideoWidget()
+        self._video_widget = ClickableVideoWidget(on_click=self._toggle_play) 
         self._video_widget.setObjectName("tutorialVideo")
-        self._video_widget.setMinimumHeight(380)
+        self._video_widget.setMinimumHeight(460)
         self._video_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding
@@ -98,7 +111,7 @@ class TutorialPage(QWidget):
         self._audio = QAudioOutput()
         self._player.setAudioOutput(self._audio)
         self._player.setVideoOutput(self._video_widget)
-        self._audio.setVolume(0.8)
+        self._audio.setVolume(0.5)
         self._player.playbackStateChanged.connect(self._on_playback_state)
         self._player.positionChanged.connect(self._on_position_changed)
         self._player.durationChanged.connect(self._on_duration_changed)
@@ -113,7 +126,7 @@ class TutorialPage(QWidget):
         ctrl_layout.setContentsMargins(0, 0, 0, 0)
         ctrl_layout.setSpacing(12)
 
-        # Play | Pause
+        # Play | Pause button
         self._play_btn = QPushButton()
         self._play_btn.setObjectName("tutorialPlayBtn")
         self._play_btn.setFixedSize(36, 36)
@@ -121,11 +134,14 @@ class TutorialPage(QWidget):
         self._play_btn.setIcon(get_icon("player-play", color="#ffffff", size=18))
         self._play_btn.clicked.connect(self._toggle_play)
 
-        # Sleek slider
+        # Seek slider
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
-        self._seek_slider.setObjectName("tutorialSleek")
+        self._seek_slider.setObjectName("tutorialSeek")
         self._seek_slider.setRange(0, 0)
-        self._seek_slider.sliderMoved.connect(self._seek)
+        self._seek_slider.sliderPressed.connect(self._on_seek_start)
+        self._seek_slider.sliderMoved.connect(self._on_seek_move)
+        self._seek_slider.sliderReleased.connect(self._on_seek_end)
+        self._seek_slider.mousePressEvent = self._seek_click
 
         # Time label
         self._time_lbl = QLabel("0:00 / 0:00")
@@ -133,25 +149,25 @@ class TutorialPage(QWidget):
         self._time_lbl.setFixedWidth(90)
         self._time_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        # Volume icon — changes based on level
+        self._vol_icon = QLabel()
+        self._vol_icon.setFixedSize(18, 18)
+        self._vol_icon.setObjectName("tutorialVolIcon")
+        self._update_vol_icon(50)
+    
         # Volume slider
-        vol_icon = QLabel()
-        vol_icon.setFixedSize(16, 16)
-        vol_icon.setPixmap(get_icon("volume", color="#555555", size=16).pixmap(16, 16))
-        vol_icon.setObjectName("tutorialVolIcon")
-
         self._vol_slider = QSlider(Qt.Orientation.Horizontal)
         self._vol_slider.setObjectName("tutorialVol")
         self._vol_slider.setRange(0, 100)
-        self._vol_slider.setValue(80)
-        self._vol_slider.setFixedWidth(80)
-        self._vol_slider.valueChanged.connect(
-            lambda v: self._audio.setVolume(v / 100.0)
-        )
+        self._vol_slider.setValue(50)
+        self._vol_slider.setFixedWidth(90)
+        self._vol_slider.mousePressEvent = self._vol_click
+        self._vol_slider.valueChanged.connect(self._on_volume_changed)
 
         ctrl_layout.addWidget(self._play_btn)
         ctrl_layout.addWidget(self._seek_slider, stretch=1)
         ctrl_layout.addWidget(self._time_lbl)
-        ctrl_layout.addWidget(vol_icon)
+        ctrl_layout.addWidget(self._vol_icon)
         ctrl_layout.addWidget(self._vol_slider)
 
         card_layout.addWidget(controls)
@@ -180,16 +196,56 @@ class TutorialPage(QWidget):
         else:
             self._player.play()
 
-    def _seek(self, position: int):
-        self._player.setPosition(position)
+    def _on_seek_start(self):
+        self._is_seeking = True
+
+    def _on_seek_move(self, pos: int):
+        self._player.setPosition(pos)
+
+    def _on_seek_end(self):
+        self._is_seeking = False
+        self._player.setPosition(self._seek_slider.value())
+
+    def _seek_click(self, event: QMouseEvent):
+        """Jump seek slider to clicked position immediately."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            ratio = event.position().x() / self._seek_slider.width()
+            pos = int(ratio * self._seek_slider.maximum())
+            self._seek_slider.setValue(pos)
+            self._player.setPosition(pos)
+        QSlider.mousePressEvent(self._seek_slider, event)
+
+    def _vol_click(self, event: QMouseEvent):
+        """Jump volume slider to clicked positio immediately."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            ratio = event.position().x() / self._vol_slider.width()
+            val = int(ratio * 100)
+            self._vol_slider.setValue(val)
+        QSlider.mousePressEvent(self._vol_slider, event)
+
+    def _on_volume_changed(self, val: int):
+        self._audio.setVolume(val / 100.0)
+        self._update_vol_icon(val)
+
+    def _update_vol_icon(self, val: int):
+        if val == 0:
+            icon_name = "volume-3"
+        elif val <= 50:
+            icon_name = "volume-2"
+        else:
+            icon_name = "volume"
+        self._vol_icon.setPixmap(
+            get_icon(icon_name, color="#555555", size=18).pixmap(18, 18)
+        )
 
     def _on_playback_state(self, state):
         playing = state == QMediaPlayer.PlaybackState.PlayingState
-        icon = "player-play" if not playing else "player-pause"
+        icon = "player-pause" if playing else "player-play"
         self._play_btn.setIcon(get_icon(icon, color="#ffffff", size=18))
 
     def _on_position_changed(self, pos: int):
-        self._seek_slider.setValue(pos)
+        if not self._is_seeking:
+            self._seek_slider.setValue(pos)
         self._time_lbl.setText(
             f"{self._fmt_ms(pos)} / {self._fmt_ms(self._player.duration())}"
         )
