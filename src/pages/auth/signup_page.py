@@ -252,8 +252,8 @@ class SignupPage(QWidget):
             toast_error(self, "Passwords do not match. Please try again.")
             return
         age = self.dob_input.date().daysTo(QDate.currentDate()) // 365
-        if age < 7:
-            toast_error(self, "You must be at least 7 years old to register.")
+        if age < 13:
+            toast_error(self, "You must be at least 13 years old to register.")
             return
         
         ok, msg = create_user(first_name, last_name, dob, email, password, throwing_hand)

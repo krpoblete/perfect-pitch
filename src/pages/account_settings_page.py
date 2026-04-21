@@ -10,9 +10,6 @@ from src.widgets.password_input import PasswordInput
 
 # USA Baseball pitch count limits by age bracket
 PITCH_LIMITS = [
-    (7, 8, 50),
-    (9, 10, 75),
-    (11, 12, 85),
     (13, 14, 95),
     (15, 16, 95),
     (17, 18, 105),

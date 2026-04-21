@@ -69,7 +69,7 @@ def _migrate(conn):
     )
     conn.commit()
 
-RETENTION_DAYS = 90
+RETENTION_DAYS = 1
 
 def _purge_expired(conn):
     """Permanently delete users inactive for longer than RETENTION_DAYS."""
@@ -117,9 +117,6 @@ def _calc_threshold(date_of_birth: str) -> int:
     """Calculate the default pitch threshold from DOB using USA Baseball guidelines."""
     from datetime import date
     PITCH_LIMITS = [
-        (7, 8, 50),
-        (9, 10, 75),
-        (11, 12, 85),
         (13, 14, 95),
         (15, 16, 95),
         (17, 18, 105),
