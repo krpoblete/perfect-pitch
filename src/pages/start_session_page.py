@@ -336,7 +336,7 @@ class StartSessionPage(QWidget):
         scaled = img.scaled(
             self.feed_label.width(),
             self.feed_label.height(),
-            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
         )
         self.feed_label.setObjectName("feedLabel")
@@ -404,8 +404,14 @@ class StartSessionPage(QWidget):
         self.feed_label.style().unpolish(self.feed_label)
         self.feed_label.style().polish(self.feed_label)
 
-        feed_w = max(self.feed_label.width(), 1340)
-        feed_h = max(self.feed_label.height(), 754)
+        feed_w = self.feed_label.width()
+        feed_h = self.feed_label.height()
+
+        if feed_w < 100 or feed_h < 100:
+            from PyQt6.QtWidgets import QApplication
+            screen = QApplication.primaryScreen().availableGeometry()
+            feed_w = screen.width() - 300 - 280
+            feed_h = screen.height() - 48
 
         # Start PitchWorker
         self._worker = PitchWorker(

@@ -37,6 +37,7 @@ scipy==1.17.1
 setuptools==70.2.0
 six==1.17.0
 sounddevice==0.5.5
+soundfile==0.13.1
 sympy==1.13.1
 threadpoolctl==3.6.0
 torch==2.5.1+cu121

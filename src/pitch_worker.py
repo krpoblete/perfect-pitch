@@ -16,10 +16,18 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
+import sounddevice as sd
+import soundfile as sf
+from pathlib import Path as _Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
 warnings.filterwarnings("ignore")
+
+# Alert sound — played on every Incorrect Form verdict
+from src.config import ROOT_DIR as _ROOT
+_ALERT_PATH = _ROOT / "assets" / "alert.mp3"
+_alert_data, _alert_sr = (None, None)
 
 class PitchWorker(QThread):
     # Signals
@@ -44,6 +52,19 @@ class PitchWorker(QThread):
 
     def stop(self):
         self._stop_event.set()
+
+    def _play_alert(self):
+        """Play alert.mp3 non-blocking on incorrect form verdict"""
+        global _alert_data, _alert_sr
+        try:
+            if _alert_data is None and _ALERT_PATH.exists():
+                _alert_data, _alert_sr = sf.read(
+                    str(_ALERT_PATH), dtype="float32", always_2d=True
+                )
+            if _alert_data is not None:
+                sd.play(_alert_data, _alert_sr)
+        except Exception:
+            pass
 
     # Main thread body
     def run(self):
@@ -116,6 +137,11 @@ class PitchWorker(QThread):
                 f"Could not open camera {self.camera_id}."
             )
             return
+        
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        DETECT_WIDTH = max(1, round(actual_w * 0.1))
+        DETECT_HEIGHT = max(1, round(actual_h * 0.1))
         
         # Mirror LHP so the model always see the same side-view
         flip = (self.throwing_hand == "RHP")
@@ -330,6 +356,10 @@ class PitchWorker(QThread):
                 }
                 self.pitch_done.emit(pitch_result)
                 self.stats_updated.emit(n_pitches, n_mistakes)
+
+                # Play alert sound for incorrect form (non-blocking)
+                if verdict == "Incorrect Form":
+                    self._play_alert()
 
                 # Session JSON log
                 session_log.append({

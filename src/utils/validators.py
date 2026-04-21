@@ -23,5 +23,5 @@ def validate_name(value: str, field: str = "Name") -> tuple[bool, str]:
     if _CONSEC_SPECIAL.search(v):
         return False, f"{field} cannot have consecutive spaces, hyphens, or apostrophes."
     if _EDGE_SPECIAL.search(v):
-        return False, f"{field} cannot start or end with a space, hyphen, or apostrophe."
+        return False, f"{field} cannot start or end with a hyphen or apostrophe."
     return True, ""
