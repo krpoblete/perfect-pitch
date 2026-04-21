@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, QUrl, QTime
+from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
 from PyQt6.QtGui import QMouseEvent, QKeyEvent
 
 from src.config import ASSETS_DIR
@@ -57,7 +57,7 @@ TUTORIAL_CONTENT = {
 }
 
 class ClickableVideoWidget(QVideoWidget):
-    """QVideoWidget that emits a click on toggle play/pause."""
+    """QVideoWidget that toggles play/pause on left click."""
     def __init__(self, on_click, parent = None):
         super().__init__(parent)
         self._on_click = on_click
@@ -69,17 +69,34 @@ class ClickableVideoWidget(QVideoWidget):
             self._on_click()
         super().mousePressEvent(event)
 
+class VolumeSlider(QSlider):
+    """QSlider with scroll-to-adjust and pointing cursor."""
+    def __init__(self, on_scroll, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self._on_scroll = on_scroll
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def wheelEvent(self, event):
+        delta = 5 if event.angleDelta().y() > 0 else -5
+        self._on_scroll(delta)
+        event.accept()
+
 class TutorialPage(QWidget):
     def __init__(self):
         super().__init__()
         self._role = "Pitcher"
         self._is_seeking = False
+        self._was_playing = False
         self._is_muted = False
         self._pre_mute_vol = 50
         self.setObjectName("contentPage")
         # Capture arrow keys on this page
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.build_ui()
+        # Timer to resume after seek — gives Media Foundation time to decode
+        self._resume_timer = QTimer(self)
+        self._resume_timer.setSingleShot(True)
+        self._resume_timer.timeout.connect(self._player_resume)
 
     def build_ui(self):
         outer = QVBoxLayout(self)
@@ -142,11 +159,12 @@ class TutorialPage(QWidget):
         self._play_btn.setIcon(get_icon("player-play", color="#ffffff", size=18))
         self._play_btn.clicked.connect(self._toggle_play)
 
-        # Seek slider
+        # Seek slider — pointing cursor, pause-seek-resume
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
         self._seek_slider.setObjectName("tutorialSeek")
         self._seek_slider.setRange(0, 0)
         self._seek_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._seek_slider.setCursor(Qt.CursorShape.PointingHandCursor)
         self._seek_slider.sliderPressed.connect(self._on_seek_start)
         self._seek_slider.sliderMoved.connect(self._on_seek_move)
         self._seek_slider.sliderReleased.connect(self._on_seek_end)
@@ -158,15 +176,15 @@ class TutorialPage(QWidget):
         self._time_lbl.setFixedWidth(90)
         self._time_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Volume icon — changes based on level
+        # Volume icon — clickable for instant mute
         self._vol_icon = QLabel()
         self._vol_icon.setFixedSize(18, 18)
         self._vol_icon.setObjectName("tutorialVolIcon")
         self._vol_icon.setCursor(Qt.CursorShape.PointingHandCursor)
         self._update_vol_icon(50)
     
-        # Volume slider
-        self._vol_slider = QSlider(Qt.Orientation.Horizontal)
+        # Volume slider — scroll to adjust, pointing cursor
+        self._vol_slider = VolumeSlider(on_scroll=self._scroll_volume)
         self._vol_slider.setObjectName("tutorialVol")
         self._vol_slider.setRange(0, 100)
         self._vol_slider.setValue(50)
@@ -204,14 +222,34 @@ class TutorialPage(QWidget):
     # Keyboard
     def keyPressEvent(self, event: QKeyEvent):
         key = event.key()
+        dur = self._player.duration()
+        pos = self._player.position()
         if key == Qt.Key.Key_Left:
-            pos = max(0, self._player.position() - SEEK_STEP_MS)
-            self._player.setPosition(pos)
+            # If video ended, restart and play on left arrow
+            new_pos = max(0, pos - SEEK_STEP_MS)
+            was_playing = (
+                self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+                or (dur > 0 and pos >= dur)
+            )
+            if was_playing:
+                self._player.pause()
+            self._player.setPosition(new_pos)
+            if was_playing:
+                self._resume_timer.start(80)
         elif key == Qt.Key.Key_Right:
-            pos = min(self._player.duration(), self._player.position() + SEEK_STEP_MS)
-            self._player.setPosition(pos)
+            new_pos = min(dur, pos + SEEK_STEP_MS)
+            was_playing = (
+                self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+            )
+            if was_playing:
+                self._player.pause()
+            self._player.setPosition(new_pos)
+            if was_playing:
+                self._resume_timer.start(80)
         elif key == Qt.Key.Key_Space:
             self._toggle_play()
+        elif key == Qt.Key.Key_M:
+            self._toggle_mute()
         else:
             super().keyPressEvent(event)
 
@@ -221,7 +259,19 @@ class TutorialPage(QWidget):
         self.setFocus()
 
     # Player controls
+    def _player_resume(self):
+        """Called by timer after seek — resumes playback once frame is decoded."""
+        self._player.play()
+
     def _toggle_play(self):
+        dur = self._player.duration()
+        pos = self._player.position()
+        # If finished, restart from beginning
+        # if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+        #     self._player.pause()
+        # if dur > 0 and pos >= dur:
+        #     self._player.setPosition(max(0, dur - SEEK_STEP_MS))
+        #     self._resume_timer.start(80)
         if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self._player.pause()
         else:
@@ -229,27 +279,51 @@ class TutorialPage(QWidget):
         self.setFocus()
 
     def _on_seek_start(self):
+        """Pause while scrubbing for sharp frame rendering."""
+        self._was_playing = (
+            self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+        )
         self._is_seeking = True
+        self._resume_timer.stop()
+        if self._was_playing:
+            self._player.pause()
 
     def _on_seek_move(self, pos: int):
         self._player.setPosition(pos)
 
     def _on_seek_end(self):
-        self._is_seeking = False
+        """Seek to final position then resume if was playing."""
         self._player.setPosition(self._seek_slider.value())
+        if self._was_playing:
+            self._player.play()
+        self._is_seeking = False
 
     def _seek_click(self, event: QMouseEvent):
-        """Jump seek slider to clicked position immediately."""
+        """Jump seek slider position with pause → seek → timed resume."""
         if event.button() == Qt.MouseButton.LeftButton:
+            was_playing = (
+                self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+            )
+            if was_playing:
+                self._player.pause()
             ratio = event.position().x() / self._seek_slider.width()
             pos = int(ratio * self._seek_slider.maximum())
             self._seek_slider.setValue(pos)
             self._player.setPosition(pos)
+            if was_playing:
+                self._resume_timer.start(80)
         QSlider.mousePressEvent(self._seek_slider, event)
         self.setFocus()
 
+    def _scroll_volume(self, delta: int):
+        """Adjust volume by scroll wheel delta, clear mute if active."""
+        if self._is_muted:
+            self._is_muted = False
+        new_val = max(0, min(100, self._vol_slider.value() + delta))
+        self._vol_slider.setValue(new_val)
+        self.setFocus()
+
     def _vol_click(self, event: QMouseEvent):
-        """Jump volume slider to clicked position immediately."""
         if event.button() == Qt.MouseButton.LeftButton:
             ratio = event.position().x() / self._vol_slider.width()
             val = int(ratio * 100)
@@ -266,7 +340,7 @@ class TutorialPage(QWidget):
 
     def _toggle_mute(self, event: QMouseEvent = None):
         if self._is_muted:
-            # Unmute — restore previous volume
+            # Unmute — restore slider and audio to saved volume 
             self._is_muted = False
             self._vol_slider.blockSignals(True)
             self._vol_slider.setValue(self._pre_mute_vol)
@@ -274,7 +348,7 @@ class TutorialPage(QWidget):
             self._audio.setVolume(self._pre_mute_vol / 100.0)
             self._update_vol_icon(self._pre_mute_vol)
         else:
-            # Mute — save current volume
+            # Mute — save current slider position, drop both slider and audio to 0 
             self._pre_mute_vol = self._vol_slider.value()
             self._is_muted = True
             self._vol_slider.blockSignals(True)
@@ -297,8 +371,13 @@ class TutorialPage(QWidget):
 
     def _on_playback_state(self, state):
         playing = state == QMediaPlayer.PlaybackState.PlayingState
-        icon = "player-pause" if playing else "player-play"
-        self._play_btn.setIcon(get_icon(icon, color="#ffffff", size=18))
+        stopped = state == QMediaPlayer.PlaybackState.StoppedState
+        # Show reload icon when video has ended (stopped at end of media)
+        if stopped and self._player.position() >= self._player.duration() > 0:
+            self._play_btn.setIcon(get_icon("reload", color="#ffffff", size=18))
+        else:
+            icon = "player-pause" if playing else "player-play"
+            self._play_btn.setIcon(get_icon(icon, color="#ffffff", size=18))
 
     def _on_position_changed(self, pos: int):
         if not self._is_seeking:
