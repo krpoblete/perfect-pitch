@@ -563,23 +563,10 @@ class StartSessionPage(QWidget):
         from src.db import get_user_by_id
         user = get_user_by_id(self.user_id)
         if user:
-            # self._threshold = user["pitch_threshold"]
             self._throwing_hand = user["throwing_hand"]
 
         # Update camera guide for current throwing hand
         self._update_camera_guide()
-
-        # Re-check threshold in case it was updated in Account Settings
-        # if self._threshold and self._pitch_count >= self._threshold:
-        #     self.threshold_lbl.setText(
-        #         f"⚠ You've reached your daily pitch limit of {self._threshold}."
-        #     )
-        #     self.threshold_lbl.show()
-        #     self.start_btn.setEnabled(False)
-        # else:
-        #     self.threshold_lbl.hide()
-        #     if not self._running:
-        #         self.start_btn.setEnabled(True)
 
         # Refresh token status — handles lock/unlock and token card value.
         # Daily reset is automatic: get_pitch_token_status queries today's

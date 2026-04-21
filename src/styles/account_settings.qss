@@ -181,3 +181,47 @@
     height: 0;
     border: none;
 }
+
+/* Danger Zone */
+#settingsDangerCard {
+    background-color: #1a0f0f;
+    border: 1px solid #3a1a1a;
+    border-radius: 10px;
+}
+
+#dangerTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e05555;
+    background: transparent;
+}
+
+#dangerBtn {
+    background-color: #4a1a1a;
+    border: 1px solid #7a2a2a;
+    border-radius: 8px;
+    color: #e05555;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0 24px;
+    letter-spacing: 0.3px;
+}
+
+#dangerBtn:hover {
+    background-color: #5a1f1f;
+    border-color: #9a3a3a;
+}
+
+#dangerBtn:pressed {
+    background-color: #3a1414;
+}
+
+#dangerBtnDisabled {
+    background-color: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    color: #3a3a3a;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0 24px;
+}

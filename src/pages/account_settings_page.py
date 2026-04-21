@@ -192,9 +192,14 @@ class AccountSettingsPage(QWidget):
         threshold_row = QHBoxLayout()
         threshold_col = QVBoxLayout()
         threshold_col.setSpacing(4)
-        threshold_lbl = QLabel("Daily Pitch Threshold")
+        threshold_lbl = QLabel("Daily Pitch Tokens")
         threshold_lbl.setObjectName("settingsFieldLabel")
-        threshold_sub = QLabel("Auto-calculated from your age (USA Baseball guidelines). Max is capped by your age bracket.")
+        threshold_sub = QLabel(
+            "Sets how many pitches you can throw per day — your daily token pool. "
+            "Auto-calculated from your age (USA Baseball guidelines). "
+            "Max is capped by your age bracket. "
+            "Tokens reset every day."
+        )
         threshold_sub.setObjectName("settingsSubtitle")
         threshold_col.addWidget(threshold_lbl)
         threshold_col.addWidget(threshold_sub)
@@ -202,7 +207,7 @@ class AccountSettingsPage(QWidget):
         self.threshold_input = QSpinBox()
         self.threshold_input.setObjectName("thresholdSpinBox")
         self.threshold_input.setFixedSize(120, 44)
-        self.threshold_input.setSuffix(" pitches")
+        self.threshold_input.setSuffix(" tokens")
         self.threshold_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.threshold_input.valueChanged.connect(self._on_profile_changed)
 
@@ -287,6 +292,40 @@ class AccountSettingsPage(QWidget):
         self.confirm_pw_input.line_edit.returnPressed.connect(self._handle_change_password)
 
         layout.addWidget(security_card)
+        layout.addSpacing(28)
+
+        # Danger Zone section
+        layout.addWidget(self._section_label("Danger Zone"))
+        layout.addSpacing(16)
+
+        danger_card = self._card()
+        danger_card.setObjectName("settingsDangerCard")
+        danger_layout = QHBoxLayout(danger_card)
+        danger_layout.setContentsMargins(28, 20, 28, 20)
+        danger_layout.setSpacing(16)
+
+        danger_text_col = QVBoxLayout()
+        danger_text_col.setSpacing(4)
+        danger_title = QLabel("Delete Account")
+        danger_title.setObjectName("dangerTitle")
+        danger_sub = QLabel(
+            "Only available to Coaches."
+        )
+        danger_sub.setObjectName("settingsSubtitle")
+        danger_sub.setWordWrap(True)
+        danger_text_col.addWidget(danger_title)
+        danger_text_col.addWidget(danger_sub)
+
+        self.delete_btn = QPushButton("Delete Account")
+        self.delete_btn.setObjectName("dangerBtn")
+        self.delete_btn.setFixedHeight(44)
+        self.delete_btn.setFixedWidth(160)
+        self.delete_btn.clicked.connect(self._handle_delete_account)
+
+        danger_layout.addLayout(danger_text_col, stretch=1)
+        danger_layout.addWidget(self.delete_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addWidget(danger_card)
         layout.addStretch()
 
         scroll.setWidget(container)
@@ -422,6 +461,21 @@ class AccountSettingsPage(QWidget):
 
         self._set_save_enabled(False)
 
+        # Delete button — only Coaches can delete their own account
+        is_coach = self._role == "Coach"
+        self.delete_btn.setEnabled(is_coach)
+        self.delete_btn.setObjectName("dangerBtn" if is_coach else "dangerBtnDisabled")
+        self.delete_btn.setCursor(
+            Qt.CursorShape.PointingHandCursor if is_coach
+            else Qt.CursorShape.ForbiddenCursor
+        )
+        self.delete_btn.setToolTip(
+            "Delete your account" if is_coach
+            else "Only Coaches can delete their account"
+        )
+        self.delete_btn.style().unpolish(self.delete_btn)
+        self.delete_btn.style().polish(self.delete_btn)
+
         # Clear password fields
         self.current_pw_input.clear()
         self.new_pw_input.clear()
@@ -482,6 +536,40 @@ class AccountSettingsPage(QWidget):
         self.profile_updated.emit()
 
         toast_success(self, "Profile updated successfully.")
+
+    def _handle_delete_account(self):
+        """Coach-only: soft-delete account and return to login."""
+        if self._role != "Coach":
+            return
+        
+        from src.widgets.confirm_dialog import ConfirmDialog
+        dlg = ConfirmDialog(
+            self.window(),
+            title="Delete Account",
+            message=(
+                "Are you sure you want to delete you account?"
+            ),
+        )
+        dlg.exec()
+        if not dlg.result_yes():
+            return
+        
+        from src.db import deactivate_user
+        from src.windows.auth_window import AuthWindow
+        from src.utils.animations import fade_out
+
+        deactivate_user(self.user_id)
+
+        # Return to login
+        self._auth_window = AuthWindow()
+        self._auth_window.show()
+
+        def _close():
+            w = self.window()
+            w._logging_out = True
+            w.close()
+
+        fade_out(self.window(), on_finish=_close)
 
     def _handle_change_password(self):
         from src.db import get_user_by_id, verify_password, update_user_password
