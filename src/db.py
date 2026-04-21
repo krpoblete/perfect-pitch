@@ -107,7 +107,7 @@ def _seed_admin(conn):
          "admin",
          hashed.decode("utf-8"),
          "Admin",
-         50,
+         10,
          _manila_now()),
     )
     conn.commit()
@@ -308,6 +308,83 @@ def get_sessions_for_user(user_id):
     ).fetchall()
     conn.close()
     return rows
+
+# Pitch token helpers
+def get_pitches_used_today(user_id: int) -> int:
+    """Return total pitches thrown today (Manila time, UTC+8)."""
+    from datetime import datetime, timezone, timedelta
+    utc8 = timezone(timedelta(hours=8))
+    today = datetime.now(utc8).strftime("%Y-%m-%d")
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT COALESCE(SUM(total_pitch), 0) AS used
+        FROM sessions
+        WHERE user_id = ?
+        AND date(date) = ?
+    """, (user_id, today)).fetchone()
+    conn.close()
+    return int(row["used"]) if row else 0
+
+def get_pitch_token_status(user_id: int) -> dict:
+    """Return full token status for the start session page.
+ 
+    Keys:
+        threshold       — user's current daily threshold (their token pool)
+        recommended_cap — USA Baseball age-based cap (max they can ever set)
+        used_today      — pitches already thrown today
+        remaining       — tokens left (threshold - used_today), min 0
+        headroom        — extra pitches available up to recommended_cap
+                          (recommended_cap - threshold), shown when exhausted
+        locked          — True when remaining == 0
+    """
+    conn = get_connection()
+    user = conn.execute(
+        "SELECT pitch_threshold, date_of_birth FROM users WHERE id = ? AND is_active = 1",
+        (user_id,)
+    ).fetchone()
+    conn.close()
+
+    if not user:
+        return {"threshold": 0, "recommended_cap": 0, "used_today": 0,
+                "remaining": 0, "headroom": 0, "locked": True}
+    
+    threshold = user["pitch_threshold"] or 50
+
+    # Compute recommended cap from DOB
+    from src.db import _calc_threshold
+    from datetime import date as _date
+    PITCH_LIMITS = [
+        (13, 14, 95), 
+        (15, 16, 95),
+        (17, 18, 105), 
+        (19, 22, 120),
+    ]
+    recommended_cap = 50
+    try:
+        dob = _date.fromisoformat(user["date_of_birth"])
+        today = _date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        for lo, hi, cap in PITCH_LIMITS:
+            if lo <= age <= hi:
+                recommended_cap = cap
+                break
+            else:
+                recommended_cap = 120
+    except Exception:
+        recommended_cap = 120
+
+    used_today = get_pitches_used_today(user_id)
+    remaining = max(0, threshold - used_today)
+    headroom = max(0, recommended_cap - threshold)
+
+    return {
+        "threshold": threshold,
+        "recommended_cap": recommended_cap,
+        "used_today": used_today,
+        "remaining": remaining,
+        "headroom": headroom,
+        "locked": remaining == 0,
+    }
 
 # Dashboard helpers
 def get_dashboard_stats(user_id):

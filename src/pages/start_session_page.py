@@ -96,12 +96,15 @@ class StartSessionPage(QWidget):
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
-        self._ml_bundle = ml_bundle
+        self._ml_bundle = ml_bundle   # (model, scaler, threshold, joint_thresholds)
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
-        self._threshold = None
-        self._throwing_hand = "RHP"
+        self._threshold = None        # user's current token pool
+        self._recommended_cap = None  # USA Baseball age-based cap
+        self._used_today = 0          # pitches thrown today
+        self._tokens_remaining = 0    # threshold - used_today 
+        self._throwing_hand = "RHP"   
         self._worker = None
         self.setObjectName("contentPage")
         self.build_ui()
@@ -150,14 +153,18 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.pitch_card)
         panel_layout.addWidget(self.mistake_card)
         panel_layout.addWidget(self.accuracy_card)
+        # Token card — shows remaining pitches for today
+        self.token_card = self._stat_card("Tokens Left", "play-handball", "#f0a500")
+        self.token_val = self.token_card.findChild(QLabel, "statValue")
+        panel_layout.addWidget(self.token_card)
 
-        # Threshold warning
-        self.threshold_lbl = QLabel()
-        self.threshold_lbl.setObjectName("thresholdWarning")
-        self.threshold_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.threshold_lbl.setWordWrap(True)
-        self.threshold_lbl.hide()
-        panel_layout.addWidget(self.threshold_lbl)
+        # Token status label — shown when locked or near limit
+        self.token_status_lbl = QLabel()
+        self.token_status_lbl.setObjectName("thresholdWarning")
+        self.token_status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.token_status_lbl.setWordWrap(True)
+        self.token_status_lbl.hide()
+        panel_layout.addWidget(self.token_status_lbl)
 
         panel_layout.addStretch()
 
@@ -356,37 +363,80 @@ class StartSessionPage(QWidget):
         self.accuracy_val.setText(f"{accuracy:.2f}%")
 
         # Block at threshold
-        if self._threshold and pitch_count >= self._threshold:
-            self._handle_threshold_reached()
+        # Decrement token display live during session
+        tokens_live = max(0, self._tokens_remaining - pitch_count)
+        self.token_val.setText(str(tokens_live))
 
-    # Threshold
-    def _handle_threshold_reached(self):
+        # Check if tokens exhausted mid-session
+        if self._threshold and pitch_count >= self._tokens_remaining:
+            self._handle_token_exhausted_mid_session()
+
+    # Token system
+    def _refresh_token_status(self):
+        """Load today's token status from DB and update all token UI."""
+        from src.db import get_pitch_token_status
+        status = get_pitch_token_status(self.user_id)
+
+        self._threshold = status["threshold"]
+        self._recommended_cap = status["recommended_cap"]
+        self._used_today = status["used_today"]
+        self._tokens_remaining = status["remaining"]
+
+        # Update token card value
+        self.token_val.setText(str(self._tokens_remaining))
+
+        if status["locked"]:
+            self._apply_token_locked(status)
+        else:
+            self.token_status_lbl.hide()
+            if not self._running:
+                self.start_btn.setEnabled(True)
+
+    def _apply_token_locked(self, status: dict):
+        """Block START and show appropriate message when tokens are exhausted."""
+        self.start_btn.setEnabled(False)
+        headroom = status["headroom"]
+        threshold = status["threshold"]
+        cap = status["recommended_cap"]
+
+        if headroom > 0:
+            msg = (
+                f"⚠ You've used all {threshold} of your pitching tokens today.\n"
+                f"You can still add {headroom} more — your recommended daily "
+                f"cap is {cap}. Increase your threshold in Account Settings."
+            )
+        else:
+            msg = (
+                f"⚠ You've reached your maximum daily pitch limit of {cap}. "
+                f"Come back tomorrow to pitch again."
+            )
+        self.token_status_lbl.setText(msg)
+        self.token_status_lbl.show()
+
+    def _handle_token_exhausted_mid_session(self):
+        """Called during a live session when tokens hit zero mid-pitch."""
         if self._running:
             self._stop_capture()
-            self.threshold_lbl.setText(
-                f"⚠ Daily pitch limit of {self._threshold} reached. "
-                f"Session ended automatically."
-            )
-            self.threshold_lbl.show()
-            self.start_btn.setEnabled(False)
+            headroom = max(0, (self._recommended_cap or 0) - (self._threshold or 0))
+            status = {
+                "threshold": self._threshold,
+                "recommended_cap": self._recommended_cap,
+                "headroom": headroom,
+            }
+            self._apply_token_locked(status)
             self.end_btn.setEnabled(True)
 
-    def _check_threshold_on_start(self) -> bool:
-        """Returns True if blocked."""
-        if self._threshold and self._pitch_count >= self._threshold:
-            self.threshold_lbl.setText(
-                f"⚠ You've reached your daily pitch limit of {self._threshold}."
-            )
-            self.threshold_lbl.show()
-            return True
-        return False
+    def _check_tokens_on_start(self) -> bool:
+        """Refresh token status, return True (blocked) if no tokens remain."""
+        self._refresh_token_status()
+        return self._tokens_remaining <= 0
     
     # Handlers
     def _handle_start(self):
-        if self._check_threshold_on_start():
+        if self._check_tokens_on_start():
             return
     
-        self.threshold_lbl.hide()
+        self.token_status_lbl.hide()
         self.camera_guide_card.hide()
         self._running = True
         self.start_btn.setEnabled(False)
@@ -399,6 +449,7 @@ class StartSessionPage(QWidget):
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
 
+        # Show loading indicator immediately while worker initializes
         self.feed_label.setText("⏳  Initializing camera and model...")
         self.feed_label.setObjectName("feedLabelIdle")
         self.feed_label.style().unpolish(self.feed_label)
@@ -407,6 +458,7 @@ class StartSessionPage(QWidget):
         feed_w = self.feed_label.width()
         feed_h = self.feed_label.height()
 
+        # Fallback: derive from screen geometry if label hasn't rendered yet
         if feed_w < 100 or feed_h < 100:
             from PyQt6.QtWidgets import QApplication
             screen = QApplication.primaryScreen().availableGeometry()
@@ -457,6 +509,8 @@ class StartSessionPage(QWidget):
             self._worker.stop()
             self._worker.wait()
             self._worker = None
+        # Re-evaluate token lock state after session ends
+        self._refresh_token_status()
 
     def _save_session(self, accuracy: float):
         from src.db import get_connection, _manila_now
@@ -476,7 +530,10 @@ class StartSessionPage(QWidget):
         self.pitch_val.setText("0")
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
-        self.threshold_lbl.hide()
+        self.token_status_lbl.hide()
+
+        # Refresh token card immediately after save so it reflects pitches used
+        self._refresh_token_status()
 
     # PitchWorker signal handlers
     def _on_model_loaded(self):
@@ -506,19 +563,25 @@ class StartSessionPage(QWidget):
         from src.db import get_user_by_id
         user = get_user_by_id(self.user_id)
         if user:
-            self._threshold = user["pitch_threshold"]
+            # self._threshold = user["pitch_threshold"]
             self._throwing_hand = user["throwing_hand"]
 
+        # Update camera guide for current throwing hand
         self._update_camera_guide()
 
         # Re-check threshold in case it was updated in Account Settings
-        if self._threshold and self._pitch_count >= self._threshold:
-            self.threshold_lbl.setText(
-                f"⚠ You've reached your daily pitch limit of {self._threshold}."
-            )
-            self.threshold_lbl.show()
-            self.start_btn.setEnabled(False)
-        else:
-            self.threshold_lbl.hide()
-            if not self._running:
-                self.start_btn.setEnabled(True)
+        # if self._threshold and self._pitch_count >= self._threshold:
+        #     self.threshold_lbl.setText(
+        #         f"⚠ You've reached your daily pitch limit of {self._threshold}."
+        #     )
+        #     self.threshold_lbl.show()
+        #     self.start_btn.setEnabled(False)
+        # else:
+        #     self.threshold_lbl.hide()
+        #     if not self._running:
+        #         self.start_btn.setEnabled(True)
+
+        # Refresh token status — handles lock/unlock and token card value.
+        # Daily reset is automatic: get_pitch_token_status queries today's
+        # sessions from the DB, so tokens reset naturally each new day.
+        self._refresh_token_status()
