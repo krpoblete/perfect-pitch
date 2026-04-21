@@ -58,7 +58,7 @@ TUTORIAL_CONTENT = {
 
 class ClickableVideoWidget(QVideoWidget):
     """QVideoWidget that toggles play/pause on left click."""
-    def __init__(self, on_click, parent = None):
+    def __init__(self, on_click, parent=None):
         super().__init__(parent)
         self._on_click = on_click
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -264,14 +264,6 @@ class TutorialPage(QWidget):
         self._player.play()
 
     def _toggle_play(self):
-        dur = self._player.duration()
-        pos = self._player.position()
-        # If finished, restart from beginning
-        # if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-        #     self._player.pause()
-        # if dur > 0 and pos >= dur:
-        #     self._player.setPosition(max(0, dur - SEEK_STEP_MS))
-        #     self._resume_timer.start(80)
         if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self._player.pause()
         else:

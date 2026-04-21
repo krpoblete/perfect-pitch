@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, QSize
 
 from src.utils.icons import get_icon
 
-ROWS_PER_PAGE = 10
+ROWS_PER_PAGE = 5 
 
 def _fmt_dt(dt_str: str) -> str:
     try:
