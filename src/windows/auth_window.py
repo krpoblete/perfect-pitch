@@ -17,8 +17,9 @@ from src.pages.auth.forgot_password_page import ForgotPasswordPage
 WIN_W, WIN_H = 1200, 700
 
 class AuthWindow(FramelessMainWindow):
-    def __init__(self):
+    def __init__(self, ml_bundle=None):
         super().__init__()
+        self.ml_bundle = ml_bundle
         self.setWindowTitle("Perfect Pitch")
         self.setFixedSize(QSize(WIN_W, WIN_H))
         self.titleBar.hide()

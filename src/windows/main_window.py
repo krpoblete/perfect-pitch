@@ -37,9 +37,10 @@ NAV_ADMIN = [
 ]
 
 class MainWindow(FramelessMainWindow):
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
+        self.ml_bundle = ml_bundle
         self._logging_out = False
         self.setWindowTitle("Perfect Pitch")
         self.titleBar.hide()
@@ -202,7 +203,7 @@ class MainWindow(FramelessMainWindow):
             "tutorial": TutorialPage(),
             "pitchers": PitchersPage(),
             "users": UsersPage(),
-            "start_session": StartSessionPage(self.user_id),
+            "start_session": StartSessionPage(self.user_id, ml_bundle=self.ml_bundle),
             "account_settings": AccountSettingsPage(self.user_id),
         }
 

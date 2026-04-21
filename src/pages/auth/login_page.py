@@ -137,8 +137,9 @@ class LoginPage(QWidget):
         if user is None or not verify_password(password, user["password"]):
             toast_error(self, "Invalid email or password.")
             return
-        
-        self.main_window = MainWindow(user_id=user["id"])
+
+        ml_bundle = getattr(self.auth, "ml_bundle", None) 
+        self.main_window = MainWindow(user_id=user["id"], ml_bundle=ml_bundle)
         self.main_window.show()
         
         def _close():

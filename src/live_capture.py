@@ -102,8 +102,8 @@ def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
     return out
 
 #camera settings
-DETECT_WIDTH  = 192
-DETECT_HEIGHT = 108
+DETECT_WIDTH  = 134
+DETECT_HEIGHT = 75 
 
 EMA_ALPHA     = 0.5
 VELOCITY_GAIN = 0.4
@@ -714,7 +714,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real-time pitch form analysis.")
     parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--width",  type=int, default=1920)
-    parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--width",  type=int, default=1340)
+    parser.add_argument("--height", type=int, default=754)
     args = parser.parse_args()
     run_live(camera_id=args.camera, width=args.width, height=args.height)

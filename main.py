@@ -45,8 +45,14 @@ def main():
     # Initialize database
     init_db()
 
+    # Pre-load ML model once at startup so StartSession launches instantly.
+    # load_model() returns (model, scaler, threshold, joint_thresholds).
+    from src.analyze import load_model
+    ml_bundle = load_model()
+    print("ML model loaded.")
+
     # Show login window centered
-    window = AuthWindow()
+    window = AuthWindow(ml_bundle=ml_bundle)
     window.show()
 
     sys.exit(app.exec())

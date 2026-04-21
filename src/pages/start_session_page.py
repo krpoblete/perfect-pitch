@@ -93,9 +93,10 @@ class SessionSummaryDialog(QDialog):
         return card
 
 class StartSessionPage(QWidget):
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
+        self._ml_bundle = ml_bundle
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
@@ -398,15 +399,27 @@ class StartSessionPage(QWidget):
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
 
+        self.feed_label.setText("⏳  Initializing camera and model...")
+        self.feed_label.setObjectName("feedLabelIdle")
+        self.feed_label.style().unpolish(self.feed_label)
+        self.feed_label.style().polish(self.feed_label)
+
+        feed_w = max(self.feed_label.width(), 1340)
+        feed_h = max(self.feed_label.height(), 754)
+
         # Start PitchWorker
         self._worker = PitchWorker(
             camera_id=CAMERA_ID,
+            width=feed_w,
+            height=feed_h,
             throwing_hand=self._throwing_hand,
+            ml_bundle=self._ml_bundle,
             parent=self,
         )
         self._worker.frame_ready.connect(self.update_frame)
         self._worker.stats_updated.connect(self.update_stats)
         self._worker.pitch_done.connect(self._on_pitch_done)
+        self._worker.model_loaded.connect(self._on_model_loaded)
         self._worker.error_occurred.connect(self._on_worker_error)
         self._worker.session_ended.connect(self._on_session_ended)
         self._worker.start()
@@ -460,6 +473,9 @@ class StartSessionPage(QWidget):
         self.threshold_lbl.hide()
 
     # PitchWorker signal handlers
+    def _on_model_loaded(self):
+        self._show_idle_feed()
+
     def _on_pitch_done(self, result: dict):
         """Receives full pitch result after each pitch is analyzed."""
         verdict = result.get("verdict", "")

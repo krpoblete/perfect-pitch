@@ -27,17 +27,19 @@ class PitchWorker(QThread):
     pitch_done = pyqtSignal(dict)         # full pitch result dict
     stats_updated = pyqtSignal(int, int)  # (pitch_count, mistakes)
     state_changed = pyqtSignal(str)       # WAITING | COUNTDOWN | COLLECTING | ANALYZING | POST_PITCH
+    model_loaded = pyqtSignal()           # camera + model ready
     error_occurred = pyqtSignal(str)      # fatal error message
     session_ended = pyqtSignal(str)       # log_path when thread finishes
 
     def __init__(self, camera_id: int = 0, width: int = 1920,
                  height: int = 1080, throwing_hand: str = "RHP",
-                 parent = None):
+                 ml_bundle=None, parent = None):
         super().__init__(parent)
         self.camera_id = camera_id
         self.width = width
         self.height = height
         self.throwing_hand = throwing_hand
+        self._ml_bundle = ml_bundle
         self._stop_event = threading.Event()
 
     def stop(self):
@@ -79,26 +81,31 @@ class PitchWorker(QThread):
         import pickle
 
         # Load model
-        checkpoint = torch.load(
-            MODEL_DIR / "lstm_autoencoder.pt",
-            map_location=DEVICE, weights_only=False,
-        )
-        cfg = checkpoint["config"]
-        threshold = checkpoint["threshold"]
-        thresholds = np.array(
-            checkpoint.get("joint_thresholds",
-                           [threshold] * NUM_JOINTS),
-            dtype=np.float32,
-        )
-        ae = LSTMAutoencoder(
-            cfg["input_size"], cfg["hidden_size"], cfg["latent_dim"],
-            cfg["seq_len"], cfg["num_layers"],
-        ).to(DEVICE)
-        ae.load_state_dict(checkpoint["model_state_dict"])
-        ae.eval()
+        if self._ml_bundle is not None:
+            ae, scaler, threshold, thresholds = self._ml_bundle
+            thresholds = np.array(thresholds, dtype=np.float32)
+        else:
+            # Fallback: load from disk if bundle wasn't passed
+            checkpoint = torch.load(
+                MODEL_DIR / "lstm_autoencoder.pt",
+                map_location=DEVICE, weights_only=False,
+            )
+            cfg = checkpoint["config"]
+            threshold = checkpoint["threshold"]
+            thresholds = np.array(
+                checkpoint.get("joint_thresholds",
+                            [threshold] * NUM_JOINTS),
+                dtype=np.float32,
+            )
+            ae = LSTMAutoencoder(
+                cfg["input_size"], cfg["hidden_size"], cfg["latent_dim"],
+                cfg["seq_len"], cfg["num_layers"],
+            ).to(DEVICE)
+            ae.load_state_dict(checkpoint["model_state_dict"])
+            ae.eval()
 
-        with open(MODEL_DIR / "scaler.pkl", "rb") as f:
-            scaler = pickle.load(f)
+            with open(MODEL_DIR / "scaler.pkl", "rb") as f:
+                scaler = pickle.load(f)
 
         # Camera
         cap = cv2.VideoCapture(self.camera_id)
@@ -115,6 +122,8 @@ class PitchWorker(QThread):
 
         cam_thread = CameraThread(cap)
         cam_thread.start()
+
+        self.model_loaded.emit()
 
         # Pose landmarker (LIVE_STREAM)
         result_list = [None]
