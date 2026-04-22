@@ -238,3 +238,41 @@
     font-weight: 600;
     background: transparent;
 }
+
+/* Pitchers only badge */
+#pitchersOnlyBadge {
+    font-size: 10px;
+    font-weight: 600;
+    color: #4a9eff;
+    background-color: #0d1e33;
+    border: 1px solid #1a3a5c;
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+
+/* Disabled hand buttons (Coach role) */
+#handBtnDisabled {
+    background-color: #141414;
+    border: 1px solid #1e1e1e;
+    border-radius: 6px;
+    color: #2a2a2a;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Disabled threshold spinbox (Coach role) */
+#thresholdSpinBoxDisabled {
+    background-color: #141414;
+    border: 1px solid #1e1e1e;
+    border-radius: 6px;
+    color: #2a2a2a;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#thresholdSpinBoxDisabled::up-button,
+#thresholdSpinBoxDisabled::down-button {
+    width: 0;
+    height: 0;
+    border: none;
+}

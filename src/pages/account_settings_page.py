@@ -182,8 +182,13 @@ class AccountSettingsPage(QWidget):
         dob_col.addWidget(self.dob_display)
 
         hand_col = QVBoxLayout()
-        hand_col.setSpacing(6) 
-        hand_col.addWidget(self._field_label("Throwing Hand"))
+        hand_col.setSpacing(6)
+        hand_header = QHBoxLayout()
+        hand_header.setSpacing(8)
+        hand_header.addWidget(self._field_label("Throwing Hand"))
+        hand_header.addWidget(self._pitchers_only_badge())
+        hand_header.addStretch()
+        hand_col.addLayout(hand_header)
         hand_btn_row = QHBoxLayout()
         hand_btn_row.setSpacing(10)
         self.rhp_btn = QPushButton("RHP")
@@ -215,15 +220,20 @@ class AccountSettingsPage(QWidget):
         threshold_row = QHBoxLayout()
         threshold_col = QVBoxLayout()
         threshold_col.setSpacing(4)
+        threshold_header = QHBoxLayout()
+        threshold_header.setSpacing(8)
         threshold_lbl = QLabel("Daily Pitch Threshold")
         threshold_lbl.setObjectName("settingsFieldLabel")
+        threshold_header.addWidget(threshold_lbl)
+        threshold_header.addWidget(self._pitchers_only_badge())
+        threshold_header.addStretch()
+        threshold_col.addLayout(threshold_header)
         threshold_sub = QLabel(
             "Your daily pitch limit. The maximum is your recommended cap "
             "(USA Baseball guidelines). Pitches used today are deducted from "
             "your available limit and it fully replenishes at midnight."
         )
         threshold_sub.setObjectName("settingsSubtitle")
-        threshold_col.addWidget(threshold_lbl)
         threshold_col.addWidget(threshold_sub)
 
         self.threshold_input = QSpinBox()
@@ -379,7 +389,13 @@ class AccountSettingsPage(QWidget):
         self.lhp_btn.style().unpolish(self.lhp_btn)
         self.lhp_btn.style().polish(self.lhp_btn)
         self._on_profile_changed()
-    
+
+    def _pitchers_only_badge(self) -> QLabel:
+        """Small inline badge indicating a field is only for Pitchers."""
+        badge = QLabel("Pitchers only")
+        badge.setObjectName("pitchersOnlyBadge")
+        return badge
+     
     def _section_label(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setObjectName("settingsSectionLabel")
@@ -511,19 +527,48 @@ class AccountSettingsPage(QWidget):
         self.rhp_btn.blockSignals(False)
         self.lhp_btn.blockSignals(False)
 
-        # Coaches don't pitch — disable hand toggle and threshold
+        # Coaches don't pitch — grey out hand buttons and threshold entirely
         is_coach = self._role == "Coach"
         self.rhp_btn.setEnabled(not is_coach)
         self.lhp_btn.setEnabled(not is_coach)
-        self.threshold_input.setEnabled(not is_coach)
+        
         if is_coach:
+            # Grey out hand buttons — use disabled object names so QSS dims them
+            self.rhp_btn.setObjectName("handBtnDisabled")
+            self.lhp_btn.setObjectName("handBtnDisabled")
             self.rhp_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
             self.lhp_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
+
+            # Threshold — show 0, greyed out, fully locked
+            self.threshold_input.blockSignals(True)
+            self.threshold_input.setRange(0, 0)
+            self.threshold_input.setValue(0)
+            self.threshold_input.blockSignals(False)
+            self.threshold_input.setEnabled(False)
+            self.threshold_input.setObjectName("thresholdSpinBoxDisabled")
             self.threshold_input.setCursor(Qt.CursorShape.ForbiddenCursor)
+            self.threshold_input.setToolTip("Coaches do not have a pitch threshold.")
+
+            # Grey out indicators for Coach
+            self.rec_cap_lbl.setText("Recommended: N/A")
+            self.rec_cap_lbl.setStyleSheet("color: #3a3a3a; background: transparent;")
+            self.remaining_lbl.setText("Remaining today: 0")
+            self.remaining_lbl.setStyleSheet("color: #3a3a3a; background: transparent;")
         else:
+            # Restore hand buttons to correct active/inactive state
+            active_hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
+            self.rhp_btn.setObjectName("handBtnActive" if active_hand == "RHP" else "handBtn") 
+            self.lhp_btn.setObjectName("handBtnActive" if active_hand == "LHP" else "handBtn")
             self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.threshold_input.setEnabled(True)
+            self.threshold_input.setObjectName("thresholdSpinBox")
             self.threshold_input.setCursor(Qt.CursorShape.IBeamCursor)
+
+        # Force QSS re-evaluation on hand buttons and spinbox
+        for w in (self.rhp_btn, self.lhp_btn, self.threshold_input):
+            w.style().unpolish(w)
+            w.style().polish(w)
 
         self._set_save_enabled(False)
 
