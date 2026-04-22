@@ -363,7 +363,9 @@ class StartSessionPage(QWidget):
         layout.addLayout(title_row)
 
         # Value
-        val = QLabel("0")
+        # Accuracy card gets a formatted default; others use plain "0"
+        default = "0.00%" if title == "Accuracy" else "0"
+        val = QLabel(default)
         val.setObjectName("statValue")
         val.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(val)
@@ -438,35 +440,52 @@ class StartSessionPage(QWidget):
 
         # Block at threshold
         # Decrement token display live during session
-        tokens_live = max(0, self._tokens_remaining - pitch_count)
-        self.token_val.setText(str(tokens_live))
+        # tokens_remaining already accounts for used_today at session start
+        pitches_live = max(0, self._tokens_remaining - pitch_count)
+        self.token_val.setText(str(pitches_live))
 
-        # Check if tokens exhausted mid-session
-        if self._threshold and pitch_count >= self._tokens_remaining:
+        # Exhaust check: session pitches have consumed all remaining tokens 
+        if pitches_live <= 0 and self._running: 
             self._handle_token_exhausted_mid_session()
 
     # Token system
     def _refresh_token_status(self):
         """Load today's token status from DB and update all token UI."""
-        from src.db import get_pitch_token_status
+        from src.db import get_pitch_token_status, get_pitches_used_today
         status = get_pitch_token_status(self.user_id)
 
-        self._threshold = status["threshold"]
-        self._recommended_cap = status["recommended_cap"]
-        self._used_today = status["used_today"]
-        self._tokens_remaining = status["remaining"]
+        cap = status["recommended_cap"]
+        used_today = status["used_today"]
+        threshold = status["threshold"]
+
+        # effective_max mirrors account_settings deduction logic exactly
+        effective_max = max(0, cap - used_today) 
+
+        # Tokens remaining = what the user can actually still pitch today
+        # clamped to both their saved threshold and the effective_max
+        self._threshold = threshold
+        self._recommended_cap = cap
+        self._used_today = used_today
+        self._tokens_remaining = min(threshold, effective_max)
 
         # Update recommended threshold card
         self.rec_val_lbl.setText(
-            f"{status['recommended_cap']} pitches/day"
-            if status["recommended_cap"] else "—"
+            f"{cap} pitches/day" if cap else "—"
         )
 
-        # Update pitches left card value
+        # Update pitches left card
         self.token_val.setText(str(self._tokens_remaining))
 
-        if status["locked"]:
-            self._apply_token_locked(status)
+        # Build a status dict consistent with _apply_token_locked expectations
+        locked_status = {
+            "threshold": threshold,
+            "recommended_cap": cap,
+            "headroom": max(0, effective_max - threshold),
+            "locked": self._tokens_remaining <= 0,
+        }
+
+        if locked_status["locked"]:
+            self._apply_token_locked(locked_status)
         else:
             self.token_status_lbl.hide()
             if not self._running:
@@ -482,13 +501,13 @@ class StartSessionPage(QWidget):
         if headroom > 0:
             msg = (
                 f"⚠ You've used all {threshold} of your pitching tokens today.\n"
-                f"You can still add {headroom} more — your recommended daily "
-                f"cap is {cap}. Increase your threshold in Account Settings."
+                f"You can still pitch {headroom} more — your recommended "
+                f"daily limit is {cap}. Increase your threshold in Account Settings."
             )
         else:
             msg = (
                 f"⚠ You've reached your maximum daily pitch limit of {cap}. "
-                f"Come back tomorrow to pitch again."
+                f"Your pitches replenish at midnight."
             )
         self.token_status_lbl.setText(msg)
         self.token_status_lbl.show()

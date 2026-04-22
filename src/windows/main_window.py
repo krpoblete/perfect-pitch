@@ -269,6 +269,7 @@ class MainWindow(FramelessMainWindow):
         logout_btn.setIconSize(QSize(16, 16))
         logout_btn.setToolTip("Logout")
         logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        logout_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         logout_btn.clicked.connect(lambda: self._logout())
 
         row.addWidget(avatar)
