@@ -10,15 +10,17 @@ from src.widgets.password_input import PasswordInput
 
 # USA Baseball pitch count limits by age bracket
 PITCH_LIMITS = [
-    (13, 14, 95),
-    (15, 16, 95),
+    (13, 16, 95),
     (17, 18, 105),
     (19, 22, 120),
 ]
 
 def get_pitch_limit(dob_str: str) -> int | None:
     """Return the recommended daily pitch limit based on date of birth.
-    Defaults to 95 if age is outside all USA Baseball brackets.""" 
+
+    Age < 13 → 95  (signup floor — youngest allowed)
+    Age > 22 → 120 (highest bracket ceiling)
+    """
     try:
         dob = date.fromisoformat(dob_str)
         today = date.today()
@@ -26,13 +28,18 @@ def get_pitch_limit(dob_str: str) -> int | None:
         for min_age, max_age, limit in PITCH_LIMITS:
             if min_age <= age <= max_age:
                 return limit
+        if age > 22:
+            return 120
+        return 95
     except Exception:
-        pass
-    return 95
+        return 95
 
 def get_pitch_max(dob_str: str) -> int:
-    """Return the USA Baseball max cap for the user's age (spinbox ceiling).
-    Always 120 for ages outside all brackets."""
+    """Return the spinbox ceiling for the user's age.
+ 
+    Age < 13 → 95  (signup floor — youngest allowed)
+    Age > 22 → 120 (highest bracket ceiling)
+    """ 
     try:
         dob = date.fromisoformat(dob_str)
         today = date.today()
@@ -40,9 +47,11 @@ def get_pitch_max(dob_str: str) -> int:
         for min_age, max_age, limit in PITCH_LIMITS:
             if min_age <= age <= max_age:
                 return limit
+        if age > 22:
+            return 120
+        return 95
     except Exception:
-        pass
-    return 120
+        return 95 
 
 class AccountSettingsPage(QWidget):
     # Emitted after a successful save so MainWindow can refresh the sidebar
@@ -57,8 +66,22 @@ class AccountSettingsPage(QWidget):
         self._original_hand = "RHP"
         self._role = "Pitcher"
         self._dob = ""
+        self._last_date = self._manila_today()
         self.setObjectName("contentPage")
         self.build_ui()
+
+        # Check every 60s if Manila date has changed → replenish spinbox at midnight
+        from PyQt6.QtCore import QTimer as _QTimer
+        self._midnight_timer = _QTimer(self)
+        self._midnight_timer.setInterval(60_000)
+        self._midnight_timer.timeout.connect(self._check_midnight_reset)
+        self._midnight_timer.start()
+    
+    @staticmethod
+    def _manila_today() -> str:
+        """Return today's date string in Manila time (UTC+8)."""
+        from datetime import datetime, timezone, timedelta
+        return datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
 
     def build_ui(self):
         outer = QVBoxLayout(self)
@@ -195,9 +218,9 @@ class AccountSettingsPage(QWidget):
         threshold_lbl = QLabel("Daily Pitch Threshold")
         threshold_lbl.setObjectName("settingsFieldLabel")
         threshold_sub = QLabel(
-            "Sets how many pitches you can throw per day. "
-            "Auto-calculated from your age (USA Baseball guidelines). "
-            "Max is capped by your age bracket. Resets every day."
+            "Your daily pitch limit. The maximum is your recommended cap "
+            "(USA Baseball guidelines). Pitches used today are deducted from "
+            "your available limit and it fully replenishes at midnight."
         )
         threshold_sub.setObjectName("settingsSubtitle")
         threshold_col.addWidget(threshold_lbl)
@@ -327,7 +350,6 @@ class AccountSettingsPage(QWidget):
             "Only available to Coaches."
         )
         danger_sub.setObjectName("settingsSubtitle")
-        danger_sub.setWordWrap(True)
         danger_text_col.addWidget(danger_title)
         danger_text_col.addWidget(danger_sub)
 
@@ -441,35 +463,47 @@ class AccountSettingsPage(QWidget):
         except Exception:
             self.dob_display.setText(self._dob)
 
-        # Threshold — use saved value or auto-calculate from DOB
-        saved = user["pitch_threshold"]
+        # Threshold with daily deduction logic
+        from src.db import get_pitches_used_today
         recommended = get_pitch_limit(self._dob)
         cap = get_pitch_max(self._dob)
-        threshold = min(saved if saved else recommended, cap) 
+        user_today = get_pitches_used_today(self.user_id)
+
+        # effect_max = how many pitches the user can still set today
+        effective_max = max(1, cap - user_today)
+
+        # Clamp the saved threshold to what's actually available today
+        saved = user["pitch_threshold"] or recommended
+        threshold = min(saved, effective_max)
         self._original_threshold = threshold
 
+        # Spinbox range: 1 → effective_max (cannot increase past what's left)
         self.threshold_input.blockSignals(True)
-        self.threshold_input.setRange(1, cap)
+        self.threshold_input.setRange(1, effective_max)
         self.threshold_input.setValue(threshold)
         self.threshold_input.blockSignals(False)
 
-        # Recommended pitches today indicator
-        self.rec_cap_lbl.setText(f"Recommended: {recommended} pitches/day")
+        # Lock spinbox if nothing left today
+        is_exhausted = effective_max <= 0 or user_today >= cap
+        self.threshold_input.setEnabled(not is_exhausted and self._role != "Coach")
+        if is_exhausted:
+            self.threshold_input.setToolTip(
+                "You've used all your pitches today. Replenishes at midnight."
+            )
+            self.threshold_input.setCursor(Qt.CursorShape.ForbiddenCursor)
+
+        # Recommended cap indicator
+        self.rec_cap_lbl.setText(f"Recommended: {cap} pitches/day")
 
         # Remaining pitches today indicator
-        try:
-            from src.db import get_pitches_used_today
-            used = get_pitches_used_today(self.user_id)
-            remaining = max(0, threshold - used)
-            self.remaining_lbl.setText(f"Remaining today: {remaining}")
-            self.remaining_lbl.setStyleSheet(
-                "color: #4ecb71; background: transparent;"
-                if remaining > 0 else
-                "color: #e05555; background: transparent;"
-            )
-        except Exception:
-            self.remaining_lbl.setText("")
-
+        remaining = max(0, effective_max)
+        self.remaining_lbl.setText(f"Remaining today: {remaining}")
+        self.remaining_lbl.setStyleSheet(
+            "color: #4ecb71; background: transparent;"
+            if remaining > 0 else
+            "color: #e05555; background: transparent;"
+        )
+        
         # Throwing hand — block signals to avoid triggering change detection
         self.rhp_btn.blockSignals(True)
         self.lhp_btn.blockSignals(True)
@@ -529,6 +563,13 @@ class AccountSettingsPage(QWidget):
             return
         self._handle_save_profile()
 
+    def _check_midnight_reset(self):
+        """Called every 60s — detects Manila midnight and replenishes the spinbox."""
+        today = self._manila_today()
+        if today != self._last_date:
+            self._last_date = today
+            # New day in Manila — re-run refresh so spinbox resets to full cap
+            self.refresh()
 
     def _handle_save_profile(self):
         from src.db import update_user_profile, update_pitch_threshold, update_throwing_hand
@@ -536,7 +577,11 @@ class AccountSettingsPage(QWidget):
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
-        threshold = min(self.threshold_input.value(), get_pitch_max(self._dob))
+        from src.db import get_pitches_used_today
+        used_today = get_pitches_used_today(self.user_id)
+        cap = get_pitch_max(self._dob)
+        effective_max = max(1, cap - used_today)
+        threshold = min(self.threshold_input.value(), effective_max)
         hand = "RHP" if self.rhp_btn.isChecked() else "LHP" 
 
         ok, msg = validate_name(first_name, "First Name")

@@ -65,7 +65,7 @@ def _migrate(conn):
     if "throwing_hand" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN throwing_hand TEXT NOT NULL DEFAULT 'RHP' CHECK(throwing_hand IN ('RHP', 'LHP'))")
     conn.execute(
-        "UPDATE users SET pitch_threshold = 5 WHERE role = 'Admin' AND pitch_threshold IS NULL"
+        "UPDATE users SET pitch_threshold = 120 WHERE role = 'Admin' AND pitch_threshold IS NULL"
     )
     conn.commit()
 
@@ -107,7 +107,7 @@ def _seed_admin(conn):
          "admin",
          hashed.decode("utf-8"),
          "Admin",
-         5,
+         120,
          _manila_now()),
     )
     conn.commit()
@@ -117,8 +117,7 @@ def _calc_threshold(date_of_birth: str) -> int:
     """Calculate the default pitch threshold from DOB using USA Baseball guidelines."""
     from datetime import date
     PITCH_LIMITS = [
-        (13, 14, 95),
-        (15, 16, 95),
+        (13, 16, 95),
         (17, 18, 105),
         (19, 22, 120),
     ]
@@ -129,9 +128,13 @@ def _calc_threshold(date_of_birth: str) -> int:
         for min_age, max_age, limit in PITCH_LIMITS:
             if min_age <= age <= max_age:
                 return limit
+        # Age > 22 (above all brackets) → cap at 120
+        if age > 22:
+            return 120
+        # Age < 13 (below signup minimum) → floor at 95
+        return 95
     except Exception:
-        pass
-    return 95
+        return 95
 
 def create_user(first_name, last_name, date_of_birth, email, password,
                 throwing_hand: str = "RHP"):
@@ -348,30 +351,8 @@ def get_pitch_token_status(user_id: int) -> dict:
         return {"threshold": 0, "recommended_cap": 0, "used_today": 0,
                 "remaining": 0, "headroom": 0, "locked": True}
     
-    threshold = user["pitch_threshold"] or 95
-
-    # Compute recommended cap from DOB
-    from src.db import _calc_threshold
-    from datetime import date as _date
-    PITCH_LIMITS = [
-        (13, 14, 95), 
-        (15, 16, 95),
-        (17, 18, 105), 
-        (19, 22, 120),
-    ]
-    recommended_cap = 95
-    try:
-        dob = _date.fromisoformat(user["date_of_birth"])
-        today = _date.today()
-        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-        for lo, hi, cap in PITCH_LIMITS:
-            if lo <= age <= hi:
-                recommended_cap = cap
-                break
-            else:
-                recommended_cap = 120
-    except Exception:
-        recommended_cap = 120
+    recommended_cap = _calc_threshold(user["date_of_birth"])
+    threshold = user["pitch_threshold"] or recommended_cap 
 
     used_today = get_pitches_used_today(user_id)
     remaining = max(0, threshold - used_today)
