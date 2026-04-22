@@ -14,7 +14,8 @@ def validate_name(value: str, field: str = "Name") -> tuple[bool, str]:
         - No digits or other special characters
         - No consecutive spaces/hyphens/apostrophes
         - No leading or trailing spaces/hyphens/apostrophes
-        - Minimum 2 characters 
+        - Minimum 2 characters
+        - Each word must start with a capital letter 
     """
     v = value.strip()
     if len(v) < 2:
@@ -25,6 +26,11 @@ def validate_name(value: str, field: str = "Name") -> tuple[bool, str]:
         return False, f"{field} cannot have consecutive spaces, hyphens, or apostrophes."
     if _EDGE_SPECIAL.search(v):
         return False, f"{field} cannot start or end with a hyphen or apostrophe."
+    # Each word (split by space or hyphen) must start with a capital letter
+    words = re.split(r"[\s\-]+", v)
+    for word in words:
+        if word and not word[0].isupper():
+            return False, f"{field} — each word must start with a capital letter (e.g., 'John Mark')." 
     return True, ""
 
 ALLOWED_DOMAINS = {"cvsu.edu.ph", "gmail.com", "yahoo.com", "outlook.com"}

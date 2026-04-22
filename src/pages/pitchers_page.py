@@ -2,10 +2,9 @@ from datetime import date
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QPushButton, QLineEdit,
-    QScrollArea, QSizePolicy, QFrame
+    QFrame
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QKeyEvent
 
 from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
@@ -220,6 +219,7 @@ class PitchersPage(QWidget):
         else:
             for i, user in enumerate(page_rows):
                 self.rows_layout.addWidget(self._make_data_row(user, alternate=i % 2 == 1))
+
                 if i < len(page_rows) - 1:
                     div = QFrame()
                     div.setObjectName("tableRowDivider")

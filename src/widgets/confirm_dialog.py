@@ -53,12 +53,14 @@ class ConfirmDialog(QDialog):
         no_btn.setObjectName("confirmNoBtn")
         no_btn.setFixedSize(88, 36)
         no_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        no_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         no_btn.clicked.connect(self._on_no)
 
         yes_btn = QPushButton("Yes")
         yes_btn.setObjectName("confirmYesBtn")
         yes_btn.setFixedSize(88, 36)
         yes_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        no_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         yes_btn.clicked.connect(self._on_yes)
 
         btn_row.addWidget(yes_btn)
@@ -67,10 +69,12 @@ class ConfirmDialog(QDialog):
 
     def _on_yes(self):
         self._result = True
+        self.clearFocus()
         self.accept()
 
     def _on_no(self):
         self._result = False
+        self.clearFocus()
         self.reject()
 
     def keyPressEvent(self, event: QKeyEvent):

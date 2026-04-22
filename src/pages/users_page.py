@@ -12,7 +12,7 @@ from src.utils.toast import toast_success, toast_error
 ROWS_PER_PAGE = 10
 COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At"]
 ROLE_OPTIONS = ["Pitcher", "Coach"]
-RETENTION_DAYS = 90
+RETENTION_DAYS = 1
 
 def _fmt_date(dt_str: str) -> str:
     try:
@@ -275,6 +275,7 @@ class UsersPage(QWidget):
         else:
             for i, user in enumerate(page_rows):
                 self.rows_layout.addWidget(self._make_data_row(user, alternate=i % 2 == 1))
+
                 if i < len(page_rows) - 1:
                     div = QFrame()
                     div.setObjectName("tableRowDivider")
