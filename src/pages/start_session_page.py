@@ -107,6 +107,7 @@ class StartSessionPage(QWidget):
         self._throwing_hand = "RHP"   
         self._worker = None
         self.setObjectName("contentPage")
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.build_ui()
 
     def build_ui(self):
@@ -137,6 +138,7 @@ class StartSessionPage(QWidget):
         panel = QWidget()
         panel.setObjectName("sessionPanel")
         panel.setFixedWidth(280)
+        panel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20, 28, 20, 28)
         panel_layout.setSpacing(14)
@@ -153,8 +155,12 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.pitch_card)
         panel_layout.addWidget(self.mistake_card)
         panel_layout.addWidget(self.accuracy_card)
-        # Token card — shows remaining pitches for today
-        self.token_card = self._stat_card("Tokens Left", "ball-baseball", "#f0a500")
+        # Recommended threshold card — shows USA Baseball recommended daily limit
+        self.rec_card = self._rec_card()
+        panel_layout.addWidget(self.rec_card)
+
+        # Pitches Left card — shows remaining pitches for today
+        self.token_card = self._stat_card("Pitches Left", "ball-baseball", "#f0a500")
         self.token_val = self.token_card.findChild(QLabel, "statValue")
         panel_layout.addWidget(self.token_card)
 
@@ -168,6 +174,24 @@ class StartSessionPage(QWidget):
 
         panel_layout.addStretch()
 
+        # Help icon button — always visible, toggles camera guide card
+        guide_toggle_row = QHBoxLayout()
+        guide_toggle_row.setContentsMargins(0, 0, 0, 0)
+        guide_toggle_row.addStretch()
+        self.guide_toggle_btn = QPushButton()
+        self.guide_toggle_btn.setObjectName("guideToggleBtn")
+        self.guide_toggle_btn.setFixedSize(28, 28)
+        self.guide_toggle_btn.setIcon(get_icon("help", color="#555555", size=20))
+        self.guide_toggle_btn.setIconSize(QSize(20, 20))
+        self.guide_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.guide_toggle_btn.setToolTip("Show/hide camera setup guide")
+        self.guide_toggle_btn.setAutoDefault(False)
+        self.guide_toggle_btn.setDefault(False)
+        self.guide_toggle_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus) 
+        self.guide_toggle_btn.clicked.connect(self._toggle_guide_card)
+        guide_toggle_row.addWidget(self.guide_toggle_btn)
+        panel_layout.addLayout(guide_toggle_row)
+
         # Camera guide card
         self.camera_guide_card = self._build_guide_card()
         panel_layout.addWidget(self.camera_guide_card)
@@ -177,6 +201,9 @@ class StartSessionPage(QWidget):
         self.start_btn.setObjectName("sessionStartBtn")
         self.start_btn.setFixedHeight(60)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.start_btn.setAutoDefault(False)
+        self.start_btn.setDefault(False)
+        self.start_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.start_btn.clicked.connect(self._handle_start)
         panel_layout.addWidget(self.start_btn)
 
@@ -186,6 +213,9 @@ class StartSessionPage(QWidget):
         self.end_btn.setFixedHeight(60)
         self.end_btn.setEnabled(False)
         self.end_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.start_btn.setAutoDefault(False)
+        self.start_btn.setDefault(False)
+        self.start_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.end_btn.clicked.connect(self._handle_end)
         panel_layout.addWidget(self.end_btn)
 
@@ -220,17 +250,7 @@ class StartSessionPage(QWidget):
         title_row.addWidget(guide_title)
         title_row.addStretch()
 
-        dismiss_btn = QPushButton()
-        dismiss_btn.setObjectName("guideDismissBtn")
-        dismiss_btn.setFixedSize(18, 18)
-        dismiss_btn.setIcon(get_icon("x-mark", color="#555555", size=12))
-        dismiss_btn.setIconSize(QSize(12, 12))
-        dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        dismiss_btn.setToolTip("Dismiss")
-        dismiss_btn.clicked.connect(lambda: card.hide())
-
         header_row.addLayout(title_row)
-        header_row.addWidget(dismiss_btn)
         layout.addLayout(header_row)
 
         # Divider
@@ -262,14 +282,57 @@ class StartSessionPage(QWidget):
 
         layout.addSpacing(4)
 
-        # Caution note
-        caution = QLabel(
-            "⚠  Your throwing arm must face\n"
-            "the camera for accurate analysis."
+        # Caution note — alert-triangle icon inherits guideCaution color
+        caution_row = QHBoxLayout()
+        caution_row.setSpacing(6)
+        caution_row.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        alert_icon = QLabel()
+        alert_icon.setObjectName("guideCautionIcon")
+        alert_icon.setFixedSize(14, 14)
+        alert_icon.setPixmap(
+            get_icon("alert-triangle", color="#888888", size=14).pixmap(14, 14)
         )
-        caution.setObjectName("guideCaution")
-        caution.setWordWrap(True)
-        layout.addWidget(caution)
+
+        caution_lbl = QLabel("Your throwing arm must face the camera for accurate analysis.")
+        caution_lbl.setObjectName("guideCaution")
+        caution_lbl.setWordWrap(True)
+
+        caution_row.addWidget(alert_icon, alignment=Qt.AlignmentFlag.AlignTop)
+        caution_row.addWidget(caution_lbl) 
+        layout.addLayout(caution_row)
+
+        return card
+
+    # Recommended threshold card builder
+    def _rec_card(self) -> QWidget:
+        """Small info card show the USA Baseball recommended daily threshold."""
+        card = QWidget()
+        card.setObjectName("recThresholdCard")
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(8)
+
+        icon_lbl = QLabel()
+        icon_lbl.setObjectName("recIcon")
+        icon_lbl.setFixedSize(16, 16)
+        icon_lbl.setPixmap(get_icon("target-arrow", color="#666666", size=16).pixmap(16, 16))
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+
+        rec_title = QLabel("Recommended")
+        rec_title.setObjectName("recTitle")
+
+        self.rec_val_lbl = QLabel("—")
+        self.rec_val_lbl.setObjectName("recValue")
+
+        text_col.addWidget(rec_title)
+        text_col.addWidget(self.rec_val_lbl)
+
+        layout.addWidget(icon_lbl, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addLayout(text_col)
+        layout.addStretch()
 
         return card
 
@@ -306,7 +369,17 @@ class StartSessionPage(QWidget):
         layout.addWidget(val)
 
         return card
-    
+
+    # Camera guide toggle
+    def _toggle_guide_card(self):
+        """Toggle the camera guide card visibility and update help icon color."""
+        if self.camera_guide_card.isVisible():
+            self.camera_guide_card.hide()
+            self.guide_toggle_btn.setIcon(get_icon("help", color="#555555", size=20))
+        else:
+            self.camera_guide_card.show()
+            self.guide_toggle_btn.setIcon(get_icon("help", color="#aaaaaa", size=20))
+
     # Camera guide updater
     def _update_camera_guide(self):
         hand = self._throwing_hand
@@ -325,6 +398,7 @@ class StartSessionPage(QWidget):
 
         # Re-show the guide card (in case it was dismissed and user navigated away)
         self.camera_guide_card.show()
+        self.guide_toggle_btn.setIcon(get_icon("help", color="#aaaaaa", size=20))
 
     # Feed
     def _show_idle_feed(self):
@@ -382,7 +456,13 @@ class StartSessionPage(QWidget):
         self._used_today = status["used_today"]
         self._tokens_remaining = status["remaining"]
 
-        # Update token card value
+        # Update recommended threshold card
+        self.rec_val_lbl.setText(
+            f"{status['recommended_cap']} pitches/day"
+            if status["recommended_cap"] else "—"
+        )
+
+        # Update pitches left card value
         self.token_val.setText(str(self._tokens_remaining))
 
         if status["locked"]:

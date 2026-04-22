@@ -70,17 +70,6 @@
     letter-spacing: 0.3px;
 }
 
-#guideDismissBtn {
-    background: transparent;
-    border: none;
-    padding: 0;
-}
-
-#guideDismissBtn:hover {
-    background: #2a2a2a;
-    border-radius: 4px;
-}
-
 #guideDivider {
     background-color: #2a2a2a;
 }
@@ -160,4 +149,44 @@
     background-color: #1a1a1a;
     border-color: #2a2a2a;
     color: #333333;
+}
+
+/* Guide toggle button (always visible above guide card) */
+#guideToggleBtn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+}
+
+#guideToggleBtn:hover {
+    background-color: #1e1e1e;
+}
+
+#guideToggleBtn:pressed {
+    background-color: #2a2a2a;
+}
+
+/* Recommended threshold card */
+#recThresholdCard {
+    background-color: #161616;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#recIcon {
+    background: transparent;
+}
+
+#recTitle {
+    font-size: 11px;
+    color: #555555;
+    background: transparent;
+}
+
+#recValue {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888888;
+    background: transparent;
 }

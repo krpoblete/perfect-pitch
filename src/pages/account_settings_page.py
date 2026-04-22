@@ -18,7 +18,7 @@ PITCH_LIMITS = [
 
 def get_pitch_limit(dob_str: str) -> int | None:
     """Return the recommended daily pitch limit based on date of birth.
-    Defaults to 50 if age is outside all USA Baseball brackets.""" 
+    Defaults to 95 if age is outside all USA Baseball brackets.""" 
     try:
         dob = date.fromisoformat(dob_str)
         today = date.today()
@@ -28,7 +28,7 @@ def get_pitch_limit(dob_str: str) -> int | None:
                 return limit
     except Exception:
         pass
-    return 50
+    return 95
 
 def get_pitch_max(dob_str: str) -> int:
     """Return the USA Baseball max cap for the user's age (spinbox ceiling).
@@ -192,13 +192,12 @@ class AccountSettingsPage(QWidget):
         threshold_row = QHBoxLayout()
         threshold_col = QVBoxLayout()
         threshold_col.setSpacing(4)
-        threshold_lbl = QLabel("Daily Pitch Tokens")
+        threshold_lbl = QLabel("Daily Pitch Threshold")
         threshold_lbl.setObjectName("settingsFieldLabel")
         threshold_sub = QLabel(
-            "Sets how many pitches you can throw per day — your daily token pool. "
+            "Sets how many pitches you can throw per day. "
             "Auto-calculated from your age (USA Baseball guidelines). "
-            "Max is capped by your age bracket. "
-            "Tokens reset every day."
+            "Max is capped by your age bracket. Resets every day."
         )
         threshold_sub.setObjectName("settingsSubtitle")
         threshold_col.addWidget(threshold_lbl)
@@ -207,7 +206,7 @@ class AccountSettingsPage(QWidget):
         self.threshold_input = QSpinBox()
         self.threshold_input.setObjectName("thresholdSpinBox")
         self.threshold_input.setFixedSize(120, 44)
-        self.threshold_input.setSuffix(" tokens")
+        self.threshold_input.setSuffix(" pitches")
         self.threshold_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.threshold_input.valueChanged.connect(self._on_profile_changed)
 
@@ -215,7 +214,23 @@ class AccountSettingsPage(QWidget):
         threshold_row.addStretch()
         threshold_row.addWidget(self.threshold_input)
         card_layout.addLayout(threshold_row)
-        card_layout.addSpacing(24)
+        card_layout.addSpacing(12)
+
+        # Recommended cap + remaining pitches indicators
+        indicators_row = QHBoxLayout()
+        indicators_row.setSpacing(10)
+
+        self.rec_cap_lbl = QLabel()
+        self.rec_cap_lbl.setObjectName("thresholdIndicator")
+
+        self.remaining_lbl = QLabel()
+        self.remaining_lbl.setObjectName("thresholdIndicatorRemaining")
+
+        indicators_row.addWidget(self.rec_cap_lbl)
+        indicators_row.addStretch()
+        indicators_row.addWidget(self.remaining_lbl)
+        card_layout.addLayout(indicators_row)
+        card_layout.addSpacing(16)
 
         # Save button — disabled until changes detected
         self.save_btn = QPushButton("Save Changes")
@@ -437,6 +452,23 @@ class AccountSettingsPage(QWidget):
         self.threshold_input.setRange(1, cap)
         self.threshold_input.setValue(threshold)
         self.threshold_input.blockSignals(False)
+
+        # Recommended pitches today indicator
+        self.rec_cap_lbl.setText(f"Recommended: {recommended} pitches/day")
+
+        # Remaining pitches today indicator
+        try:
+            from src.db import get_pitches_used_today
+            used = get_pitches_used_today(self.user_id)
+            remaining = max(0, threshold - used)
+            self.remaining_lbl.setText(f"Remaining today: {remaining}")
+            self.remaining_lbl.setStyleSheet(
+                "color: #4ecb71; background: transparent;"
+                if remaining > 0 else
+                "color: #e05555; background: transparent;"
+            )
+        except Exception:
+            self.remaining_lbl.setText("")
 
         # Throwing hand — block signals to avoid triggering change detection
         self.rhp_btn.blockSignals(True)

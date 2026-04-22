@@ -65,7 +65,7 @@ def _migrate(conn):
     if "throwing_hand" not in existing:
         conn.execute("ALTER TABLE users ADD COLUMN throwing_hand TEXT NOT NULL DEFAULT 'RHP' CHECK(throwing_hand IN ('RHP', 'LHP'))")
     conn.execute(
-        "UPDATE users SET pitch_threshold = 50 WHERE role = 'Admin' AND pitch_threshold IS NULL"
+        "UPDATE users SET pitch_threshold = 5 WHERE role = 'Admin' AND pitch_threshold IS NULL"
     )
     conn.commit()
 
@@ -107,7 +107,7 @@ def _seed_admin(conn):
          "admin",
          hashed.decode("utf-8"),
          "Admin",
-         10,
+         5,
          _manila_now()),
     )
     conn.commit()
@@ -131,7 +131,7 @@ def _calc_threshold(date_of_birth: str) -> int:
                 return limit
     except Exception:
         pass
-    return 50
+    return 95
 
 def create_user(first_name, last_name, date_of_birth, email, password,
                 throwing_hand: str = "RHP"):
@@ -348,7 +348,7 @@ def get_pitch_token_status(user_id: int) -> dict:
         return {"threshold": 0, "recommended_cap": 0, "used_today": 0,
                 "remaining": 0, "headroom": 0, "locked": True}
     
-    threshold = user["pitch_threshold"] or 50
+    threshold = user["pitch_threshold"] or 95
 
     # Compute recommended cap from DOB
     from src.db import _calc_threshold
@@ -359,7 +359,7 @@ def get_pitch_token_status(user_id: int) -> dict:
         (17, 18, 105), 
         (19, 22, 120),
     ]
-    recommended_cap = 50
+    recommended_cap = 95
     try:
         dob = _date.fromisoformat(user["date_of_birth"])
         today = _date.today()
