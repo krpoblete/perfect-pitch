@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QFocusEvent
 
 from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
@@ -46,31 +47,18 @@ class PitchersPage(QWidget):
         title_col.addWidget(self.count_lbl)
 
         # Search bar
-        search_wrapper = QWidget()
-        search_wrapper.setObjectName("searchWrapper")
-        search_wrapper.setFixedHeight(40)
-        search_wrapper.setFixedWidth(280)
-        sw_layout = QHBoxLayout(search_wrapper)
-        sw_layout.setContentsMargins(10, 0, 10, 0)
-        sw_layout.setSpacing(6)
-
-        search_icon = QLabel()
-        search_icon.setFixedSize(16, 16)
-        search_icon.setPixmap(get_icon("search", color="#555555", size=16).pixmap(16, 16))
-
         self.search_input = QLineEdit()
-        self.search_input.setObjectName("searchInput")
-        self.search_input.setPlaceholderText("Search pitchers...")
+        self.search_input.setObjectName("searchBar")
+        self.search_input.setPlaceholderText("Search users...")
+        self.search_input.setFixedHeight(38)
+        self.search_input.setFixedWidth(280)
         self.search_input.textChanged.connect(self._on_search)
-
-        sw_layout.addWidget(search_icon)
-        sw_layout.addWidget(self.search_input)
 
         header_row.addLayout(title_col)
         header_row.addStretch()
-        header_row.addWidget(search_wrapper)
+        header_row.addWidget(self.search_input)
         layout.addLayout(header_row)
-        layout.addSpacing(24)
+        layout.addSpacing(24) 
 
         # Table header
         self.table_container = QWidget()

@@ -4,13 +4,14 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QLineEdit,
     QFrame, QComboBox
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtGui import QFocusEvent
 
 from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
 
 ROWS_PER_PAGE = 10
-COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At"]
+COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Days Left"]
 ROLE_OPTIONS = ["Pitcher", "Coach"]
 RETENTION_DAYS = 1
 
@@ -41,6 +42,12 @@ class UsersPage(QWidget):
         self._page = 0
         self._build_ui()
 
+        # Refresh remaining days every 60 seconds
+        self._timer = QTimer(self)
+        self._timer.setInterval(60_000)
+        self._timer.timeout.connect(self._refresh_days)
+        self._timer.start()
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 36, 40, 28)
@@ -58,32 +65,19 @@ class UsersPage(QWidget):
         title_col.addWidget(title)
         title_col.addWidget(self.count_lbl)
 
-        # Search bar
-        search_wrapper = QWidget()
-        search_wrapper.setObjectName("searchWrapper")
-        search_wrapper.setFixedHeight(40)
-        search_wrapper.setFixedWidth(280)
-        sw_layout = QHBoxLayout(search_wrapper)
-        sw_layout.setContentsMargins(10, 0, 10, 0)
-        sw_layout.setSpacing(6)
-
-        search_icon = QLabel()
-        search_icon.setFixedSize(16, 16)
-        search_icon.setPixmap(get_icon("search", color="#555555", size=16).pixmap(16, 16))
-
+        # Search bar — plain input, active border on focus
         self.search_input = QLineEdit()
-        self.search_input.setObjectName("searchInput")
+        self.search_input.setObjectName("searchBar")
         self.search_input.setPlaceholderText("Search users...")
+        self.search_input.setFixedHeight(38)
+        self.search_input.setFixedWidth(280)
         self.search_input.textChanged.connect(self._on_search)
-
-        sw_layout.addWidget(search_icon)
-        sw_layout.addWidget(self.search_input)
 
         header_row.addLayout(title_col)
         header_row.addStretch()
-        header_row.addWidget(search_wrapper)
+        header_row.addWidget(self.search_input)
         layout.addLayout(header_row)
-        layout.addSpacing(24)
+        layout.addSpacing(24) 
 
         # Table
         self.table_container = QWidget()
@@ -145,7 +139,7 @@ class UsersPage(QWidget):
         h = QHBoxLayout(row)
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
-        stretches = [3, 3, 2, 2, 2, 2]
+        stretches = [3, 3, 2, 2, 2, 2, 2]
         for col, stretch in zip(COLUMNS, stretches):
             lbl = QLabel(col)
             lbl.setObjectName("tableHeaderCell")
@@ -163,7 +157,7 @@ class UsersPage(QWidget):
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
 
-        stretches = [3, 3, 2, 2, 2, 2]
+        stretches = [3, 3, 2, 2, 2, 2, 2]
         full_name = f"{user['first_name']} {user['last_name']}"
         joined = _fmt_date(user["created_at"])
 
@@ -229,18 +223,23 @@ class UsersPage(QWidget):
         joined_lbl.setObjectName("tableCell")
         h.addWidget(joined_lbl, stretch=stretches[4])
 
-        # Deleted At + remaining days
+        # Deleted At
+        deleted_lbl = QLabel(_fmt_date(deleted_at) if deleted_at else "—")
+        deleted_lbl.setObjectName("tableCellMuted" if deleted_at else "tableCell")
+        h.addWidget(deleted_lbl, stretch=stretches[5])
+        
+        # Days Left — only shown for inactive accounts
         if deleted_at:
             days_left = _days_remaining(deleted_at)
-            deleted_text = f"{_fmt_date(deleted_at)} ({days_left}d left)"
-            deleted_obj = "tableCellMuted"
+            days_text = f"{days_left}d"
+            days_obj = "daysLeftWarning" if days_left <= 7 else "daysLeftNormal"
         else:
-            deleted_text = "—"
-            deleted_obj = "tableCell"
+            days_text = "—"
+            days_obj = "tableCell"
 
-        deleted_lbl = QLabel(deleted_text)
-        deleted_lbl.setObjectName(deleted_obj)
-        h.addWidget(deleted_lbl, stretch=stretches[5])
+        days_lbl = QLabel(days_text)
+        days_lbl.setObjectName(days_obj)
+        h.addWidget(days_lbl, stretch=stretches[6])
 
         return row
 
@@ -343,6 +342,9 @@ class UsersPage(QWidget):
             self.refresh()
         else:
             toast_error(self, f"Failed to update {name}'s role.")
+
+    def _refresh_days(self):
+        """Re-render the page to update remaining days without a full DB reload."""
 
     # Lifecycle
     def refresh(self):

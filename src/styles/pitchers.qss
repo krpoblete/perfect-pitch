@@ -5,32 +5,6 @@
     background: transparent;
 }
 
-#searchWrapper {
-    background-color: #181818;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-}
-
-#searchWrapper:focus-within {
-    border: 1px solid #555555;
-}
-
-#searchWrapper QLabel {
-    background: transparent;
-}
-
-#searchInput {
-    background: transparent;
-    border: none;
-    color: #e8e8e8;
-    font-size: 13px;
-}
-
-#searchInput:focus {
-    border: none;
-    background: transparent;
-}
-
 #tableContainer {
     background-color: #111111;
     border: 1px solid #1e1e1e;
@@ -144,4 +118,31 @@
     color: #f0a500;
     background: transparent;
     letter-spacing: 0.5px;
+}
+
+/* Search bar — active/inactive states */
+#searchBar {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 0 14px;
+    color: #e8e8e8;
+    font-size: 13px;
+}
+
+#searchBar:focus {
+    border: 1px solid #555555;
+    background-color: #1e1e1e;
+}
+
+#searchBar:hover {
+    border: 1px solid #3a3a3a;
+}
+
+/* Days left column */
+#daysLeftWarning {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e05555;
+    background: transparent;
 }
