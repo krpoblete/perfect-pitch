@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
@@ -5,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QDate, QTimer
 from src.utils.icons import get_icon
-from src.utils.toast import toast_error, toast_success
+from src.utils.toast import toast_error, toast_success, toast_info
 from src.widgets.password_input import PasswordInput
 
 MAX_ATTEMPTS = 3
@@ -201,6 +202,7 @@ class ForgotPasswordPage(QWidget):
             return
         
         from src.db import get_user_by_email
+        from src.utils.validators import validate_email
 
         email = self.verify_email_input.text().strip()
         dob = self.verify_dob_input.date().toString("yyyy-MM-dd")
@@ -208,7 +210,13 @@ class ForgotPasswordPage(QWidget):
         if not email:
             toast_error(self, "Please enter your email address.")
             return
-        
+
+        # Validate domain — don't count as an attempt
+        valid, msg = validate_email(email)
+        if not valid:
+            toast_error(self, msg)
+            return
+
         user = get_user_by_email(email)
 
         if user is None or user["date_of_birth"] != dob:
@@ -232,8 +240,9 @@ class ForgotPasswordPage(QWidget):
         self.stack.setCurrentIndex(1)
 
     def _handle_reset(self):
+        import re
         import bcrypt
-        from src.db import get_connection
+        from src.db import get_connection, get_user_by_id
 
         password = self.new_pw_input.text()
         confirm = self.confirm_pw_input.text()
@@ -244,10 +253,25 @@ class ForgotPasswordPage(QWidget):
         if len(password) < 8:
             toast_error(self, "Password must be at least 8 characters long.")
             return
+        if not re.search(r"[a-z]", password):
+            toast_error(self, "Password must contain at least one lowercase letter.")
+            return
+        if not re.search(r"[A-Z]", password):
+            toast_error(self, "Password must contain at least one uppercase letter.")
+            return
+        if not re.search(r"\d", password):
+            toast_error(self, "Password must contain at least one number.")
+            return
         if password != confirm:
             toast_error(self, "Passwords do not match. Please try again.")
             return
-        
+
+        # Check new password is different from current
+        user = get_user_by_id(self._verified_user_id)
+        if user and bcrypt.checkpw(password.encode("utf-8"), user["password"].encode("utf-8")):
+            toast_info(self, "New password must be different from your current password.")
+            return 
+
         hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
         conn = get_connection()
         conn.execute(
@@ -282,6 +306,10 @@ class ForgotPasswordPage(QWidget):
     def _go_back(self):
         self._reset_state()
         self.auth.show_page("login")
+
+    def clear(self):
+        """Reset to defaults — called by auth_window on every page switch."""
+        self._reset_state()
 
     def _reset_state(self):
         self.verify_email_input.clear()

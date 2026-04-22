@@ -160,6 +160,7 @@ class MainWindow(FramelessMainWindow):
             btn.setIconSize(QSize(18, 18))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setCheckable(True)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.clicked.connect(lambda checked, k=key, i=icon_name: self._switch_page(k, i))
             self.nav_buttons[key] = btn
             sb_layout.addWidget(btn)
@@ -186,6 +187,7 @@ class MainWindow(FramelessMainWindow):
         acc_btn.setIconSize(QSize(18, 18))
         acc_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         acc_btn.setCheckable(True)
+        acc_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         acc_btn.clicked.connect(lambda: self._switch_page("account_settings", "settings"))
         self.nav_buttons["account_settings"] = acc_btn
         sb_layout.addWidget(acc_btn)
@@ -197,6 +199,7 @@ class MainWindow(FramelessMainWindow):
         # Content stack 
         self.stack = QStackedWidget()
         self.stack.setObjectName("contentStack")
+        self.stack.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.pages = {
             "dashboard": DashboardPage(self.user_id),
@@ -287,6 +290,7 @@ class MainWindow(FramelessMainWindow):
         tutorial = self.pages.get("tutorial")
         if tutorial and key != "tutorial":
             tutorial._player.stop()
+            tutorial.clearFocus()
 
         icon_map = {k: i for k, i, _ in self.nav_items}
         icon_map["account_settings"] = "settings"

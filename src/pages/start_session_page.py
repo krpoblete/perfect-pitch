@@ -154,7 +154,7 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.mistake_card)
         panel_layout.addWidget(self.accuracy_card)
         # Token card — shows remaining pitches for today
-        self.token_card = self._stat_card("Tokens Left", "play-handball", "#f0a500")
+        self.token_card = self._stat_card("Tokens Left", "ball-baseball", "#f0a500")
         self.token_val = self.token_card.findChild(QLabel, "statValue")
         panel_layout.addWidget(self.token_card)
 

@@ -195,15 +195,10 @@ class SignupPage(QWidget):
         self._select_hand("RHP")
 
     ALLOWED_DOMAINS = {"cvsu.edu.ph", "gmail.com", "yahoo.com", "outlook.com"}
-    
+
     def _is_valid_email(self, email):
-        import re
-        if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email):
-            return False, "Please enter a valid email address."
-        domain = email.split("@")[-1].lower()
-        if domain not in self.ALLOWED_DOMAINS:
-            return False, f"Only @cvsu.edu.ph, @gmail.com, @yahoo.com, and @outlook.com emails are allowed."
-        return True, ""
+        from src.utils.validators import validate_email
+        return validate_email(email)
     
     def _is_strong_password(self, password):
         import re

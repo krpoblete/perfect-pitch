@@ -1,8 +1,9 @@
 import re
 
+# Allowed: letters (incl. accented), spaces, hyphens, apostrophes
 _NAME_ALLOWED = re.compile(r"^[a-zA-ZÀ-ÿ\s\-']+$")
-_CONSEC_SPECIAL = re.compile(r"[\s\-']{2,}")
-_EDGE_SPECIAL = re.compile(r"^[\s\-']|[\s\-']$")
+_CONSEC_SPECIAL = re.compile(r"[\s\-']{2,}")        # 2+ consecutive specials
+_EDGE_SPECIAL = re.compile(r"^[\s\-']|[\s\-']$")    # leading/trailing special
 
 def validate_name(value: str, field: str = "Name") -> tuple[bool, str]:
     """
@@ -24,4 +25,17 @@ def validate_name(value: str, field: str = "Name") -> tuple[bool, str]:
         return False, f"{field} cannot have consecutive spaces, hyphens, or apostrophes."
     if _EDGE_SPECIAL.search(v):
         return False, f"{field} cannot start or end with a hyphen or apostrophe."
+    return True, ""
+
+ALLOWED_DOMAINS = {"cvsu.edu.ph", "gmail.com", "yahoo.com", "outlook.com"}
+
+def validate_email(email: str) -> tuple[bool, str]:
+    """Validate email format and allowed domain."""
+    import re
+    if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email):
+        return False, "Please enter a valid email address."
+    domain = email.split("@")[-1].lower()
+    if domain not in ALLOWED_DOMAINS:
+        allowed = ", ".join(f"@{d}" for d in sorted(ALLOWED_DOMAINS))
+        return False, f"Only {allowed} emails are allowed."
     return True, ""

@@ -600,7 +600,7 @@ class AccountSettingsPage(QWidget):
             toast_error(self, "Password must contain at least one number.")
             return
         if new_pw != confirm:
-            toast_error(self, "Passwords do not match. Pleast try again.")
+            toast_error(self, "Passwords do not match. Please try again.")
             return
         if new_pw == current:
             toast_info(self, "New password must be different from your current password.")
