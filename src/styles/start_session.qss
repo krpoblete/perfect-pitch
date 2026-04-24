@@ -190,3 +190,14 @@
     color: #888888;
     background: transparent;
 }
+
+/* Token status widget */
+#tokenStatusWidget {
+    background-color: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+}
+
+#tokenAlertIcon {
+    background: transparent;
+}

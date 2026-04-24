@@ -58,7 +58,7 @@ class SessionSummaryDialog(QDialog):
 
         grid.addWidget(self._stat_card("Pitch Count", str(pitch_count), "#4a9eff"), 0, 0)
         grid.addWidget(self._stat_card("Mistakes", str(mistakes), "#e05555"), 0, 1)
-        grid.addWidget(self._stat_card("Accuracy", str(accuracy), "#4ecb71"), 0, 2)
+        grid.addWidget(self._stat_card("Accuracy", f"{accuracy:.2f}%", "#4ecb71"), 0, 2)
         layout.addLayout(grid)
 
         layout.addStretch()
@@ -164,13 +164,27 @@ class StartSessionPage(QWidget):
         self.token_val = self.token_card.findChild(QLabel, "statValue")
         panel_layout.addWidget(self.token_card)
 
-        # Token status label — shown when locked or near limit
+        # Token status widget — alert-triangle icon + message label
+        self.token_status_widget = QWidget()
+        self.token_status_widget.setObjectName("tokenStatusWidget")
+        token_status_layout = QHBoxLayout(self.token_status_widget)
+        token_status_layout.setContentsMargins(8, 8, 8, 8)
+        token_status_layout.setSpacing(8)
+        token_status_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self._alert_icon_lbl = QLabel()
+        self._alert_icon_lbl.setFixedSize(14, 14)
+        self._alert_icon_lbl.setObjectName("tokenAlertIcon")
+
         self.token_status_lbl = QLabel()
         self.token_status_lbl.setObjectName("thresholdWarning")
-        self.token_status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.token_status_lbl.setWordWrap(True)
-        self.token_status_lbl.hide()
-        panel_layout.addWidget(self.token_status_lbl)
+
+        token_status_layout.addWidget(self._alert_icon_lbl,
+                                      alignment=Qt.AlignmentFlag.AlignTop)
+        token_status_layout.addWidget(self.token_status_lbl)
+        self.token_status_widget.hide()
+        panel_layout.addWidget(self.token_status_widget)
 
         panel_layout.addStretch()
 
@@ -450,7 +464,14 @@ class StartSessionPage(QWidget):
 
     # Token system
     def _refresh_token_status(self):
-        """Load today's token status from DB and update all token UI."""
+        """Load today's token status from DB and update all token UI.
+
+        Mirrors account_settings_page.py deduction logic:
+            effective_max = recommended_cap - used_today
+            tokens_remaining = min(threshold, effective_max)
+        So if the user pitched 60 of their 120 cap, they have 60 left
+        regardless of what their saved threshold is. 
+        """
         from src.db import get_pitch_token_status, get_pitches_used_today
         status = get_pitch_token_status(self.user_id)
 
@@ -480,6 +501,7 @@ class StartSessionPage(QWidget):
         locked_status = {
             "threshold": threshold,
             "recommended_cap": cap,
+            "used_today": used_today,
             "headroom": max(0, effective_max - threshold),
             "locked": self._tokens_remaining <= 0,
         }
@@ -492,23 +514,39 @@ class StartSessionPage(QWidget):
                 self.start_btn.setEnabled(True)
 
     def _apply_token_locked(self, status: dict):
-        """Block START and show appropriate message when tokens are exhausted."""
+        """Block START and show appropriate message when tokens are exhausted.
+
+        Inherits effective_max deduction logic from account_settings_page:
+            effective_max = recommended_cap - used_today
+            headroom      = effective_max - threshold (extra pitches still available)  
+        """
         self.start_btn.setEnabled(False)
-        headroom = status["headroom"]
-        threshold = status["threshold"]
+
         cap = status["recommended_cap"]
+        threshold = status["threshold"]
+        used_today = status.get("used_today", self._used_today)
+
+        # Recompute headroom using effect_max — mirrors account_settings logic
+        effective_max = max(0, cap - used_today)
+        headroom = max(0, effective_max - threshold)
 
         if headroom > 0:
             msg = (
-                f"⚠ You've used all {threshold} of your pitching tokens today.\n"
-                f"You can still pitch {headroom} more — your recommended "
+                f"You've used all {threshold} of your pitching tokens today. "
+                f"You can still pitch {headroom} more and your recommended "
                 f"daily limit is {cap}. Increase your threshold in Account Settings."
             )
+            icon_color = "#f0a500"
         else:
             msg = (
-                f"⚠ You've reached your maximum daily pitch limit of {cap}. "
+                f"You've reached your maximum daily pitch limit of {cap}. "
                 f"Your pitches replenish at midnight."
             )
+            icon_color = "#e05555"
+
+        self._alert_icon_lbl.setPixmap(
+            get_icon("alert-triangle", color=icon_color, size=14).pixmap(14, 14)
+        )
         self.token_status_lbl.setText(msg)
         self.token_status_lbl.show()
 
@@ -535,7 +573,7 @@ class StartSessionPage(QWidget):
         if self._check_tokens_on_start():
             return
     
-        self.token_status_lbl.hide()
+        self.token_status_widget.hide()
         self.camera_guide_card.hide()
         self._running = True
         self.start_btn.setEnabled(False)
@@ -600,14 +638,21 @@ class StartSessionPage(QWidget):
 
     def _stop_capture(self):
         self._running = False
-        self.start_btn.setEnabled(True)
         self.end_btn.setEnabled(False)
+
+        # Clear the feed immediately so the user never sees a frozen frame
         self._show_idle_feed()
         self._update_camera_guide()
+
+        # Stop the worker — signal it first, then wait for clean shutdown 
         if self._worker and self._worker.isRunning():
             self._worker.stop()
-            self._worker.wait()
+            self._worker.wait(3000)
+            if self._worker and self._worker.isRunning():
+                self._worker.terminate()
             self._worker = None
+
+        self.start_btn.setEnabled(True)
         # Re-evaluate token lock state after session ends
         self._refresh_token_status()
 
@@ -629,7 +674,7 @@ class StartSessionPage(QWidget):
         self.pitch_val.setText("0")
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
-        self.token_status_lbl.hide()
+        self.token_status_widget.hide()
 
         # Refresh token card immediately after save so it reflects pitches used
         self._refresh_token_status()
