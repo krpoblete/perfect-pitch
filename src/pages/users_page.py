@@ -10,9 +10,9 @@ from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
 
 ROWS_PER_PAGE = 10
-COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Days Left"]
+COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Expires In"]
 ROLE_OPTIONS = ["Pitcher", "Coach"]
-RETENTION_DAYS = 1
+RETENTION_DAYS = 1 
 
 def _fmt_date(dt_str: str) -> str:
     try:
@@ -20,17 +20,43 @@ def _fmt_date(dt_str: str) -> str:
     except Exception:
         return dt_str or "—"
     
-def _days_remaining(deleted_at_str: str) -> int:
-    """Days left before the account is permanently purged."""
+def _time_remaining(deleted_at_str: str) -> tuple[int, int, int, int] | None:
+    """Returns (days, hours, minutes, seconds) remaining until purge,
+    or None if already expired.
+    """
     try:
         from datetime import datetime, timezone, timedelta
         utc8 = timezone(timedelta(hours=8))
         deleted = datetime.fromisoformat(deleted_at_str).replace(tzinfo=utc8)
+        expires = deleted + timedelta(days=RETENTION_DAYS)
         now = datetime.now(utc8)
-        elapsed = (now - deleted).days
-        return max(0, RETENTION_DAYS - elapsed)
+        delta = expires - now
+        if delta.total_seconds() <= 0:
+            return (0, 0, 0, 0)
+        total_secs = int(delta.total_seconds())
+        days, rem = divmod(total_secs, 86400)
+        hours, rem = divmod(rem, 3600)
+        mins, secs = divmod(rem, 60)
+        return (days, hours, mins, secs) 
     except Exception:
-        return RETENTION_DAYS
+        return None
+
+def _fmt_remaining(deleted_at_str: str) -> tuple[str, bool]:
+    """
+    Returns (formatted_string, is_critical).
+    is_critical = True when less than 24 hours remain. 
+    """
+    t = _time_remaining(deleted_at_str)
+    if t is None:
+        return "—", False
+    days, hours, mins, secs = t
+    if days > 0:
+        text = f"{days}d {hours:02d}:{mins:02d}:{secs:02d}"
+        critical = days == 0
+    else:
+        text = f"{hours:02d}:{mins:02d}:{secs:02d}"
+        critical = True
+    return text, critical
 
 class UsersPage(QWidget):
     def __init__(self):
@@ -41,9 +67,9 @@ class UsersPage(QWidget):
         self._page = 0
         self._build_ui()
 
-        # Refresh remaining days every 60 seconds
+        # Refresh expires-in countdown every second 
         self._timer = QTimer(self)
-        self._timer.setInterval(60_000)
+        self._timer.setInterval(1_000)
         self._timer.timeout.connect(self._refresh_days)
         self._timer.start()
 
@@ -227,18 +253,17 @@ class UsersPage(QWidget):
         deleted_lbl.setObjectName("tableCellMuted" if deleted_at else "tableCell")
         h.addWidget(deleted_lbl, stretch=stretches[5])
         
-        # Days Left — only shown for inactive accounts
+        # Expires in — live countdown for inactive accounts 
         if deleted_at:
-            days_left = _days_remaining(deleted_at)
-            days_text = f"{days_left}d"
-            days_obj = "daysLeftWarning" if days_left <= 7 else "daysLeftNormal"
+            expires_text, critical = _fmt_remaining(deleted_at)
+            expires_obj = "daysLeftWarning" if critical else "daysLeftNormal"
         else:
-            days_text = "—"
-            days_obj = "tableCell"
+            expires_text = "—"
+            expires_obj = "tableCell"
 
-        days_lbl = QLabel(days_text)
-        days_lbl.setObjectName(days_obj)
-        h.addWidget(days_lbl, stretch=stretches[6])
+        expires_lbl = QLabel(expires_text)
+        expires_lbl.setObjectName(expires_obj)
+        h.addWidget(expires_lbl, stretch=stretches[6])
 
         return row
 
@@ -344,6 +369,7 @@ class UsersPage(QWidget):
 
     def _refresh_days(self):
         """Re-render the page to update remaining days without a full DB reload."""
+        self._render_page()
 
     # Lifecycle
     def refresh(self):

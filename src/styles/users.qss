@@ -77,3 +77,19 @@
     background: transparent;
     letter-spacing: 0.5px;
 }
+
+/* Expires In column */
+#daysLeftNormal {
+    font-size: 12px;
+    font-family: "Consolas", "Courier New", monospace;
+    color: #aaaaaa;
+    background: transparent;
+}
+
+#daysLeftWarning {
+    font-size: 12px;
+    font-family: "Consolas", "Courier New", monospace;
+    font-weight: 700;
+    color: #e05555;
+    background: transparent;
+}
