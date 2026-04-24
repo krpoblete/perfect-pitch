@@ -87,6 +87,7 @@ class TutorialPage(QWidget):
         self._role = "Pitcher"
         self._is_seeking = False
         self._was_playing = False
+        self._skip_seek_start = False
         self._is_muted = False
         self._pre_mute_vol = 50
         self.setObjectName("contentPage")
@@ -224,28 +225,39 @@ class TutorialPage(QWidget):
         key = event.key()
         dur = self._player.duration()
         pos = self._player.position()
+        finished = dur > 0 and pos >= dur
+
         if key == Qt.Key.Key_Left:
-            # If video ended, restart and play on left arrow
             new_pos = max(0, pos - SEEK_STEP_MS)
             was_playing = (
                 self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
-                or (dur > 0 and pos >= dur)
+                or finished 
             )
-            if was_playing:
+            self._is_seeking = True
+            if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
                 self._player.pause()
+            self._seek_slider.setValue(new_pos)
             self._player.setPosition(new_pos)
             if was_playing:
                 self._resume_timer.start(80)
+            else:
+                self._is_seeking = False
+
         elif key == Qt.Key.Key_Right:
             new_pos = min(dur, pos + SEEK_STEP_MS)
             was_playing = (
                 self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
             )
+            self._is_seeking = True
             if was_playing:
                 self._player.pause()
+            self._seek_slider.setValue(new_pos)
             self._player.setPosition(new_pos)
             if was_playing:
                 self._resume_timer.start(80)
+            else:
+                self._is_seeking = False
+
         elif key == Qt.Key.Key_Space:
             self._toggle_play()
         elif key == Qt.Key.Key_M:
@@ -254,13 +266,12 @@ class TutorialPage(QWidget):
             super().keyPressEvent(event)
 
     def showEvent(self, event):
-        """Grab focus when page becomes visible so arrow keys work immediately."""
         super().showEvent(event)
         self.setFocus()
 
     # Player controls
     def _player_resume(self):
-        """Called by timer after seek — resumes playback once frame is decoded."""
+        self._is_seeking = False
         self._player.play()
 
     def _toggle_play(self):
@@ -271,7 +282,9 @@ class TutorialPage(QWidget):
         self.setFocus()
 
     def _on_seek_start(self):
-        """Pause while scrubbing for sharp frame rendering."""
+        """Only called during drag — not during click seeks."""
+        if self._skip_seek_start:
+            return
         self._was_playing = (
             self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
         )
@@ -284,31 +297,39 @@ class TutorialPage(QWidget):
         self._player.setPosition(pos)
 
     def _on_seek_end(self):
-        """Seek to final position then resume if was playing."""
+        if self._skip_seek_start:
+            return
         self._player.setPosition(self._seek_slider.value())
         if self._was_playing:
-            self._player.play()
+            # self._player.play()
+            self._resume_timer.start(80)
         self._is_seeking = False
 
     def _seek_click(self, event: QMouseEvent):
-        """Jump seek slider position with pause → seek → timed resume."""
+        """Click-to-jump: handle seek ourselves, skip sliderPressed/Released."""
         if event.button() == Qt.MouseButton.LeftButton:
+            dur = self._player.duration()
+            pos = self._player.position()
+            finished = dur > 0 and pos >= dur
             was_playing = (
                 self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+                or finished
             )
-            if was_playing:
-                self._player.pause()
             ratio = event.position().x() / self._seek_slider.width()
-            pos = int(ratio * self._seek_slider.maximum())
-            self._seek_slider.setValue(pos)
-            self._player.setPosition(pos)
+            new_pos = int(ratio * self._seek_slider.maximum())
+            self._skip_seek_start = True
+            self._is_seeking = True
+            self._seek_slider.setValue(new_pos)
+            self._player.setPosition(new_pos)
+            self._skip_seek_start = False
             if was_playing:
                 self._resume_timer.start(80)
+            else:
+                self._is_seeking = False
         QSlider.mousePressEvent(self._seek_slider, event)
         self.setFocus()
 
     def _scroll_volume(self, delta: int):
-        """Adjust volume by scroll wheel delta, clear mute if active."""
         if self._is_muted:
             self._is_muted = False
         new_val = max(0, min(100, self._vol_slider.value() + delta))
@@ -328,11 +349,11 @@ class TutorialPage(QWidget):
     def _on_volume_changed(self, val: int):
         if not self._is_muted:
             self._audio.setVolume(val / 100.0)
-        self._update_vol_icon(val)
+            self._update_vol_icon(val)
 
     def _toggle_mute(self, event: QMouseEvent = None):
         if self._is_muted:
-            # Unmute — restore slider and audio to saved volume 
+            # Unmute — restore audio to saved volume 
             self._is_muted = False
             self._vol_slider.blockSignals(True)
             self._vol_slider.setValue(self._pre_mute_vol)
@@ -340,8 +361,11 @@ class TutorialPage(QWidget):
             self._audio.setVolume(self._pre_mute_vol / 100.0)
             self._update_vol_icon(self._pre_mute_vol)
         else:
-            # Mute — save current slider position, drop both slider and audio to 0 
-            self._pre_mute_vol = self._vol_slider.value()
+            # Mute — save last non-zero volume so we never restore to 0
+            current = self._vol_slider.value()
+            if current > 0:
+                self._pre_mute_vol = current
+            # _pre_mute_vol keeps its previous value if current is 0
             self._is_muted = True
             self._vol_slider.blockSignals(True)
             self._vol_slider.setValue(0)
@@ -362,9 +386,11 @@ class TutorialPage(QWidget):
         )
 
     def _on_playback_state(self, state):
+        # Don't update icon while user is dragging the seek slider
+        if self._is_seeking:
+            return
         playing = state == QMediaPlayer.PlaybackState.PlayingState
         stopped = state == QMediaPlayer.PlaybackState.StoppedState
-        # Show reload icon when video has ended (stopped at end of media)
         if stopped and self._player.position() >= self._player.duration() > 0:
             self._play_btn.setIcon(get_icon("reload", color="#ffffff", size=18))
         else:
