@@ -115,6 +115,7 @@ class AuthWindow(FramelessMainWindow):
 
     def show_page(self, page: str):
         """Switch to a named page and reset all forms to defaults."""
+        # Clear every auth page before switching
         for p in [self.login_page, self.signup_page, self.forgot_page]:
             if hasattr(p, "clear"):
                 p.clear()

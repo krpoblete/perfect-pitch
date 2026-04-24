@@ -62,7 +62,6 @@ class ClickableVideoWidget(QVideoWidget):
         super().__init__(parent)
         self._on_click = on_click
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -151,12 +150,11 @@ class TutorialPage(QWidget):
         ctrl_layout.setContentsMargins(0, 0, 0, 0)
         ctrl_layout.setSpacing(12)
 
-        # Play | Pause — NoFocus so arrow keys stay on this page
+        # Play | Pause
         self._play_btn = QPushButton()
         self._play_btn.setObjectName("tutorialPlayBtn")
         self._play_btn.setFixedSize(36, 36)
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._play_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._play_btn.setIcon(get_icon("player-play", color="#ffffff", size=18))
         self._play_btn.clicked.connect(self._toggle_play)
 
@@ -164,7 +162,6 @@ class TutorialPage(QWidget):
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
         self._seek_slider.setObjectName("tutorialSeek")
         self._seek_slider.setRange(0, 0)
-        self._seek_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._seek_slider.setCursor(Qt.CursorShape.PointingHandCursor)
         self._seek_slider.sliderPressed.connect(self._on_seek_start)
         self._seek_slider.sliderMoved.connect(self._on_seek_move)
@@ -190,7 +187,6 @@ class TutorialPage(QWidget):
         self._vol_slider.setRange(0, 100)
         self._vol_slider.setValue(50)
         self._vol_slider.setFixedWidth(90)
-        self._vol_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._vol_slider.mousePressEvent = self._vol_click
         self._vol_slider.valueChanged.connect(self._on_volume_changed)
         self._vol_icon.mousePressEvent = self._toggle_mute
@@ -301,7 +297,6 @@ class TutorialPage(QWidget):
             return
         self._player.setPosition(self._seek_slider.value())
         if self._was_playing:
-            # self._player.play()
             self._resume_timer.start(80)
         self._is_seeking = False
 

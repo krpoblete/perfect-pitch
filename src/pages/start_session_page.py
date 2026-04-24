@@ -107,7 +107,6 @@ class StartSessionPage(QWidget):
         self._throwing_hand = "RHP"   
         self._worker = None
         self.setObjectName("contentPage")
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.build_ui()
 
     def build_ui(self):
@@ -138,7 +137,6 @@ class StartSessionPage(QWidget):
         panel = QWidget()
         panel.setObjectName("sessionPanel")
         panel.setFixedWidth(280)
-        panel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20, 28, 20, 28)
         panel_layout.setSpacing(14)
@@ -201,7 +199,6 @@ class StartSessionPage(QWidget):
         self.guide_toggle_btn.setToolTip("Show/hide camera setup guide")
         self.guide_toggle_btn.setAutoDefault(False)
         self.guide_toggle_btn.setDefault(False)
-        self.guide_toggle_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus) 
         self.guide_toggle_btn.clicked.connect(self._toggle_guide_card)
         guide_toggle_row.addWidget(self.guide_toggle_btn)
         panel_layout.addLayout(guide_toggle_row)
@@ -217,7 +214,6 @@ class StartSessionPage(QWidget):
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setAutoDefault(False)
         self.start_btn.setDefault(False)
-        self.start_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.start_btn.clicked.connect(self._handle_start)
         panel_layout.addWidget(self.start_btn)
 
@@ -229,7 +225,6 @@ class StartSessionPage(QWidget):
         self.end_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setAutoDefault(False)
         self.start_btn.setDefault(False)
-        self.start_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.end_btn.clicked.connect(self._handle_end)
         panel_layout.addWidget(self.end_btn)
 

@@ -21,7 +21,6 @@ class WindowButtons(QWidget):
         min_btn.setObjectName("winMinBtn")
         min_btn.setFixedSize(28, 24)
         min_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        min_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         min_btn.setToolTip("Minimize")
         min_btn.clicked.connect(self._minimize)
 
@@ -30,7 +29,6 @@ class WindowButtons(QWidget):
         close_btn.setObjectName("winCloseBtn")
         close_btn.setFixedSize(28, 24)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        min_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_btn.setToolTip("Close")
         close_btn.clicked.connect(self._close)
 

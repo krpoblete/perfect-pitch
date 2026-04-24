@@ -45,7 +45,7 @@ class PitchersPage(QWidget):
         title_col.addWidget(title)
         title_col.addWidget(self.count_lbl)
 
-        # Search bar
+        # Search bar — plain input, active border on focus
         self.search_input = QLineEdit()
         self.search_input.setObjectName("searchBar")
         self.search_input.setPlaceholderText("Search users...")
