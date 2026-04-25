@@ -669,7 +669,7 @@ class AccountSettingsPage(QWidget):
             self.window(),
             title="Delete Account",
             message=(
-                "Are you sure you want to delete you account?"
+                "Are you sure you want to delete your account?"
             ),
         )
         dlg.exec()

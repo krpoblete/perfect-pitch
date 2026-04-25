@@ -10,9 +10,9 @@ from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
 
 ROWS_PER_PAGE = 10
-COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Expires In"]
+COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Expires In (90 Day Retention)"]
 ROLE_OPTIONS = ["Pitcher", "Coach"]
-RETENTION_DAYS = 1 
+RETENTION_DAYS = 1
 
 def _fmt_date(dt_str: str) -> str:
     try:
