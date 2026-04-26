@@ -485,28 +485,33 @@ class AccountSettingsPage(QWidget):
         cap = get_pitch_max(self._dob)
         user_today = get_pitches_used_today(self.user_id)
 
-        # effect_max = how many pitches the user can still set today
+        # effective_max = remaining pitches available today 
         effective_max = max(1, cap - user_today)
 
-        # Clamp the saved threshold to what's actually available today
+        # Exhausted = user has used at or beyond their threshold today 
         saved = user["pitch_threshold"] or recommended
+        is_exhausted = user_today >= saved
+
+        # Clamp saved threshold to what's still available (handles mid-day changes) 
         threshold = min(saved, effective_max)
         self._original_threshold = threshold
 
-        # Spinbox range: 1 → effective_max (cannot increase past what's left)
+        # Spinbox range: always 1 → effective_max so user can raise/lower freely
         self.threshold_input.blockSignals(True)
         self.threshold_input.setRange(1, effective_max)
         self.threshold_input.setValue(threshold)
         self.threshold_input.blockSignals(False)
 
-        # Lock spinbox if nothing left today
-        is_exhausted = effective_max <= 0 or user_today >= cap
+        # Lock spinbox only when truly exhausted
         self.threshold_input.setEnabled(not is_exhausted and self._role != "Coach")
         if is_exhausted:
             self.threshold_input.setToolTip(
                 "You've used all your pitches today. Replenishes at midnight."
             )
             self.threshold_input.setCursor(Qt.CursorShape.ForbiddenCursor)
+        else:
+            self.threshold_input.setToolTip("")
+            self.threshold_input.setCursor(Qt.CursorShape.IBeamCursor)
 
         # Recommended cap indicator
         self.rec_cap_lbl.setText(f"Recommended: {cap} pitches/day")

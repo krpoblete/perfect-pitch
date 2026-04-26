@@ -313,11 +313,10 @@ class MainWindow(FramelessMainWindow):
             page.refresh()
 
     def _lock_nav(self):
-        """Disable nav, logout, and window actions while a session is live."""
+        """Disable all nav buttons and window actions while a session is live."""
         self._session_live = True 
-        for key, btn in self.nav_buttons.items():
-            if key != "start_session":
-                btn.setEnabled(False)
+        for btn in self.nav_buttons.values():
+            btn.setEnabled(False)
         # Disable logout button
         bottom = getattr(self, "_sidebar_bottom", None)
         if bottom:

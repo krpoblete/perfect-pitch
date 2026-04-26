@@ -749,6 +749,8 @@ class StartSessionPage(QWidget):
         }
         self._apply_token_locked(status)
 
+        # Show 0 immediately on the panel without touching the DB
+        self.token_val.setText("0")
         # Launch the same async summary flow as _handle_end
         self._launch_summary_waiter()
 
@@ -890,7 +892,7 @@ class StartSessionPage(QWidget):
             self._save_session(accuracy)
         self._summary_dlg = None
         self._ending_worker = None
-        # Refresh AFTER save so DB reflects this session's pitches
+        # Refresh AFTER dialog closes so the panel never jumps during summary 
         self._refresh_token_status()
         # Ensure feed is black and END is disabled after dialog closes
         self._show_idle_feed()
