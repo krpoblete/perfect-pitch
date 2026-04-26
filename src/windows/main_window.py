@@ -42,6 +42,7 @@ class MainWindow(FramelessMainWindow):
         self.user_id = user_id
         self.ml_bundle = ml_bundle
         self._logging_out = False
+        self._session_live = False
         self.setWindowTitle("Perfect Pitch")
         self.titleBar.hide()
         self.setResizeEnabled(False)
@@ -215,6 +216,11 @@ class MainWindow(FramelessMainWindow):
         # Connect account settings signal to sidebar refresh
         self.pages["account_settings"].profile_updated.connect(self._reload_user_info)
 
+        # Lock nav during a session, unlock after
+        ss = self.pages["start_session"]
+        ss.session_started.connect(self._lock_nav)
+        ss.session_finished.connect(self._unlock_nav)
+
         layout.addWidget(sidebar)
         layout.addWidget(self.stack)
 
@@ -306,9 +312,43 @@ class MainWindow(FramelessMainWindow):
         if hasattr(page, "refresh"):
             page.refresh()
 
+    def _lock_nav(self):
+        """Disable nav, logout, and window actions while a session is live."""
+        self._session_live = True 
+        for key, btn in self.nav_buttons.items():
+            if key != "start_session":
+                btn.setEnabled(False)
+        # Disable logout button
+        bottom = getattr(self, "_sidebar_bottom", None)
+        if bottom:
+            for child in bottom.findChildren(QPushButton):
+                if child.objectName() == "logoutBtn":
+                    child.setEnabled(False)
+        # Disable window minimize/close via WindowButtons widget
+        if hasattr(self, "win_btns"):
+            self.win_btns.setEnabled(False)
+
+    def _unlock_nav(self):
+        """Re-enable all nav, logout, and window actions after session ends."""
+        self._session_live = False 
+        for btn in self.nav_buttons.values():
+            btn.setEnabled(True)
+        # Re-enable logout button
+        bottom = getattr(self, "_sidebar_bottom", None)
+        if bottom:
+            for child in bottom.findChildren(QPushButton):
+                if child.objectName() == "logoutBtn":
+                    child.setEnabled(True)
+        # Re-enable window buttons
+        if hasattr(self, "win_btns"):
+            self.win_btns.setEnabled(True)
+
     def closeEvent(self, event):
         if self._logging_out:
             event.accept()
+            return
+        if self._session_live:
+            event.ignore()
             return
         dlg = ConfirmDialog(self, title="Exit Perfect Pitch", message="Are you sure you want to exit?")
         dlg.exec()

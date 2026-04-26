@@ -1,7 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSizePolicy, QDialog, QGridLayout, QFrame,
-    QScrollArea
 )
 from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
@@ -25,7 +24,7 @@ class SessionSummaryDialog(QDialog):
     _H_DEFAULT = 620
 
     def __init__(self, parent, pitch_count: int, mistakes: int, accuracy: float,
-                 skeleton_path: str = ""):
+                 skeleton_path: str):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
@@ -74,6 +73,7 @@ class SessionSummaryDialog(QDialog):
                 self.skeleton_lbl.setPixmap(scaled)
                 self.skeleton_pending_lbl.hide()
                 return
+        # Replace text label with icon + message using the app's get_icon helper
         icon_lbl = QLabel()
         icon_lbl.setFixedSize(16, 16)
         icon_lbl.setStyleSheet("background: transparent;")
@@ -84,6 +84,7 @@ class SessionSummaryDialog(QDialog):
         except Exception:
             pass
         self.skeleton_pending_lbl.setText("Skeleton image unavailable")
+        # Insert icon just before the text label in the parent layout
         parent_layout = self.skeleton_pending_lbl.parentWidget().layout()
         idx = parent_layout.indexOf(self.skeleton_pending_lbl)
         row_w = QWidget()
@@ -168,22 +169,70 @@ class SessionSummaryDialog(QDialog):
  
         rl.addStretch()
  
-        # Accuracy band
+        # Accuracy note card 
         acc_int = int(self._accuracy)
         if acc_int >= 80:
-            band_color, band_text = "#4ecb71", "Great session! Keep it up."
+            band_color = "#4ecb71"
+            band_icon = "star-filled"
+            band_head = "Great session!"
+            band_body = "Your mechanics are on point. Keep up the consistency."
         elif acc_int >= 50:
-            band_color, band_text = "#f0a500", "Room to improve, review your form."
+            band_color = "#f0a500"
+            band_icon = "star-half"
+            band_head = "Room to improve."
+            band_body = "Review joint feedback and focus on flagged areas."
         else:
-            band_color, band_text = "#e05555", "Focus on mechanics next session."
+            band_color = "#e05555"
+            band_icon = "star"
+            band_head = "Focus on mechanics."
+            band_body = "Several joints exceeded threshold, prioritize form next session."
+
+        note_card = QWidget()
+        note_card.setObjectName("summaryNoteCard")
+        note_card.setStyleSheet(
+            f"QWidget#summaryNoteCard {{"
+            f" background: rgba(255,255,255,0.03);"
+            f" border: 1px solid {band_color}55;"
+            f" border-left: 3px solid {band_color};"
+            f" border-radius: 8px;"
+            f"}}"
+        )
+        note_layout = QVBoxLayout(note_card)
+        note_layout.setContentsMargins(14, 12, 14, 12)
+        note_layout.setSpacing(5)
+
+        note_head_row = QHBoxLayout()
+        note_head_row.setSpacing(8)
+        note_head_row.setContentsMargins(0, 0, 0, 0)
+
+        star_lbl = QLabel()
+        star_lbl.setFixedSize(15, 15)
+        star_lbl.setStyleSheet("background: transparent; border: none;")
+        try:
+            star_lbl.setPixmap(get_icon(band_icon, color=band_color, size=15).pixmap(15, 15))
+        except Exception:
+            pass
+        note_head_row.addWidget(star_lbl)
+
+        note_head = QLabel(band_head)
+        note_head.setStyleSheet(
+            f"color: {band_color}; background: transparent; "
+            f"font-size: 13px; font-weight: 700; border: none;"
+        )
+        note_head_row.addWidget(note_head)
+        note_head_row.addStretch()
+
+        note_body = QLabel(band_body)
+        note_body.setWordWrap(True)
+        note_body.setStyleSheet(
+            "color: #777777; background: transparent; "
+            "font-size: 12px; border: none;"
+        )
+        note_layout.addLayout(note_head_row)
+        note_layout.addWidget(note_body)
+        rl.addWidget(note_card)
  
-        tip = QLabel(band_text)
-        tip.setWordWrap(True)
-        tip.setObjectName("summaryTip")
-        tip.setStyleSheet(f"color: {band_color}; background: transparent;")
-        rl.addWidget(tip)
- 
-        rl.addSpacing(20)
+        rl.addSpacing(16)
 
         # Save button
         save_btn = QPushButton("Save and Close")
@@ -218,7 +267,9 @@ class SessionSummaryDialog(QDialog):
         return card
 
 class StartSessionPage(QWidget):
-    _worker_done = pyqtSignal()  # emitted by waiter thread → fires on main thread
+    _worker_done = pyqtSignal()      # internal: waiter thread → main thread
+    session_started = pyqtSignal()   # emitted when START is pressed
+    session_finished = pyqtSignal()  # emitted when summary dialog closes
 
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
@@ -579,15 +630,13 @@ class StartSessionPage(QWidget):
         self.mistake_val.setText(str(mistakes))
         self.accuracy_val.setText(f"{accuracy:.2f}%")
 
-        # Block at threshold
-        # Decrement token display live during session
-        # tokens_remaining already accounts for used_today at session start
-        pitches_live = max(0, self._tokens_remaining - pitch_count)
-        self.token_val.setText(str(pitches_live))
-
-        # Exhaust check: session pitches have consumed all remaining tokens 
-        if pitches_live <= 0 and self._running: 
-            self._handle_token_exhausted_mid_session()
+        # Decrement token display live during session only
+        if self._running:
+            pitches_live = max(0, self._tokens_remaining -  pitch_count)
+            self.token_val.setText(str(pitches_live))
+            # Exhaust check: session pitches have consumed all remaining tokens
+            if pitches_live <= 0:
+                self._handle_token_exhausted_mid_session()
 
     # Token system
     def _refresh_token_status(self):
@@ -690,6 +739,8 @@ class StartSessionPage(QWidget):
         self._ending_worker = self._worker
         self._worker = None
 
+        self._stop_capture()
+
         headroom = max(0, (self._recommended_cap or 0) - (self._threshold or 0))
         status = {
             "threshold": self._threshold,
@@ -716,6 +767,8 @@ class StartSessionPage(QWidget):
         self._running = True
         self.start_btn.setEnabled(False)
         self.end_btn.setEnabled(True)
+
+        self.session_started.emit()
 
         # Reset stats for new sessions
         self._pitch_count = 0
@@ -806,18 +859,17 @@ class StartSessionPage(QWidget):
     def _on_worker_finished(self, worker):
         """Called on the main thread once the worker QThread has fully exited."""
         print(f"[END] _on_worker_finished called | worker={worker}")
-        skeleton_path = getattr(worker, "skeleton_path", "") if worker else ""
+        skeleton_path = getattr(worker, "skeleton_path", "") if worker is not None else ""
         print(f"[END] skeleton path={skeleton_path!r}")
  
         self.start_btn.setEnabled(True)
-        # if hasattr(self, "guide_toggle_btn"):
-        #     self.guide_toggle_btn.setEnabled(True)
-        self._refresh_token_status()
         # Re-show guide card — user may have dismissed it during the session
         self._update_camera_guide()
  
         # Nothing to summarise — session ended before any pitch was thrown
         if self._end_pitch_count == 0:
+            self._refresh_token_status()
+            self.session_finished.emit()
             return
  
         accuracy = (
@@ -838,9 +890,12 @@ class StartSessionPage(QWidget):
             self._save_session(accuracy)
         self._summary_dlg = None
         self._ending_worker = None
+        # Refresh AFTER save so DB reflects this session's pitches
+        self._refresh_token_status()
         # Ensure feed is black and END is disabled after dialog closes
         self._show_idle_feed()
         self.end_btn.setEnabled(False)
+        self.session_finished.emit()
 
     def _stop_capture(self):
         """Stop the worker synchronously (used by error/token-exhausted paths).

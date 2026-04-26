@@ -272,21 +272,19 @@
 }
 
 #summarySaveBtn {
-    background-color: #1a1a1a;
-    border: 1px solid #2e2e2e;
+    background-color: #d4d4d4;
+    color: #0d0d0d;
+    border: none;
     border-radius: 8px;
-    color: #cccccc;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 1px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
 }
 
 #summarySaveBtn:hover {
-    background-color: #222222;
-    border-color: #3e3e3e;
-    color: #ffffff;
+    background-color: #efefef;
 }
 
 #summarySaveBtn:pressed {
-    background-color: #141414;
+    background-color: #bbbbbb;
 }
