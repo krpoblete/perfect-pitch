@@ -40,11 +40,69 @@ JOINT_NAMES = [
 ]
 
 FEEDBACK = [
-    "Check left elbow position during throw", "Check right elbow position during throw",
-    "Check left shoulder alignment", "Check right shoulder alignment",
-    "Adjust left hip posture and avoid excessive lean", "Adjust right hip posture and avoid excessive lean",
-    "Keep left knee more stable", "Keep right knee more stable",
-    "Keep hips more level and balanced",
+    {#Left Elbow
+        "Normal": "Left Elbow - position is good",
+        "Elevated": "Left Elbow - position is slightly off",
+        "Moderate": "Left Elbow - adjust position",
+        "High": "Left Elbow - position is off",
+        "Critical": "Left Elbow - fix position immediately",
+    },
+    {#Right Elbow
+        "Normal": "Right Elbow - position is good",
+        "Elevated": "Right Elbow - position is slightly off",
+        "Moderate": "Right Elbow - adjust position",
+        "High": "Right Elbow - position is off",
+        "Critical": "Right Elbow - fix position immediately",
+    },
+    {#Left Shoulder
+        "Normal": "Left Shoulder - alignment is good",
+        "Elevated": "Left Shoulder - slight misalignment",
+        "Moderate": "Left Shoulder - adjust alignment",
+        "High": "Left Shoulder - alignment is off",
+        "Critical": "Left Shoulder - fix alignment immediately",
+    },
+    {#Right Shoulder
+        "Normal": "Right Shoulder - alignment is good",
+        "Elevated": "Right Shoulder - slight misalignment",
+        "Moderate": "Right Shoulder - adjust alignment",
+        "High": "Right Shoulder - alignment is off",
+        "Critical": "Right Shoulder - fix alignment immediately",
+    },
+    {#Left Hip
+        "Normal": "Left Hip - position is stable",
+        "Elevated": "Left Hip - slight imbalance",
+        "Moderate": "Left Hip - adjust posture",
+        "High": "Left Hip - posture is off ",
+        "Critical": "Left Hip - fix posture and balance immediately",
+    },
+    {#Right Hip
+        "Normal": "Right Hip - position is stable",
+        "Elevated": "Right Hip - slight imbalance",
+        "Moderate": "Right Hip - adjust posture",
+        "High": "Right Hip - posture is off ",
+        "Critical": "Right Hip - fix posture and balance immediately",
+    },
+    {#Left Knee
+        "Normal": "Left Knee - movement is stable",
+        "Elevated": "Left Knee - slight instability",
+        "Moderate": "Left Knee - improve stability",
+        "High": "Left Knee - stability is off",
+        "Critical": "Left Knee - stabilize movement immediately",
+    },
+    {#Right Knee
+        "Normal": "Right Knee - movement is stable",
+        "Elevated": "Right Knee - slight instability",
+        "Moderate": "Right Knee - improve stability",
+        "High": "Right Knee - stability is off",
+        "Critical": "Right Knee - stabilize movement immediately",
+    },
+    {#Pelvis
+        "Normal": "Pelvis - hip movement is good",
+        "Elevated": "Pelvis - slight hip tilt",
+        "Moderate": "Pelvis - keep hips more level",
+        "High": "Pelvis - avoid leaning too much on one side",
+        "Critical": "Pelvis - stay centered and control hip movement",
+    },
 ]
 
 KEYPOINT_LINES = [
@@ -205,11 +263,11 @@ def get_severity(risk, threshold):
     else:                             return "Critical"
 
 def risk_color(risk, threshold):
-    if   risk < threshold:            return (50, 205, 50)    # green        — Normal
-    elif risk < 1.25 * threshold:      return (0, 215, 255)    # yellow       — Elevated
-    elif risk < 1.5 * threshold:      return (0, 165, 255)    # light orange — Moderate
-    elif risk < 2.0 * threshold:      return (0, 100, 255)    # orange       — High
-    else:                             return (0, 0, 220)      # red          — Critical
+    if   risk < threshold:            return (50, 205, 50)    # green        - Normal
+    elif risk < 1.25 * threshold:      return (0, 215, 255)    # yellow       - Elevated
+    elif risk < 1.5 * threshold:      return (0, 165, 255)    # light orange - Moderate
+    elif risk < 2.0 * threshold:      return (0, 100, 255)    # orange       - High
+    else:                             return (0, 0, 220)      # red          - Critical
 
 def count_severity(joint_risks, joint_thresholds):
     n_critical = int(np.sum(joint_risks >= 2.0 * joint_thresholds))
@@ -239,14 +297,14 @@ def check_verdict(mse, threshold, joint_risks, joint_thresholds):
     if mse <= threshold:
         return False, f"MSE within threshold. {label}", n_critical, n_high, n_moderate, n_elevated
 
-    # MSE is above threshold — now check joint evidence to confirm
+    # MSE is above threshold - now check joint evidence to confirm
     if (n_critical >= CRITICAL_LIMIT or
         n_high     >= HIGH_LIMIT     or
         n_moderate >= MODERATE_LIMIT or
         risk_score >= 3):
         return True, f"High MSE + joint evidence. {label}", n_critical, n_high, n_moderate, n_elevated
 
-    # MSE is elevated but joints don't confirm — flag only if MSE is significantly high
+    # MSE is elevated but joints don't confirm - flag only if MSE is significantly high
     if mse > threshold * 1.5:
         return True, f"MSE significantly exceeds threshold. {label}", n_critical, n_high, n_moderate, n_elevated
 
@@ -260,13 +318,14 @@ def build_feedback_table(joint_risks, joint_thresholds):
     for i in range(NUM_JOINTS):
         risk   = float(joint_risks[i])
         thresh = float(joint_thresholds[i])
+        sev    = get_severity(risk, thresh)
         rows.append({
             "Joint":     JOINT_NAMES[i],
-            "Feedback":  FEEDBACK[i],
+            "Feedback":  FEEDBACK[i].get(sev, ""),
             "Risk":      round(risk, 6),
             "Threshold": round(thresh, 6),
             "Flagged":   risk > thresh,
-            "Severity":  get_severity(risk, thresh),
+            "Severity":  sev,
         })
     SEVERITY_RANK = {"Critical": 4, "High": 3, "Moderate": 2, "Elevated": 1, "Normal": 0}
     df = pd.DataFrame(rows)
@@ -283,7 +342,9 @@ def print_summary(verdict, issue, reason, mse, threshold, n_critical, n_high, n_
     print(f"  MSE       : {mse:.6f}  (threshold: {threshold:.6f})")
     print(f"  Joints    : Critical={n_critical}  High={n_high}  Moderate={n_moderate}  Elevated={n_elevated}")
     if worst_joint is not None:
-        print(f"  Feedback  : {FEEDBACK[worst_joint]}")
+        worst_row = feedback_df[feedback_df["Joint"] == JOINT_NAMES[worst_joint]]
+        if not worst_row.empty:
+            print(f"  Feedback  : {worst_row.iloc[0]['Feedback']}")
     print(f"{'=' * 55}\n")
     print(feedback_df.to_string(index=False), "\n")
 
@@ -299,11 +360,11 @@ def landmark_colors(frame_risk, joint_thresholds):
     return norm_risk
 
 def norm_risk_color(norm_risk):
-    if   norm_risk < 1.0:   return (50, 205, 50)    # green        — Normal
-    elif norm_risk < 1.25:   return (0, 215, 255)    # yellow       — Elevated
-    elif norm_risk < 1.5:   return (0, 165, 255)    # light orange — Moderate
-    elif norm_risk < 2.0:   return (0, 100, 255)    # orange       — High
-    else:                   return (0, 0, 220)       # red          — Critical
+    if   norm_risk < 1.0:   return (50, 205, 50)    # green        - Normal
+    elif norm_risk < 1.25:   return (0, 215, 255)    # yellow       - Elevated
+    elif norm_risk < 1.5:   return (0, 165, 255)    # light orange - Moderate
+    elif norm_risk < 2.0:   return (0, 100, 255)    # orange       - High
+    else:                   return (0, 0, 220)       # red          - Critical
 
 def draw_skeleton(frame, image_lms, lm_norm_risk):
     out = frame.copy()
@@ -396,7 +457,7 @@ def load_model():
     if "joint_thresholds" in checkpoint:
         joint_thresholds = np.array(checkpoint["joint_thresholds"], dtype=np.float32)
     else:
-        print("  [WARN] checkpoint has no joint_thresholds — falling back to global threshold for all joints.")
+        print("  [WARN] checkpoint has no joint_thresholds - falling back to global threshold for all joints.")
         joint_thresholds = np.full(NUM_JOINTS, threshold, dtype=np.float32)
 
     model = LSTMAutoencoder(
@@ -494,3 +555,4 @@ if __name__ == "__main__":
     parser.add_argument("--out", default=None, help="Path for annotated output video")
     args = parser.parse_args()
     analyze(args.video, args.out)
+

@@ -47,31 +47,36 @@ JOINT_LANDMARKS = [
     (11, 23,  4),   # L.Shoulder -> L.Hip
     (12, 24,  5),   # R.Shoulder -> R.Hip
     (23, 24, -1),   # L.Hip <-> R.Hip
-    (23, 25,  6),   # L.Hip -> L.Knee  
+    (23, 25,  6),   # L.Hip -> L.Knee
     (24, 26,  7),   # R.Hip -> R.Knee
+    (25, 27,  6),   # L.Knee -> L.Ankle  (inherits L.Knee severity)
+    (26, 28,  7),   # R.Knee -> R.Ankle  (inherits R.Knee severity)
 ]
 
 def landmark_colors(joint_risks: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
 
     out = np.zeros(33, dtype=np.float32)
-    for j, dot in enumerate(KEYPOINTS):        
+    for j, dot in enumerate(KEYPOINTS):
         out[dot] = float(joint_risks[j]) / (float(thresholds[j]) + 1e-10)
     out[PELVIS] = float(joint_risks[8]) / (float(thresholds[8]) + 1e-10)
+    # Ankles inherit knee severity — visual extension only
+    out[27] = float(joint_risks[6]) / (float(thresholds[6]) + 1e-10)  # L.Ankle = L.Knee
+    out[28] = float(joint_risks[7]) / (float(thresholds[7]) + 1e-10)  # R.Ankle = R.Knee
     return out
 
 def severity_color(ratio: float) -> tuple:
     if ratio < 1.0:
-        return (50, 205, 50)#green(normal)
+        return (50, 205, 50)    # green   (normal)
     if ratio < 1.25:
-        return (0, 215, 255)#yellow(elevated)
+        return (0, 215, 255)    # yellow  (elevated)
     if ratio < 1.5:
-        return (0, 165, 255)#light orange(moderate)
+        return (0, 165, 255)    # orange  (moderate)
     if ratio < 2.0:
-        return (0, 100, 255)#orange(high)
-    return (0, 0, 220)#red(critical)
+        return (0, 100, 255)    # orange+ (high)
+    return (0, 0, 220)          # red     (critical)
 
 def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
-                  dot_risk: np.ndarray) -> np.ndarray:
+                   dot_risk: np.ndarray) -> np.ndarray:
     if screen_pts is None:
         return frame.copy()
 
@@ -79,21 +84,21 @@ def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
     frame_height, frame_width = out.shape[:2]
 
     def pixel(idx: int) -> tuple:
-        if idx == PELVIS:                         
+        if idx == PELVIS:
             lh, rh = screen_pts[23], screen_pts[24]
             return int((lh[0] + rh[0]) / 2 * frame_width), int((lh[1] + rh[1]) / 2 * frame_height)
         x, y = screen_pts[idx]
         return int(x * frame_width), int(y * frame_height)
 
-    #segment
+    # segments
     for mp_a, mp_b, j_idx in JOINT_LANDMARKS:
         ratio = (dot_risk[PELVIS] if j_idx == -1
                  else dot_risk[KEYPOINTS[j_idx]])
         cv2.line(out, pixel(mp_a), pixel(mp_b),
                  severity_color(ratio), 2, cv2.LINE_AA)
 
-    #landmarks
-    for dot in [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 32]:
+    # landmarks — includes ankles (27, 28) for visual continuity
+    for dot in [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 32]:
         color = severity_color(dot_risk[dot])
         size = 3 if dot == NOSE else 5
         cv2.circle(out, pixel(dot), size, color, -1, cv2.LINE_AA)
@@ -101,18 +106,17 @@ def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
 
     return out
 
-#camera settings
-DETECT_WIDTH  = 134
-DETECT_HEIGHT = 104 
 
-EMA_ALPHA     = 0.5
-VELOCITY_GAIN = 0.4
+# ── Camera settings ────────────────────────────────────────────────────────────
 
-#pitchflow
-COUNTDOWN_SECS = 3
+DETECT_WIDTH  = 192
+DETECT_HEIGHT = 108
+
+# pitchflow
+COUNTDOWN_SECS   = 3
 MAX_PITCH_FRAMES = 90
 
-#live alert
+# live alert
 INFER_EVERY      = 10
 ALERT_RISK_RATIO = 1.5
 
@@ -129,7 +133,7 @@ SHORT_NAMES = [
     "Pelvis",
 ]
 
-#pitching state
+# pitching state
 WAITING    = "waiting"
 COUNTDOWN  = "countdown"
 COLLECTING = "collecting"
@@ -137,7 +141,8 @@ ANALYZING  = "analyzing"
 POST_PITCH = "post_pitch"
 
 
-#camera thread
+# ── Camera thread ──────────────────────────────────────────────────────────────
+
 class CameraThread(threading.Thread):
 
     def __init__(self, cap: cv2.VideoCapture):
@@ -170,10 +175,62 @@ class CameraThread(threading.Thread):
         self._stop.set()
 
 
+
+
+
+def get_text_size(text: str, size: int) -> tuple:
+    (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 28.0, max(1, round(size / 18)))
+    return w, h
+
+
+def put_text(img: np.ndarray, text: str, pos: tuple,
+             size: int, color_bgr: tuple) -> None:
+    cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX,
+                size / 28.0, color_bgr, max(1, round(size / 18)), cv2.LINE_AA)
+
+
+
+# ── Font size constants ────────────────────────────────────────────────────────
+
+FS_TINY   = 14   # muted hints, key legend, joint value column
+FS_SMALL  = 18   # joint names, progress labels, body values
+FS_BODY   = 22   # general status text, feedback lines
+FS_MEDIUM = 28   # panel sub-headers / verdict text
+FS_LARGE  = 42   # "Analyzing..." overlay
+FS_HUGE   = 84   # countdown number
+
+
+# ── UI constants ───────────────────────────────────────────────────────────────
+
+PANEL_W       = 420
+PANEL_BG      = (18, 18, 18)
+HDR_H         = 72
+CLR_PRIMARY   = (230, 230, 230)
+CLR_SECONDARY = (155, 155, 155)
+CLR_MUTED     = (82, 82, 82)
+CLR_DIVIDER   = (40, 40, 40)
+CLR_BAR_BG    = (48, 48, 48)
+
+# bar column positions (inside a 420-wide panel)
+BAR_X = 115
+BAR_W = 180
+VAL_X = BAR_X + BAR_W + 8
+
+
+def _divider(panel: np.ndarray, y: int, pw: int) -> None:
+    cv2.line(panel, (10, y), (pw - 10, y), CLR_DIVIDER, 1, cv2.LINE_AA)
+
+
+def _section_label(panel: np.ndarray, text: str, y: int) -> None:
+    put_text(panel, text.upper(), (10, y), FS_TINY, CLR_MUTED)
+
+
 # ── Panel helpers ──────────────────────────────────────────────────────────────
 
 def side_panel(fh: int, pw: int) -> np.ndarray:
-    return np.full((fh, pw, 3), (25, 25, 25), dtype=np.uint8)
+    p = np.full((fh, pw, 3), PANEL_BG, dtype=np.uint8)
+    cv2.line(p, (1, 0), (1, fh), (45, 45, 45), 1)
+    return p
 
 
 def blend_panel(frame: np.ndarray, panel: np.ndarray) -> np.ndarray:
@@ -189,14 +246,27 @@ def blend_panel(frame: np.ndarray, panel: np.ndarray) -> np.ndarray:
 
 def draw_waiting_overlay(frame: np.ndarray) -> np.ndarray:
     fh, fw = frame.shape[:2]
-    pw     = 300
+    pw     = PANEL_W
     panel  = side_panel(fh, pw)
-    cv2.rectangle(panel, (0, 0), (pw, 46), (60, 60, 60), -1)
-    cv2.putText(panel, "Waiting for pitcher", (8, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
-    for i, line in enumerate(["Step into frame.", "", "R = reset", "Q = quit"]):
-        cv2.putText(panel, line, (8, 70 + i * 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.40, (140, 140, 140), 1, cv2.LINE_AA)
+
+    # Header
+    cv2.rectangle(panel, (0, 0), (pw, HDR_H), (52, 52, 52), -1)
+    put_text(panel, "STANDBY",          (10, 28), FS_TINY,   CLR_MUTED)
+    put_text(panel, "Awaiting Pitcher", (10, 64), FS_MEDIUM, CLR_PRIMARY)
+
+    _divider(panel, HDR_H + 2, pw)
+
+    # Instructions
+    y = HDR_H + 32
+    _section_label(panel, "Instructions", y)
+    y += 28
+    for line in ["Step into frame to begin.", "R  —  Reset session", "Q  —  Quit"]:
+        put_text(panel, line, (10, y), FS_BODY, CLR_SECONDARY)
+        y += 32
+
+    # Bottom status
+    put_text(panel, "System ready", (10, fh - 16), FS_TINY, CLR_MUTED)
+
     return blend_panel(frame, panel)
 
 
@@ -206,23 +276,35 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     fh, fw  = out.shape[:2]
     overlay = out.copy()
     cx, cy  = fw // 2, fh // 2
-    cv2.circle(overlay, (cx, cy), 70, (0, 0, 0), -1)
-    cv2.addWeighted(overlay, 0.55, out, 0.45, 0, out)
-    number      = str(max(1, int(np.ceil(secs_left))))
-    (tw, th), _ = cv2.getTextSize(number, cv2.FONT_HERSHEY_SIMPLEX, 3.5, 6)
-    cv2.putText(out, number, (cx - tw // 2, cy + th // 2),
-                cv2.FONT_HERSHEY_SIMPLEX, 3.5, (50, 220, 50), 6, cv2.LINE_AA)
-    cv2.putText(out, "Get ready to pitch...", (cx - 95, cy + 95),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
-    pw    = 300
+    cv2.circle(overlay, (cx, cy), 96, (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.60, out, 0.40, 0, out)
+
+    number = str(max(1, int(np.ceil(secs_left))))
+    tw, th = get_text_size(number, FS_HUGE)
+    put_text(out, number, (cx - tw // 2, cy + th // 2), FS_HUGE, (50, 220, 50))
+
+    hint = "Get ready to pitch..."
+    hw, _ = get_text_size(hint, FS_BODY)
+    put_text(out, hint, (cx - hw // 2, cy + 138), FS_BODY, (200, 200, 200))
+
+    pw    = PANEL_W
     panel = side_panel(fh, pw)
-    cv2.rectangle(panel, (0, 0), (pw, 46), (60, 100, 60), -1)
-    cv2.putText(panel, "Pitcher detected!", (8, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
-    cv2.putText(panel, f"Recording in {secs_left:.1f}s", (8, 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.42, (160, 200, 160), 1, cv2.LINE_AA)
-    cv2.putText(panel, "R = cancel  |  Q = quit", (8, fh - 8),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.33, (80, 80, 80), 1, cv2.LINE_AA)
+    cv2.rectangle(panel, (0, 0), (pw, HDR_H), (32, 88, 42), -1)
+    put_text(panel, "DETECTED",      (10, 28), FS_TINY,   (130, 195, 130))
+    put_text(panel, "Pitcher Ready", (10, 64), FS_MEDIUM, CLR_PRIMARY)
+
+    _divider(panel, HDR_H + 2, pw)
+
+    y = HDR_H + 30
+    put_text(panel, f"Recording in  {secs_left:.1f}s", (10, y), FS_BODY, (140, 200, 140))
+
+    prog  = max(0.0, 1.0 - secs_left / COUNTDOWN_SECS)
+    bar_w = int(prog * (PANEL_W - 20))
+    y += 18
+    cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
+    cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (70, 180, 70), -1)
+
+    put_text(panel, "R  —  Cancel    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
     return blend_panel(out, panel)
 
 
@@ -237,44 +319,61 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
                if early_risk is not None else np.zeros(33, dtype=np.float32))
     out    = draw_keypoints(frame, screen_pts, dot_risk)
     fh, fw = out.shape[:2]
-    pw     = 300
+    pw     = PANEL_W
     panel  = side_panel(fh, pw)
 
-    hdr    = (0, 0, 200) if alert_joint else (110, 50, 20)
-    cv2.rectangle(panel, (0, 0), (pw, 46), hdr, -1)
-    header = f"ALERT: {alert_joint[:14]}" if alert_joint else "Recording pitch..."
-    cv2.putText(panel, header, (8, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+    # Header
+    if alert_joint:
+        hdr_col = (140, 20, 20)
+        hdr_tag = "ALERT"
+        hdr_sub = alert_joint
+    else:
+        hdr_col = (38, 72, 108)
+        hdr_tag = "RECORDING"
+        hdr_sub = "Pitch in progress"
 
+    cv2.rectangle(panel, (0, 0), (pw, HDR_H), hdr_col, -1)
+    put_text(panel, hdr_tag, (10, 28), FS_TINY,   (170, 170, 200))
+    put_text(panel, hdr_sub, (10, 64), FS_MEDIUM, CLR_PRIMARY)
+
+    _divider(panel, HDR_H + 2, pw)
+
+    # Progress bar
+    y        = HDR_H + 28
     progress = n_collected / MAX_PITCH_FRAMES
-    bar_w    = int(progress * (pw - 16))
-    cv2.putText(panel, f"{n_collected}/{MAX_PITCH_FRAMES} frames  ({fps_live:.0f} fps)", (8, 56),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.35, (120, 120, 120), 1, cv2.LINE_AA)
-    cv2.rectangle(panel, (8, 62), (pw - 8, 72), (55, 55, 55), -1)
-    cv2.rectangle(panel, (8, 62), (8 + bar_w, 72), (80, 160, 80), -1)
+    bar_w    = int(progress * (pw - 20))
+    frame_lbl = f"{n_collected} / {MAX_PITCH_FRAMES} frames"
+    fps_lbl   = f"{fps_live:.0f} fps"
+    put_text(panel, frame_lbl, (10, y), FS_SMALL, CLR_SECONDARY)
+    fw2, _ = get_text_size(fps_lbl, FS_SMALL)
+    put_text(panel, fps_lbl, (pw - fw2 - 10, y), FS_SMALL, CLR_MUTED)
+    y += 16
+    cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
+    cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (80, 160, 80), -1)
+
+    y += 24
+    _divider(panel, y, pw)
+    y += 20
+
+    # Joint risk table
+    _section_label(panel, "Live Joint Risk", y)
+    y += 26
 
     if early_risk is not None:
-        y = 86
-        cv2.putText(panel, "Live Joint Risk", (8, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.40, (180, 180, 180), 1, cv2.LINE_AA)
         for k in range(NUM_JOINTS):
             risk   = float(early_risk[k])
             thresh = float(thresholds[k])
             color  = risk_color(risk, thresh)
-            bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * 110)
-            y     += 16
-            cv2.putText(panel, SHORT_NAMES[k], (8, y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.28, (160, 160, 160), 1, cv2.LINE_AA)
-            cv2.rectangle(panel, (76, y - 10), (186, y), (55, 55, 55), -1)
-            cv2.rectangle(panel, (76, y - 10), (76 + bw, y), color, -1)
-            cv2.putText(panel, f"{risk:.3f}", (190, y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.26, (140, 140, 140), 1, cv2.LINE_AA)
+            bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * BAR_W)
+            put_text(panel, SHORT_NAMES[k], (10, y), FS_SMALL, CLR_SECONDARY)
+            cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + BAR_W, y + 4), CLR_BAR_BG, -1)
+            cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + bw,    y + 4), color,       -1)
+            put_text(panel, f"{risk:.3f}", (VAL_X, y), FS_TINY, CLR_MUTED)
+            y += 26
     else:
-        cv2.putText(panel, "Warming up...", (8, 94),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.36, (100, 100, 100), 1, cv2.LINE_AA)
+        put_text(panel, "Warming up...", (10, y), FS_BODY, CLR_MUTED)
 
-    cv2.putText(panel, "R = reset", (8, fh - 8),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.33, (80, 80, 80), 1, cv2.LINE_AA)
+    put_text(panel, "R  —  Reset    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
     return blend_panel(out, panel)
 
 
@@ -289,73 +388,90 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
         out = frame.copy()
 
     fh, fw = out.shape[:2]
-    pw     = 300
+    pw     = PANEL_W
     panel  = side_panel(fh, pw)
 
+    # Header
     is_correct = result["verdict"] == "Correct Form"
-    cv2.rectangle(panel, (0, 0), (pw, 46),
-                  (50, 205, 50) if is_correct else (0, 0, 200), -1)
-    cv2.putText(panel, result["verdict"][:22], (8, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv2.LINE_AA)
+    hdr_col    = (20, 150, 35) if is_correct else (18, 18, 185)
+    cv2.rectangle(panel, (0, 0), (pw, HDR_H), hdr_col, -1)
+    put_text(panel, "RESULT",          (10, 28), FS_TINY,
+             (130, 220, 140) if is_correct else (130, 130, 230))
+    put_text(panel, result["verdict"], (10, 64), FS_MEDIUM, CLR_PRIMARY)
+
+    _divider(panel, HDR_H + 2, pw)
+    y = HDR_H + 26
 
     if result["main_issue"]:
-        cv2.putText(panel, f"Issue: {result['main_issue'][:20]}", (8, 48),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.36, (220, 220, 220), 1, cv2.LINE_AA)
+        put_text(panel, f"Issue:  {result['main_issue'][:30]}", (10, y),
+                 FS_BODY, (210, 155, 95))
+        y += 30
 
-    y = 60
+    # Session accuracy bar
     if n_pitches > 0:
         acc     = n_correct / n_pitches * 100
-        acc_col = (50, 205, 50) if acc >= 70 else (0, 215, 255) if acc >= 50 else (0, 0, 220)
-        bw      = int((acc / 100.0) * (pw - 16))
-        cv2.putText(panel, f"{n_correct}/{n_pitches} correct ({acc:.0f}%)", (8, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, acc_col, 1, cv2.LINE_AA)
-        cv2.rectangle(panel, (8, y + 4), (pw - 8, y + 14), (70, 70, 70), -1)
-        cv2.rectangle(panel, (8, y + 4), (8 + bw, y + 14), acc_col, -1)
+        acc_col = (50, 205, 50) if acc >= 70 else (0, 215, 255) if acc >= 50 else (0, 80, 220)
+        bw      = int((acc / 100.0) * (pw - 20))
+        lbl     = f"{n_correct} / {n_pitches} correct  —  {acc:.0f}%"
+        put_text(panel, lbl, (10, y), FS_SMALL, acc_col)
+        y += 16
+        cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
+        cv2.rectangle(panel, (10, y), (10 + bw,  y + 9), acc_col,   -1)
+        y += 22
 
-    y = 82
-    cv2.putText(panel, "Joint Risk (this pitch)", (8, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.40, (180, 180, 180), 1, cv2.LINE_AA)
+    _divider(panel, y, pw)
+    y += 20
+    _section_label(panel, "Joint Risk", y)
+    y += 26
+
     for k in range(NUM_JOINTS):
         risk   = float(result["joint_risks"][k])
         thresh = float(thresholds[k])
         color  = risk_color(risk, thresh)
-        bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * 110)
-        y     += 17
-        cv2.putText(panel, SHORT_NAMES[k], (8, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.30, (160, 160, 160), 1, cv2.LINE_AA)
-        cv2.rectangle(panel, (76, y - 10), (186, y), (55, 55, 55), -1)
-        cv2.rectangle(panel, (76, y - 10), (76 + bw, y), color, -1)
-        cv2.putText(panel, f"{risk:.3f}", (190, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.28, (140, 140, 140), 1, cv2.LINE_AA)
+        bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * BAR_W)
+        put_text(panel, SHORT_NAMES[k], (10, y), FS_SMALL, CLR_SECONDARY)
+        cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + BAR_W, y + 4), CLR_BAR_BG, -1)
+        cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + bw,    y + 4), color,       -1)
+        put_text(panel, f"{risk:.3f}", (VAL_X, y), FS_TINY, CLR_MUTED)
+        y += 26
 
-    y += 18
-    cv2.putText(panel, "Top Feedback", (8, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.40, (180, 180, 180), 1, cv2.LINE_AA)
-    for _, row in result["feedback_df"].head(3).iterrows():
-        y += 17
-        color = risk_color(row["Risk"], row["Threshold"])
-        cv2.putText(panel, row["Feedback"][:20], (8, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.30, color, 1, cv2.LINE_AA)
-        cv2.putText(panel, row["Severity"], (220, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.30, color, 1, cv2.LINE_AA)
-
+    _divider(panel, y, pw)
     y += 20
-    cv2.putText(panel, f"Next pitch in {secs_left:.1f}s", (8, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180, 180, 180), 1, cv2.LINE_AA)
+    _section_label(panel, "Top Feedback", y)
+    y += 26
+
+    for _, row in result["feedback_df"].head(3).iterrows():
+        color = risk_color(row["Risk"], row["Threshold"])
+        fb = row["Feedback"]
+        while fb and get_text_size(fb, FS_SMALL)[0] > pw - 20:
+            fb = fb[:-1]
+        put_text(panel, fb, (10, y), FS_SMALL, color)
+        y += 22
+        put_text(panel, row["Severity"], (10, y), FS_TINY, color)
+        y += 24
+
+    _divider(panel, y, pw)
+    y += 20
+
+    # Cooldown countdown
+    put_text(panel, f"Next pitch in  {secs_left:.1f}s", (10, y), FS_BODY, CLR_SECONDARY)
     prog  = max(0.0, 1.0 - secs_left / COOLDOWN)
-    bar_w = int(prog * (pw - 16))
-    cv2.rectangle(panel, (8, y + 6), (pw - 8, y + 16), (60, 60, 60), -1)
-    cv2.rectangle(panel, (8, y + 6), (8 + bar_w, y + 16), (80, 160, 80), -1)
-    cv2.putText(panel, "R = reset now", (8, fh - 8),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.33, (80, 80, 80), 1, cv2.LINE_AA)
+    bar_w = int(prog * (pw - 20))
+    y += 16
+    cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
+    cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (80, 160, 80), -1)
+
+    put_text(panel, "R  —  Reset now    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
 
     return blend_panel(out, panel)
 
-#landmark smoother
+
+# ── Landmark smoother ──────────────────────────────────────────────────────────
+
 class LandmarkSmoother:
-    def __init__(self, alpha: float = EMA_ALPHA, vel_gain: float = VELOCITY_GAIN):
-        self.alpha    = alpha
-        self.vel_gain = vel_gain
+    def __init__(self):
+        self.alpha    = 1.0   # pure passthrough, no EMA lag
+        self.vel_gain = 0.0   # no velocity-based prediction
         self._pts     = None
         self._vel     = None
 
@@ -384,10 +500,11 @@ class LandmarkSmoother:
         return self._pts is not None
 
 
-#main
+# ── Main ───────────────────────────────────────────────────────────────────────
+
 def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
 
-    #model
+    # model
     print("Loading model...")
     ckpt      = torch.load(MODEL_DIR / "lstm_autoencoder.pt",
                            map_location=DEVICE, weights_only=False)
@@ -416,7 +533,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
     print(f"Per-joint : {dict(zip(SHORT_NAMES, thresholds.round(5)))}")
     print(f"Device    : {DEVICE}")
 
-    #camera
+    # camera
     cap = cv2.VideoCapture(camera_id)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
@@ -471,13 +588,12 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
 
     # ── Per-pitch state ────────────────────────────────────────────────────────
     state          = WAITING
-    cd_start       = None   # countdown start time
-    post_start     = None   # post-pitch cooldown start time
+    cd_start       = None
+    post_start     = None
     lastresult_list    = None
     world_pts      = None
     image_pts      = None
     smoother       = LandmarkSmoother()
-
 
     world_frames        = []
     screen_frames        = []
@@ -627,7 +743,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
             if main_issue:
                 print(f"Issue: {main_issue}")
 
-            #pitch logging
+            # pitch logging
             pitch_record = {
                 "pitch_number": n_pitches,
                 "timestamp": datetime.now().isoformat(),
@@ -661,7 +777,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
                 reset()
                 print("Ready for next pitch.\n")
 
-        #display
+        # display
         lm = display_lm if display_lm is not None else (screen_frames[-1] if screen_frames else None)
 
         if state == WAITING:
@@ -681,16 +797,28 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
         elif state == ANALYZING:
             display = (draw_keypoints(frame, lm, np.zeros(33))
                        if lm is not None else frame.copy())
-            cv2.putText(display, "Analyzing...", (20, display.shape[0] // 2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 215, 255), 2, cv2.LINE_AA)
+            analyzing_txt = "Analyzing..."
+            atw, ath = get_text_size(analyzing_txt, FS_LARGE)
+            ax = (display.shape[1] - atw) // 2
+            ay = display.shape[0] // 2
+            cv2.rectangle(display, (ax - 18, ay - ath - 12), (ax + atw + 18, ay + 12),
+                          (0, 0, 0), -1)
+            cv2.rectangle(display, (ax - 18, ay - ath - 12), (ax + atw + 18, ay + 12),
+                          (40, 40, 40), 1)
+            put_text(display, analyzing_txt, (ax, ay), FS_LARGE, (0, 215, 255))
 
         else:
             secs    = max(0.0, COOLDOWN - (time.perf_counter() - post_start))
             display = draw_post_pitch_overlay(frame, lastresult_list, secs,
                                               n_pitches, n_correct, lm)
 
-        cv2.putText(display, f"FPS {fps_live:.1f}", (8, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
+        # FPS counter
+        fps_txt = f"FPS  {fps_live:.1f}"
+        ftw, fth = get_text_size(fps_txt, FS_BODY)
+        cv2.rectangle(display, (6, 6), (ftw + 18, fth + 16), (0, 0, 0), -1)
+        cv2.rectangle(display, (6, 6), (ftw + 18, fth + 16), (42, 42, 42), 1)
+        put_text(display, fps_txt, (12, fth + 11), FS_BODY, (200, 200, 200))
+
         cv2.imshow("Live Pitch Analysis", display)
 
         key = cv2.waitKey(1) & 0xFF
@@ -714,9 +842,8 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real-time pitch form analysis.")
     parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--width",  type=int, default=876,
-                        help="Capture width — set to your feed area width (screen_w - 580)")
-    parser.add_argument("--height", type=int, default=768,
-                        help="Capture height — set to your screen height minus taskbar")
+    parser.add_argument("--width",  type=int, default=1980)
+    parser.add_argument("--height", type=int, default=1080)
     args = parser.parse_args()
     run_live(camera_id=args.camera, width=args.width, height=args.height)
+

@@ -91,7 +91,6 @@ class PitchWorker(QThread):
         from src.live_capture import (
             CameraThread, LandmarkSmoother,
             DETECT_WIDTH, DETECT_HEIGHT,
-            EMA_ALPHA, VELOCITY_GAIN,
             COUNTDOWN_SECS, MAX_PITCH_FRAMES,
             INFER_EVERY, ALERT_RISK_RATIO, COOLDOWN,
             SHORT_NAMES, LOG_DIR,
@@ -188,7 +187,7 @@ class PitchWorker(QThread):
         session_log = []
 
         # State
-        smoother = LandmarkSmoother(EMA_ALPHA, VELOCITY_GAIN)
+        smoother = LandmarkSmoother()
         state = WAITING
         cd_start = None
         post_start = None
@@ -436,7 +435,7 @@ class PitchWorker(QThread):
         # Cleanup — landmarker.close() can block for 10-30 s waiting for
         # pending async inference callbacks to drain.  Run it in a daemon
         # thread so it doesn't delay the worker's exit (and the finished
-        # signal) or skeleton generation. 
+        # signal) or skeleton generation.
         cam_thread.stop()
         cap.release()
         threading.Thread(target=landmarker.close, daemon=True).start()
