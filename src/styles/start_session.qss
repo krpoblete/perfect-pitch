@@ -201,3 +201,92 @@
 #tokenAlertIcon {
     background: transparent;
 }
+
+/* Session Summary Dialog */
+#summaryRoot {
+    background-color: #0d0d0d;
+    border: 1px solid #1e1e1e;
+}
+
+#summarySkeletonPanel {
+    background-color: #0a0a0a;
+}
+
+#summaryDivider {
+    background-color: #1e1e1e;
+    max-width: 1px;
+}
+
+#summaryStatsPanel {
+    background-color: #0f0f0f;
+}
+
+#summaryBadge {
+    color: #4ecb71;
+    background: transparent;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+#summaryTitle {
+    color: #ffffff;
+    background: transparent;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+#summarySubtitle {
+    color: #555555;
+    background: transparent;
+    font-size: 12px;
+}
+
+#summaryTip {
+    font-size: 12px;
+    font-style: italic;
+    background: transparent;
+}
+
+#summaryStatCard {
+    background-color: #161616;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+}
+
+#summaryStatLabel {
+    color: #888888;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#summaryStatValue {
+    font-size: 18px;
+    font-weight: 700;
+    background: transparent;
+}
+
+#summarySkeletonImage {
+    background: transparent;
+}
+
+#summarySaveBtn {
+    background-color: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-radius: 8px;
+    color: #cccccc;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+#summarySaveBtn:hover {
+    background-color: #222222;
+    border-color: #3e3e3e;
+    color: #ffffff;
+}
+
+#summarySaveBtn:pressed {
+    background-color: #141414;
+}

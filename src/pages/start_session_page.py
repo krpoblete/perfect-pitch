@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QSizePolicy, QDialog, QGridLayout, QFrame
+    QLabel, QPushButton, QSizePolicy, QDialog, QGridLayout, QFrame,
+    QScrollArea
 )
 from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
@@ -12,100 +13,232 @@ from src.pitch_worker import PitchWorker
 CAMERA_ID = 0
 
 class SessionSummaryDialog(QDialog):
-    """Summary popup shown after END is clicked."""
-    def __init__(self, parent, pitch_count: int, mistakes: int, accuracy: float):
+    """
+    Session summary — fills the camera feed area:
+        Left  : joint-severity skeleton PNG, large and readable
+        Right : session stats, worst joint callout, save button
+
+    Sized to match the feed label geometry so it overlays it exactly.
+    """
+    # Fallback size used when parent geometry is unavailable
+    _W_DEFAULT = 940
+    _H_DEFAULT = 620
+
+    def __init__(self, parent, pitch_count: int, mistakes: int, accuracy: float,
+                 skeleton_path: str = ""):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setObjectName("summaryRoot")
-        self.setFixedSize(400, 300)
-        self._build_ui(pitch_count, mistakes, accuracy)
-        self._center_on_parent(parent)
+        self._pitch_count = pitch_count
+        self._mistakes = mistakes
+        self._accuracy = accuracy
+        self._skeleton_path = skeleton_path
+        self._build_ui()
+        self._size_and_position(parent)
 
-    def _center_on_parent(self, parent):
-        if parent:
-            pr = parent.frameGeometry()
-            self.move(
-                pr.x() + (pr.width() - self.width()) // 2,
-                pr.y() + (pr.height() - self.height()) // 2,
+    def _size_and_position(self, parent):
+        """Match the dialog to the parent's feed_label geometry."""
+        try:
+            feed = parent.feed_label
+            tl = feed.mapToGlobal(feed.rect().topLeft())
+            w, h = feed.width(), feed.height()
+        except Exception:
+            w, h = self._W_DEFAULT, self._H_DEFAULT
+            from PyQt6.QtWidgets import QApplication
+            sg = QApplication.primaryScreen().availableGeometry()
+            tl = sg.topLeft()
+            tl.setX(tl.x() + (sg.width() - w) // 2)
+            tl.setY(tl.y() + (sg.height() - h) // 2)
+        self.setFixedSize(w, h)
+        self.move(tl)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._load_skeleton)
+
+    def _load_skeleton(self):
+        import os
+        path = self._skeleton_path
+        if path and os.path.exists(path):
+            pixmap = QPixmap(path) 
+            if not pixmap.isNull():
+                # Fill the skeleton label as large as possible
+                tw = self.skeleton_lbl.width()
+                th = self.skeleton_lbl.height()
+                scaled = pixmap.scaled(
+                    tw, th,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                self.skeleton_lbl.setPixmap(scaled)
+                self.skeleton_pending_lbl.hide()
+                return
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(16, 16)
+        icon_lbl.setStyleSheet("background: transparent;")
+        try:
+            icon_lbl.setPixmap(
+                get_icon("alert-triangle", color="#e05555", size=16).pixmap(16, 16)
             )
+        except Exception:
+            pass
+        self.skeleton_pending_lbl.setText("Skeleton image unavailable")
+        parent_layout = self.skeleton_pending_lbl.parentWidget().layout()
+        idx = parent_layout.indexOf(self.skeleton_pending_lbl)
+        row_w = QWidget()
+        row_w.setStyleSheet("background: transparent;")
+        row = QHBoxLayout(row_w)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row.addWidget(icon_lbl)
+        row.addWidget(self.skeleton_pending_lbl)
+        parent_layout.insertWidget(idx, row_w)
 
-    def _build_ui(self, pitch_count: int, mistakes: int, accuracy: float):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 28, 30, 24)
-        layout.setSpacing(8)
-        
+    def _build_ui(self):
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Left: skeleton panel
+        self.skeleton_panel = QWidget()
+        self.skeleton_panel.setObjectName("summarySkeletonPanel")
+        sk_layout = QVBoxLayout(self.skeleton_panel)
+        sk_layout.setContentsMargins(20, 18, 12, 16)
+        sk_layout.setSpacing(6)
+
+        self.skeleton_lbl = QLabel()
+        self.skeleton_lbl.setObjectName("summarySkeletonImage")
+        self.skeleton_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.skeleton_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        sk_layout.addWidget(self.skeleton_lbl, stretch=1)
+
+        # Pending label overlaid below image slot
+        self.skeleton_pending_lbl = QLabel("⏳  Generating joint severity map…")
+        self.skeleton_pending_lbl.setObjectName("summarySubtitle")
+        self.skeleton_pending_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sk_layout.addWidget(self.skeleton_pending_lbl)
+
+        root.addWidget(self.skeleton_panel, stretch=65)
+
+        # Divider
+        div = QFrame()
+        div.setObjectName("summaryDivider")
+        div.setFrameShape(QFrame.Shape.VLine)
+        root.addWidget(div)
+
+        # Right: stats panel
+        right = QWidget()
+        right.setObjectName("summaryStatsPanel")
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(32, 32, 32, 28)
+        rl.setSpacing(0)
+
+        # Session ended badge
+        badge = QLabel("SESSION COMPLETE")
+        badge.setObjectName("summaryBadge")
+        badge.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        rl.addWidget(badge)
+
+        rl.addSpacing(10)
+
         # Title
         title = QLabel("Session Summary")
         title.setObjectName("summaryTitle")
-        layout.addWidget(title)
+        rl.addWidget(title)
 
-        layout.addSpacing(6)
-
-        subtitle = QLabel("Your session has ended. Here's how you did.")
+        subtitle = QLabel("Here's how you performed across all pitches.")
         subtitle.setObjectName("summarySubtitle")
         subtitle.setWordWrap(True)
-        layout.addWidget(subtitle)
+        rl.addWidget(subtitle)
 
-        layout.addSpacing(24)
+        rl.addSpacing(28)
 
-        # Stats grid
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
-
-        grid.addWidget(self._stat_card("Pitch Count", str(pitch_count), "#4a9eff"), 0, 0)
-        grid.addWidget(self._stat_card("Mistakes", str(mistakes), "#e05555"), 0, 1)
-        grid.addWidget(self._stat_card("Accuracy", f"{accuracy:.2f}%", "#4ecb71"), 0, 2)
-        layout.addLayout(grid)
-
-        layout.addStretch()
+        # Stat cards: stacked vertically for the taller layout
+        for label, value, color in [
+            ("Pitch Count", str(self._pitch_count), "#4a9eff"),
+            ("Mistakes", str(self._mistakes), "#e05555"),
+            ("Accuracy", f"{self._accuracy:.2f}%", "#4ecb71"),
+        ]:
+            rl.addWidget(self._stat_card(label, value, color))
+            rl.addSpacing(10)
+ 
+        rl.addStretch()
+ 
+        # Accuracy band
+        acc_int = int(self._accuracy)
+        if acc_int >= 80:
+            band_color, band_text = "#4ecb71", "Great session! Keep it up."
+        elif acc_int >= 50:
+            band_color, band_text = "#f0a500", "Room to improve, review your form."
+        else:
+            band_color, band_text = "#e05555", "Focus on mechanics next session."
+ 
+        tip = QLabel(band_text)
+        tip.setWordWrap(True)
+        tip.setObjectName("summaryTip")
+        tip.setStyleSheet(f"color: {band_color}; background: transparent;")
+        rl.addWidget(tip)
+ 
+        rl.addSpacing(20)
 
         # Save button
         save_btn = QPushButton("Save and Close")
         save_btn.setObjectName("summarySaveBtn")
-        save_btn.setFixedHeight(44)
+        save_btn.setFixedHeight(52)
+        save_btn.setAutoDefault(False)
+        save_btn.setDefault(False)
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.clicked.connect(self.accept)
-        layout.addWidget(save_btn)
+        rl.addWidget(save_btn)
+
+        root.addWidget(right, stretch=35)
 
     def _stat_card(self, label: str, value: str, color: str) -> QWidget:
         card = QWidget()
         card.setObjectName("summaryStatCard")
-        col = QVBoxLayout(card)
-        col.setContentsMargins(12, 14, 12, 14)
-        col.setSpacing(6)
-        col.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        val_lbl = QLabel(value)
-        val_lbl.setObjectName("summaryStatValue")
-        val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        val_lbl.setStyleSheet(f"color: {color}; background: transparent;")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(16, 14, 16, 14)
+        row.setSpacing(0)
 
         lbl = QLabel(label)
         lbl.setObjectName("summaryStatLabel")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        col.addWidget(val_lbl)
-        col.addWidget(lbl)
+        val_lbl = QLabel(value)
+        val_lbl.setObjectName("summaryStatValue")
+        val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        val_lbl.setStyleSheet(f"color: {color}; background: transparent;")
+
+        row.addWidget(lbl)
+        row.addStretch()
+        row.addWidget(val_lbl)
         return card
 
 class StartSessionPage(QWidget):
+    _worker_done = pyqtSignal()  # emitted by waiter thread → fires on main thread
+
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
-        self._ml_bundle = ml_bundle   # (model, scaler, threshold, joint_thresholds)
+        self._ml_bundle = ml_bundle        # (model, scaler, threshold, joint_thresholds)
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
-        self._threshold = None        # user's current token pool
-        self._recommended_cap = None  # USA Baseball age-based cap
-        self._used_today = 0          # pitches thrown today
-        self._tokens_remaining = 0    # threshold - used_today 
+        self._threshold = None             # user's current token pool
+        self._recommended_cap = None       # USA Baseball age-based cap
+        self._used_today = 0               # pitches thrown today
+        self._tokens_remaining = 0         # threshold - used_today 
         self._throwing_hand = "RHP"   
         self._worker = None
+        self._summary_dlg = None           # ref to open dialog for skeleton injection
+        self._skeleton_path = ""           # path to last generated skeleton PNG
+        self._end_pitch_count = 0          # snapshot at END time for dialog
+        self._end_mistakes = 0             # snapshot at END time for dialog
+        self._ending_worker = None         # strong ref held during async shutdown
+        self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
         self.setObjectName("contentPage")
         self.build_ui()
 
@@ -125,8 +258,7 @@ class StartSessionPage(QWidget):
         self.feed_label.setObjectName("feedLabel")
         self.feed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.feed_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._show_idle_feed()
         feed_layout.addWidget(self.feed_label)
@@ -539,6 +671,7 @@ class StartSessionPage(QWidget):
             )
             icon_color = "#e05555"
 
+        # Render alert-triangle SVG with inherited color
         self._alert_icon_lbl.setPixmap(
             get_icon("alert-triangle", color=icon_color, size=14).pixmap(14, 14)
         )
@@ -547,16 +680,26 @@ class StartSessionPage(QWidget):
 
     def _handle_token_exhausted_mid_session(self):
         """Called during a live session when tokens hit zero mid-pitch."""
-        if self._running:
-            self._stop_capture()
-            headroom = max(0, (self._recommended_cap or 0) - (self._threshold or 0))
-            status = {
-                "threshold": self._threshold,
-                "recommended_cap": self._recommended_cap,
-                "headroom": headroom,
-            }
-            self._apply_token_locked(status)
-            self.end_btn.setEnabled(True)
+        if not self._running:
+            return
+        self._running = False
+        self._end_pitch_count = self._pitch_count
+        self._end_mistakes = self._mistakes
+
+        # Snapshot worker BEFORE _stop_capture nulls self._worker
+        self._ending_worker = self._worker
+        self._worker = None
+
+        headroom = max(0, (self._recommended_cap or 0) - (self._threshold or 0))
+        status = {
+            "threshold": self._threshold,
+            "recommended_cap": self._recommended_cap,
+            "headroom": headroom,
+        }
+        self._apply_token_locked(status)
+
+        # Launch the same async summary flow as _handle_end
+        self._launch_summary_waiter()
 
     def _check_tokens_on_start(self) -> bool:
         """Refresh token status, return True (blocked) if no tokens remain."""
@@ -615,43 +758,115 @@ class StartSessionPage(QWidget):
         self._worker.start()
 
     def _handle_end(self):
-        self._stop_capture()
+        print(f"[END] _handle_end called | _running={self._running} ending_worker={self._ending_worker}")
+        # Guard: ignore if a shutdown is already in progress
+        if self._ending_worker is not None or not self._running:
+            print("[END] guard hit — shutdown already in progress or not running")
+            return
 
-        accuracy = (
-            (self._pitch_count - self._mistakes) / self._pitch_count * 100
-            if self._pitch_count > 0 else 0.0
-        )
-
-        dlg = SessionSummaryDialog(
-            self.window(),
-            pitch_count=self._pitch_count,
-            mistakes=self._mistakes,
-            accuracy=accuracy,
-        )
-        if dlg.exec():
-            self._save_session(accuracy)
-
-    def _stop_capture(self):
         self._running = False
         self.end_btn.setEnabled(False)
-
-        # Clear the feed immediately so the user never sees a frozen frame
         self._show_idle_feed()
         self._update_camera_guide()
 
-        # Stop the worker — signal it first, then wait for clean shutdown 
-        if self._worker and self._worker.isRunning():
-            self._worker.stop()
-            self._worker.wait(3000)
-            if self._worker and self._worker.isRunning():
-                self._worker.terminate()
-            self._worker = None
+        # Clear feed immediately — session is already processing
+        self._show_idle_feed()
+
+        # Snapshot pitch stats now — they must not change before dialog opens
+        self._end_pitch_count = self._pitch_count
+        self._end_mistakes = self._mistakes
+        print(f"[END] pitches={self._end_pitch_count} mistakes={self._end_mistakes} worker={self._worker}")
+
+        # Snapshot worker BEFORE anything can null it, then launch waiter 
+        self._ending_worker = self._worker
+        self._worker = None
+        self._launch_summary_waiter()
+        
+    def _launch_summary_waiter(self):
+        """Spawn a background thread that waits for the worker to exit, then
+        posts _on_worker_finished to the main thread via QTimer.singleShot."""
+        import threading as _threading
+
+        def _wait_for_worker():
+            print(f"[END waiter] thread started | worker={self._ending_worker}")
+            w = self._ending_worker
+            if w is not None and w.isRunning():
+                print("[END waiter] calling w.stop() then w.wait()…")
+                w.stop()
+                w.wait()
+                print("[END waiter] w.wait() returned")
+            else:
+                print(f"[END waiter] worker already stopped, posting immediately")
+            print("[END waiter] emitting _worker_done signal")
+            self._worker_done.emit()
+
+        _threading.Thread(target=_wait_for_worker, daemon=True).start()
+        print("[END] waiter thread launched")
+
+    def _on_worker_finished(self, worker):
+        """Called on the main thread once the worker QThread has fully exited."""
+        print(f"[END] _on_worker_finished called | worker={worker}")
+        skeleton_path = getattr(worker, "skeleton_path", "") if worker else ""
+        print(f"[END] skeleton path={skeleton_path!r}")
+ 
+        self.start_btn.setEnabled(True)
+        # if hasattr(self, "guide_toggle_btn"):
+        #     self.guide_toggle_btn.setEnabled(True)
+        self._refresh_token_status()
+        # Re-show guide card — user may have dismissed it during the session
+        self._update_camera_guide()
+ 
+        # Nothing to summarise — session ended before any pitch was thrown
+        if self._end_pitch_count == 0:
+            return
+ 
+        accuracy = (
+            (self._end_pitch_count - self._end_mistakes) / self._end_pitch_count * 100
+            if self._end_pitch_count > 0 else 0.0
+        )
+ 
+        dlg = SessionSummaryDialog(
+            self,
+            pitch_count=self._end_pitch_count,
+            mistakes=self._end_mistakes,
+            accuracy=accuracy,
+            skeleton_path=skeleton_path,
+        )
+ 
+        self._summary_dlg = dlg
+        if dlg.exec():
+            self._save_session(accuracy)
+        self._summary_dlg = None
+        self._ending_worker = None
+        # Ensure feed is black and END is disabled after dialog closes
+        self._show_idle_feed()
+        self.end_btn.setEnabled(False)
+
+    def _stop_capture(self):
+        """Stop the worker synchronously (used by error/token-exhausted paths).
+
+        For the normal END button flow use _handle_end, which stops the worker
+        non-blockingly via the finished signal so the UI never freezes. 
+        """
+        self._running = False
+        self.end_btn.setEnabled(False)
+        self._show_idle_feed()
+        self._update_camera_guide()
+
+        worker = self._worker
+        self._worker = None 
+        if worker and worker.isRunning():
+            worker.stop()
+            finished = worker.wait(15_000)
+            if not finished and worker.isRunning():
+                worker.terminate()
+                worker.wait(2000)
 
         self.start_btn.setEnabled(True)
-        # Re-evaluate token lock state after session ends
         self._refresh_token_status()
 
     def _save_session(self, accuracy: float):
+        toast_success(self, "Session saved successfully.")
         from src.db import get_connection, _manila_now
         conn = get_connection()
         conn.execute(
@@ -692,9 +907,10 @@ class StartSessionPage(QWidget):
         toast_error(self, f"Camera error: {message}")
 
     def _on_session_ended(self, log_path: str):
-        """Called when PitchWorker finishes — log path is ready."""
-        toast_success(self, f"Session log saved.")
-        print(f"Session log → {log_path}")
+        """Called when PitchWorker finishes. skeleton_path is read directly
+        from worker.skeleton_path in _stop_capture, not via this signal."""
+        if log_path:
+            print(f"Session log → {log_path}")
 
     # Lifecycle
     def refresh(self):

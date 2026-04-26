@@ -36,6 +36,7 @@ class PitchWorker(QThread):
     stats_updated = pyqtSignal(int, int)  # (pitch_count, mistakes)
     state_changed = pyqtSignal(str)       # WAITING | COUNTDOWN | COLLECTING | ANALYZING | POST_PITCH
     model_loaded = pyqtSignal()           # camera + model ready
+    skeleton_ready = pyqtSignal(str)      # path to combined skeleton PNG
     error_occurred = pyqtSignal(str)      # fatal error message
     session_ended = pyqtSignal(str)       # log_path when thread finishes
 
@@ -47,8 +48,9 @@ class PitchWorker(QThread):
         self.width = width
         self.height = height
         self.throwing_hand = throwing_hand
-        self._ml_bundle = ml_bundle
+        self._ml_bundle = ml_bundle           # pre-loaded (model, scaler, threshold, thresholds)
         self._stop_event = threading.Event()
+        self.skeleton_path = ""               # written by worker thread, read by main after wait()
 
     def stop(self):
         self._stop_event.set()
@@ -137,7 +139,9 @@ class PitchWorker(QThread):
                 f"Could not open camera {self.camera_id}."
             )
             return
-        
+
+        # Compute DETECT dimensions at 10% of actual capture size
+        # so MediaPipe always works on a proportionally correct frame 
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         DETECT_WIDTH = max(1, round(actual_w * 0.1))
@@ -149,6 +153,7 @@ class PitchWorker(QThread):
         cam_thread = CameraThread(cap)
         cam_thread.start()
 
+        # signal UI that camera + model are ready
         self.model_loaded.emit()
 
         # Pose landmarker (LIVE_STREAM)
@@ -179,7 +184,7 @@ class PitchWorker(QThread):
         log_dir = ROOT_DIR / "output"
         log_dir.mkdir(exist_ok=True)
         session_start = datetime.now()
-        log_path = log_dir / f"session_{session_start.strftime('%Y%m%d_%H%M%S')}.json"
+        log_path = log_dir / f"session_{session_start.strftime('%Y-%m-%d_%H-%M-%S')}.json"
         session_log = []
 
         # State
@@ -428,10 +433,31 @@ class PitchWorker(QThread):
             # Emit frame to Qt (replaces cv2.imshow)
             self.frame_ready.emit(display)
 
-        # Cleanup
+        # Cleanup — landmarker.close() can block for 10-30 s waiting for
+        # pending async inference callbacks to drain.  Run it in a daemon
+        # thread so it doesn't delay the worker's exit (and the finished
+        # signal) or skeleton generation. 
         cam_thread.stop()
-        landmarker.close()
         cap.release()
+        threading.Thread(target=landmarker.close, daemon=True).start()
 
         if session_log:
+            # Store skeleton path on self — main thread reads it safely after wait() 
+            self.skeleton_path = ""
+            try:
+                from src.pitch_summary import compute_summary, build_combined_skeleton
+                from src.config import ROOT_DIR
+                images_folder = ROOT_DIR / "assets" / "skeletons"
+                stats = compute_summary(session_log)
+                out_png = log_path.parent / f"{log_path.stem}_skeleton.png"
+                build_combined_skeleton(stats, images_folder, out_png)
+                if out_png.exists():
+                    self.skeleton_path = str(out_png)
+                    print(f"[skeleton] ready -> {self.skeleton_path}")
+            except Exception as e:
+                import traceback
+                print(f"[skeleton] {e}")
+                traceback.print_exc()
+
+            # Both paths emitted together — UI receives them before opening dialog
             self.session_ended.emit(str(log_path))
