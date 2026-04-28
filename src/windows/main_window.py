@@ -31,7 +31,6 @@ NAV_COACH = [
 
 NAV_ADMIN = [
     ("dashboard", "home", "Dashboard"),
-    ("tutorial", "help", "Tutorial"),
     ("users", "users-group", "Users"),
     ("start_session", "play-handball", "Start Session"),
 ]

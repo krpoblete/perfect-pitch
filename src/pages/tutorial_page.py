@@ -41,19 +41,6 @@ TUTORIAL_CONTENT = {
         ),
         "video": "coach.mp4",
     },
-    "Admin": {
-        "title": "Admin Tutorial",
-        "subtitle": "Learn how to manage users and oversee the Perfect Pitch system.",
-        "description": (
-            "This tutorial is for system administrators. You will learn how to "
-            "manage user accounts, assign Coach and Pitcher roles, and interpret "
-            "the app-wide Dashboard overview. You will also understand the "
-            "soft-delete and 90-day data retention system, how inactive accounts "
-            "are tracked, and how to use the Users table to monitor the status "
-            "of all registered accounts."
-        ),
-        "video": "admin.mp4",
-    },
 }
 
 class ClickableVideoWidget(QVideoWidget):
