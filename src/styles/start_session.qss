@@ -288,3 +288,32 @@
 #summarySaveBtn:pressed {
     background-color: #bbbbbb;
 }
+
+/* Camera selector combo */
+#cameraCombo {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #888888;
+    font-size: 11px;
+    padding: 0 8px;
+    selection-background-color: #1e1e1e;
+}
+
+#cameraCombo:hover {
+    border-color: #3a3a3a;
+    color: #aaaaaa;
+}
+
+#cameraCombo::drop-down {
+    border: none;
+    width: 18px;
+}
+
+#cameraCombo QAbstractItemView {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    color: #aaaaaa;
+    selection-background-color: #222222;
+    font-size: 11px;
+}

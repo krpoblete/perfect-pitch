@@ -155,7 +155,7 @@ class CameraThread(threading.Thread):
     def run(self):
         while not self._stop.is_set():
             ret, frame = self._cap.read()
-            if not ret:
+            if not ret or frame is None:
                 self.ok = False
                 break
             if self._q.full():
@@ -533,9 +533,10 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
     print(f"Per-joint : {dict(zip(SHORT_NAMES, thresholds.round(5)))}")
     print(f"Device    : {DEVICE}")
 
-    # camera
-    cap = cv2.VideoCapture(camera_id)
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    # camera — CAP_DSHOW for Windows DirectShow (works with OBS Virtual Camera).
+    # Do NOT force a FOURCC — let the driver negotiate its native format.
+    # OpenCV automatically converts YUY2/NV12 from OBS to BGR on read().
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     cap.set(cv2.CAP_PROP_FPS, 30)
@@ -846,4 +847,3 @@ if __name__ == "__main__":
     parser.add_argument("--height", type=int, default=1080)
     args = parser.parse_args()
     run_live(camera_id=args.camera, width=args.width, height=args.height)
-

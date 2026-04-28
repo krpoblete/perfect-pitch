@@ -129,10 +129,15 @@ class PitchWorker(QThread):
             with open(MODEL_DIR / "scaler.pkl", "rb") as f:
                 scaler = pickle.load(f)
 
-        # Camera
-        cap = cv2.VideoCapture(self.camera_id)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        # Camera — CAP_DSHOW for Windows DirectShow (works with OBS Virtual Camera).
+        # Do NOT force a FOURCC — let the driver negotiate its native format.
+        # OpenCV automatically converts YUY2/NV12 from OBS to BGR on read().
+        # Only set resolution softly; if OBS ignores it we use whatever it gives.
+        cap = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not cap.isOpened():
             self.error_occurred.emit(
                 f"Could not open camera {self.camera_id}."
@@ -312,11 +317,15 @@ class PitchWorker(QThread):
                     feat_sc = scaler.transform(feat)
                     _, early_risk, _ = compute_scores(feat_sc, ae)
                     worst = int(np.argmax(early_risk / (thresholds + 1e-10)))
+                    prev_alert = alert_joint
                     alert_joint = (
                         SHORT_NAMES[worst]
                         if early_risk[worst] >= ALERT_RISK_RATIO * thresholds[worst]
                         else None
                     )
+                    # Ring alert on the first frame a joint exceeds threshold
+                    if alert_joint is not None and prev_alert is None:
+                        self._play_alert()
 
                 if n >= MAX_PITCH_FRAMES:
                     state = ANALYZING
@@ -360,10 +369,6 @@ class PitchWorker(QThread):
                 }
                 self.pitch_done.emit(pitch_result)
                 self.stats_updated.emit(n_pitches, n_mistakes)
-
-                # Play alert sound for incorrect form (non-blocking)
-                if verdict == "Incorrect Form":
-                    self._play_alert()
 
                 # Session JSON log
                 session_log.append({

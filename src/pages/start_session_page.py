@@ -289,7 +289,11 @@ class StartSessionPage(QWidget):
         self._end_pitch_count = 0          # snapshot at END time for dialog
         self._end_mistakes = 0             # snapshot at END time for dialog
         self._ending_worker = None         # strong ref held during async shutdown
+        self._worker_state = ""            # last state emitted by PitchWorker
+        self._camera_index = 0             # active camera device index
         self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
+        # Start polling for camera connect/disconnect
+        # self._start_camera_monitor()
         self.setObjectName("contentPage")
         self.build_ui()
 
@@ -317,9 +321,12 @@ class StartSessionPage(QWidget):
         root.addWidget(feed_wrapper, stretch=3)
 
         # Stats panel
+        from PyQt6.QtWidgets import QApplication as _QApp
+        _sw = _QApp.primaryScreen().availableGeometry().width()
+        _panel_w = max(220, min(300, int(_sw * 0.155)))
         panel = QWidget()
         panel.setObjectName("sessionPanel")
-        panel.setFixedWidth(280)
+        panel.setFixedWidth(_panel_w)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(20, 28, 20, 28)
         panel_layout.setSpacing(14)
@@ -369,10 +376,24 @@ class StartSessionPage(QWidget):
 
         panel_layout.addStretch()
 
-        # Help icon button — always visible, toggles camera guide card
+        self.camera_guide_card = self._build_guide_card()
+        panel_layout.addWidget(self.camera_guide_card)
+
+        # Bottom row: camera selector + guide toggle
+        from PyQt6.QtWidgets import QComboBox
         guide_toggle_row = QHBoxLayout()
         guide_toggle_row.setContentsMargins(0, 0, 0, 0)
-        guide_toggle_row.addStretch()
+        guide_toggle_row.setSpacing(6)
+
+        self.camera_combo = QComboBox()
+        self.camera_combo.setObjectName("cameraCombo")
+        self.camera_combo.setFixedHeight(28)
+        self.camera_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.camera_combo.setToolTip("Select camera source")
+        self._populate_camera_combo()
+        self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
+        guide_toggle_row.addWidget(self.camera_combo, stretch=1)
+
         self.guide_toggle_btn = QPushButton()
         self.guide_toggle_btn.setObjectName("guideToggleBtn")
         self.guide_toggle_btn.setFixedSize(28, 28)
@@ -384,11 +405,8 @@ class StartSessionPage(QWidget):
         self.guide_toggle_btn.setDefault(False)
         self.guide_toggle_btn.clicked.connect(self._toggle_guide_card)
         guide_toggle_row.addWidget(self.guide_toggle_btn)
-        panel_layout.addLayout(guide_toggle_row)
 
-        # Camera guide card
-        self.camera_guide_card = self._build_guide_card()
-        panel_layout.addWidget(self.camera_guide_card)
+        panel_layout.addLayout(guide_toggle_row)
 
         # START button
         self.start_btn = QPushButton("START")
@@ -565,6 +583,101 @@ class StartSessionPage(QWidget):
         return card
 
     # Camera guide toggle
+    @staticmethod
+    def _get_camera_names() -> dict:
+        """Return {index: name} for all DirectShow video devices using WMI.
+        Falls back to generic labels if WMI is unavailable."""
+        names = {}
+        try:
+            import subprocess, json as _json
+            # Query Win32_PnPEntity for camera-class devices via PowerShell
+            ps = (
+                "Get-WmiObject Win32_PnPEntity | "
+                "Where-Object {$_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image'} | "
+                "Select-Object -ExpandProperty Name | ConvertTo-Json"
+            )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps],
+                capture_output=True, text=True, timeout=5
+            )
+            raw = result.stdout.strip()
+            if raw:
+                parsed = _json.loads(raw)
+                device_names = [parsed] if isinstance(parsed, str) else parsed
+                for i, name in enumerate(device_names):
+                    names[i] = name
+        except Exception:
+            pass
+        return names
+
+    def _populate_camera_combo(self):
+        """Probe camera indices 0-9, fetch real device names, populate combo."""
+        import cv2 as _cv2
+        self.camera_combo.blockSignals(True)
+        self.camera_combo.clear()
+
+        device_names = self._get_camera_names()
+        found = []
+        for idx in range(10):
+            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+            if cap.isOpened():
+                found.append(idx)
+                cap.release()
+
+        if not found:
+            self.camera_combo.addItem("No cameras found", -1)
+        else:
+            for idx in found:
+                name = device_names.get(idx, f"Camera {idx}")
+                label = f"{name}" if idx > 0 else f"{name} (default)"
+                self.camera_combo.addItem(label, idx)
+
+        for i in range(self.camera_combo.count()):
+            if self.camera_combo.itemData(i) == self._camera_index:
+                self.camera_combo.setCurrentIndex(i)
+                break
+
+        self.camera_combo.blockSignals(False)
+
+    def _on_camera_changed(self, combo_idx: int):
+        """Update active camera index — takes effect on next START."""
+        idx = self.camera_combo.itemData(combo_idx)
+        if idx is not None and idx >= 0:
+            self._camera_index = idx
+
+    # def _start_camera_monitor(self):
+    #     """Poll every 3 s for camera connect/disconnect and refresh combo."""
+    #     self._camera_monitor = QTimer(self)
+    #     self._camera_monitor.setInterval(3000)
+    #     self._camera_monitor.timeout.connect(self._check_camera_changes)
+    #     self._camera_monitor.start()
+
+    def _check_camera_changes(self):
+        """Refresh the camera combo if the device list has changed."""
+        if self._running:
+            return   # never disrupt a live session
+        import cv2 as _cv2
+        current_indices = set()
+        for idx in range(10):
+            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+            if cap.isOpened():
+                current_indices.add(idx)
+                cap.release()
+        # Compare against what's currently in the combo
+        combo_indices = {
+            self.camera_combo.itemData(i)
+            for i in range(self.camera_combo.count())
+            if self.camera_combo.itemData(i) is not None and
+               self.camera_combo.itemData(i) >= 0
+        }
+        if current_indices != combo_indices:
+            prev = self._camera_index
+            self._populate_camera_combo()
+            # If the selected camera disappeared, reset to 0
+            if prev not in current_indices:
+                self._camera_index = 0
+                self.camera_combo.setCurrentIndex(0)
+
     def _toggle_guide_card(self):
         """Toggle the camera guide card visibility and update help icon color."""
         if self.camera_guide_card.isVisible():
@@ -775,6 +888,7 @@ class StartSessionPage(QWidget):
         # Reset stats for new sessions
         self._pitch_count = 0
         self._mistakes = 0
+        self._worker_state = ""
         self.pitch_val.setText("0")
         self.mistake_val.setText("0")
         self.accuracy_val.setText("0.00%")
@@ -797,7 +911,7 @@ class StartSessionPage(QWidget):
 
         # Start PitchWorker
         self._worker = PitchWorker(
-            camera_id=CAMERA_ID,
+            camera_id=self._camera_index,
             width=feed_w,
             height=feed_h,
             throwing_hand=self._throwing_hand,
@@ -810,6 +924,7 @@ class StartSessionPage(QWidget):
         self._worker.model_loaded.connect(self._on_model_loaded)
         self._worker.error_occurred.connect(self._on_worker_error)
         self._worker.session_ended.connect(self._on_session_ended)
+        self._worker.state_changed.connect(self._on_worker_state_changed)
         self._worker.start()
 
     def _handle_end(self):
@@ -830,6 +945,7 @@ class StartSessionPage(QWidget):
         # Snapshot pitch stats now — they must not change before dialog opens
         self._end_pitch_count = self._pitch_count
         self._end_mistakes = self._mistakes
+        self._worker_state = ""
         print(f"[END] pitches={self._end_pitch_count} mistakes={self._end_mistakes} worker={self._worker}")
 
         # Snapshot worker BEFORE anything can null it, then launch waiter 
@@ -871,6 +987,9 @@ class StartSessionPage(QWidget):
         # Nothing to summarise — session ended before any pitch was thrown
         if self._end_pitch_count == 0:
             self._refresh_token_status()
+            self._show_idle_feed()
+            self.end_btn.setEnabled(False)
+            self._ending_worker = None
             self.session_finished.emit()
             return
  
@@ -962,6 +1081,10 @@ class StartSessionPage(QWidget):
         """Called when PitchWorker hits a fatal error."""
         self._stop_capture()
         toast_error(self, f"Camera error: {message}")
+
+    def _on_worker_state_changed(self, state: str):
+        """Track the worker's current state so _handle_end can use it."""
+        self._worker_state = state 
 
     def _on_session_ended(self, log_path: str):
         """Called when PitchWorker finishes. skeleton_path is read directly
