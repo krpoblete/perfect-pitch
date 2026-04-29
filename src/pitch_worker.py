@@ -26,8 +26,10 @@ warnings.filterwarnings("ignore")
 
 # Alert sound — played on every Incorrect Form verdict
 from src.config import ROOT_DIR as _ROOT
-_ALERT_PATH = _ROOT / "assets" / "alert.mp3"
+_ALERT_PATH  = _ROOT / "assets" / "alert.mp3"
+_SETGO_PATH  = _ROOT / "assets" / "setgo.mp3"
 _alert_data, _alert_sr = (None, None)
+_setgo_data, _setgo_sr = (None, None)
 
 class PitchWorker(QThread):
     # Signals
@@ -56,17 +58,42 @@ class PitchWorker(QThread):
         self._stop_event.set()
 
     def _play_alert(self):
-        """Play alert.mp3 non-blocking on incorrect form verdict"""
+        """Play alert.mp3 non-blocking — stops current playback first to
+        prevent overlapping distortion when joints change rapidly."""
         global _alert_data, _alert_sr
-        try:
-            if _alert_data is None and _ALERT_PATH.exists():
-                _alert_data, _alert_sr = sf.read(
-                    str(_ALERT_PATH), dtype="float32", always_2d=True
-                )
-            if _alert_data is not None:
-                sd.play(_alert_data, _alert_sr)
-        except Exception:
-            pass
+        import threading as _t
+        def _play():
+            global _alert_data, _alert_sr
+            try:
+                if _alert_data is None and _ALERT_PATH.exists():
+                    _alert_data, _alert_sr = sf.read(
+                        str(_ALERT_PATH), dtype="float32", always_2d=True
+                    )
+                if _alert_data is not None:
+                    sd.stop()
+                    sd.play(_alert_data, _alert_sr)
+                    sd.wait()
+            except Exception:
+                pass
+        _t.Thread(target=_play, daemon=True).start()
+
+    def _play_setgo(self):
+        """Play setgo.mp3 non-blocking at countdown → recording transition."""
+        global _setgo_data, _setgo_sr
+        import threading as _t
+        def _play():
+            global _setgo_data, _setgo_sr
+            try:
+                if _setgo_data is None and _SETGO_PATH.exists():
+                    _setgo_data, _setgo_sr = sf.read(
+                        str(_SETGO_PATH), dtype="float32", always_2d=True
+                    )
+                if _setgo_data is not None:
+                    sd.play(_setgo_data, _setgo_sr)
+                    sd.wait()
+            except Exception:
+                pass
+        _t.Thread(target=_play, daemon=True).start()
 
     # Main thread body
     def run(self):
@@ -311,6 +338,7 @@ class PitchWorker(QThread):
                     since_infer = 0
                     early_risk = None
                     alert_joint  = None
+                    self._play_setgo()
 
             elif state == COLLECTING:
                 if person_seen:
@@ -332,8 +360,8 @@ class PitchWorker(QThread):
                         if early_risk[worst] >= ALERT_RISK_RATIO * thresholds[worst]
                         else None
                     )
-                    # Ring alert on the first frame a joint exceeds threshold
-                    if alert_joint is not None and prev_alert is None:
+                    # Beep on every new or changed joint alert
+                    if alert_joint is not None and alert_joint != prev_alert:
                         self._play_alert()
 
                 if n >= MAX_PITCH_FRAMES:

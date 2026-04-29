@@ -318,7 +318,7 @@ class StartSessionPage(QWidget):
 
         root.addWidget(feed_wrapper, stretch=3)
 
-        # Stats panel
+        # Stats panel — width scales with screen so it fits smaller monitors
         from PyQt6.QtWidgets import QApplication as _QApp
         _sw = _QApp.primaryScreen().availableGeometry().width()
         _panel_w = max(220, min(300, int(_sw * 0.155)))
@@ -582,17 +582,20 @@ class StartSessionPage(QWidget):
 
     # Camera guide toggle
     @staticmethod
-    def _get_camera_names() -> dict:
-        """Return {index: name} for all DirectShow video devices using WMI.
-        Falls back to generic labels if WMI is unavailable."""
-        names = {}
+    def _get_camera_names() -> list:
+        """Return ordered list of real DirectShow video device names via
+        PowerShell + Win32_PnPSignedDriver / FriendlyName query.
+        Catches OBS Virtual Camera (registered under 'Camera' PNPClass on
+        Win10/11) and other virtual devices that WMI lists by FriendlyName.
+        Falls back to empty list if PowerShell is unavailable."""
         try:
             import subprocess, json as _json
-            # Query Win32_PnPEntity for camera-class devices via PowerShell
+            # Win32_PnPSignedDriver gives FriendlyName for ALL camera devices
+            # including virtual ones like OBS. Filter by class name 'Camera'.
             ps = (
-                "Get-WmiObject Win32_PnPEntity | "
-                "Where-Object {$_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image'} | "
-                "Select-Object -ExpandProperty Name | ConvertTo-Json"
+                "Get-PnpDevice -Class Camera -Status OK | "
+                "Select-Object -ExpandProperty FriendlyName | "
+                "ConvertTo-Json -Compress"
             )
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-Command", ps],
@@ -601,40 +604,48 @@ class StartSessionPage(QWidget):
             raw = result.stdout.strip()
             if raw:
                 parsed = _json.loads(raw)
-                device_names = [parsed] if isinstance(parsed, str) else parsed
-                for i, name in enumerate(device_names):
-                    names[i] = name
+                if isinstance(parsed, str):
+                    return [parsed]
+                return list(parsed)
         except Exception:
             pass
-        return names
+        return []
 
     def _populate_camera_combo(self):
-        """Probe camera indices 0-9, fetch real device names, populate combo."""
+        """Probe camera indices, validate by reading a frame, fetch real
+        device names via PnP. Avoids phantom ghost devices that isOpened()
+        returns True for but never deliver frames."""
         import cv2 as _cv2
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
-
+ 
         device_names = self._get_camera_names()
+ 
+        # Validate each index by actually grabbing a frame — ghost DirectShow
+        # devices (e.g. old webcam drivers) open but never deliver data.
         found = []
-        for idx in range(10):
+        for idx in range(8):
             cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
             if cap.isOpened():
-                found.append(idx)
+                ret, _ = cap.read()
+                if ret:
+                    found.append(idx)
                 cap.release()
-
+ 
         if not found:
             self.camera_combo.addItem("No cameras found", -1)
         else:
-            for idx in found:
-                name = device_names.get(idx, f"Camera {idx}")
-                label = f"{name}" if idx > 0 else f"{name} (default)"
+            for pos, idx in enumerate(found):
+                # Match by position in PnP list (same order as DirectShow enumeration)
+                name = device_names[pos] if pos < len(device_names) else f"Camera {idx}"
+                label = f"{name} (default)" if idx == 0 else name
                 self.camera_combo.addItem(label, idx)
-
+ 
         for i in range(self.camera_combo.count()):
             if self.camera_combo.itemData(i) == self._camera_index:
                 self.camera_combo.setCurrentIndex(i)
                 break
-
+ 
         self.camera_combo.blockSignals(False)
 
     def _on_camera_changed(self, combo_idx: int):
@@ -689,7 +700,7 @@ class StartSessionPage(QWidget):
         scaled = img.scaled(
             self.feed_label.width(),
             self.feed_label.height(),
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
         self.feed_label.setObjectName("feedLabel")
@@ -847,7 +858,8 @@ class StartSessionPage(QWidget):
         self._running = True
         self.start_btn.setEnabled(False)
         self.end_btn.setEnabled(True)
-
+        if hasattr(self, "camera_combo"):
+            self.camera_combo.setEnabled(False)
         self.session_started.emit()
 
         # Reset stats for new sessions
@@ -866,6 +878,10 @@ class StartSessionPage(QWidget):
 
         feed_w = self.feed_label.width()
         feed_h = self.feed_label.height()
+        # The worker composites a side panel (PANEL_W=420) onto the frame.
+        # Subtract the panel so the camera portion fills the remaining width.
+        from src.live_capture import PANEL_W as _PANEL_W
+        feed_w = max(100, feed_w - _PANEL_W)
 
         # Fallback: derive from screen geometry if label hasn't rendered yet
         if feed_w < 100 or feed_h < 100:
@@ -946,6 +962,8 @@ class StartSessionPage(QWidget):
         print(f"[END] skeleton path={skeleton_path!r}")
  
         self.start_btn.setEnabled(True)
+        if hasattr(self, "camera_combo"):
+            self.camera_combo.setEnabled(True)
         # Re-show guide card — user may have dismissed it during the session
         self._update_camera_guide()
  
@@ -1004,6 +1022,8 @@ class StartSessionPage(QWidget):
                 worker.wait(2000)
 
         self.start_btn.setEnabled(True)
+        if hasattr(self, "camera_combo"):
+            self.camera_combo.setEnabled(True)
         self._refresh_token_status()
 
     def _save_session(self, accuracy: float):
