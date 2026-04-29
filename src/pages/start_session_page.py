@@ -274,23 +274,23 @@ class StartSessionPage(QWidget):
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
-        self._ml_bundle = ml_bundle        # (model, scaler, threshold, joint_thresholds)
+        self._ml_bundle = ml_bundle   # (model, scaler, threshold, joint_thresholds)
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
-        self._threshold = None             # user's current token pool
-        self._recommended_cap = None       # USA Baseball age-based cap
-        self._used_today = 0               # pitches thrown today
-        self._tokens_remaining = 0         # threshold - used_today 
+        self._threshold = None        # user's current token pool
+        self._recommended_cap = None  # USA Baseball age-based cap
+        self._used_today = 0          # pitches thrown today
+        self._tokens_remaining = 0    # threshold - used_today 
         self._throwing_hand = "RHP"   
         self._worker = None
-        self._summary_dlg = None           # ref to open dialog for skeleton injection
-        self._skeleton_path = ""           # path to last generated skeleton PNG
-        self._end_pitch_count = 0          # snapshot at END time for dialog
-        self._end_mistakes = 0             # snapshot at END time for dialog
-        self._ending_worker = None         # strong ref held during async shutdown
-        self._worker_state = ""            # last state emitted by PitchWorker
-        self._camera_index = 0             # active camera device index
+        self._summary_dlg = None      # ref to open dialog for skeleton injection
+        self._skeleton_path = ""      # path to last generated skeleton PNG
+        self._end_pitch_count = 0     # snapshot at END time for dialog
+        self._end_mistakes = 0        # snapshot at END time for dialog
+        self._ending_worker = None    # strong ref held during async shutdown
+        self._worker_state = ""       # last state emitted by PitchWorker
+        self._camera_index = 0        # active camera device index
         self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
         self.setObjectName("contentPage")
         self.build_ui()
@@ -583,33 +583,54 @@ class StartSessionPage(QWidget):
     # Camera guide toggle
     @staticmethod
     def _get_camera_names() -> list:
-        """Return ordered list of real DirectShow video device names via
-        PowerShell + Win32_PnPSignedDriver / FriendlyName query.
-        Catches OBS Virtual Camera (registered under 'Camera' PNPClass on
-        Win10/11) and other virtual devices that WMI lists by FriendlyName.
+        """Return ordered list of DirectShow video device names.
+
+        Strategy — try three queries in order, merge unique results:
+        1. Get-PnpDevice -Class Camera   (physical webcams, Win10/11)
+        2. Get-PnpDevice -Class Image    (some USB cameras, scanners excluded)
+        3. Win32_PnPEntity name filter   (catches OBS Virtual Camera which
+           registers as a KsProxy device, not under Camera/Image class)
         Falls back to empty list if PowerShell is unavailable."""
-        try:
-            import subprocess, json as _json
-            # Win32_PnPSignedDriver gives FriendlyName for ALL camera devices
-            # including virtual ones like OBS. Filter by class name 'Camera'.
-            ps = (
-                "Get-PnpDevice -Class Camera -Status OK | "
-                "Select-Object -ExpandProperty FriendlyName | "
-                "ConvertTo-Json -Compress"
-            )
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", ps],
-                capture_output=True, text=True, timeout=5
-            )
-            raw = result.stdout.strip()
-            if raw:
+        import subprocess, json as _json
+        names = []
+        seen = set()
+
+        queries = [
+            # Standard webcams
+            ("Get-PnpDevice -Class Camera -Status OK | "
+             "Select-Object -ExpandProperty FriendlyName | "
+             "ConvertTo-Json -Compress"),
+            # Image class (catches some webcams + virtual cameras)
+            ("Get-PnpDevice -Class Image -Status OK | "
+             "Select-Object -ExpandProperty FriendlyName | "
+             "ConvertTo-Json -Compress"),
+            # Broad WMI name filter — catches OBS Virtual Camera
+            ("Get-WmiObject Win32_PnPEntity | "
+             "Where-Object { $_.Name -match 'camera|webcam|video|obs' } | "
+             "Select-Object -ExpandProperty Name | "
+             "ConvertTo-Json -Compress"),
+        ]
+
+        for ps in queries:
+            try:
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps],
+                    capture_output=True, text=True, timeout=5
+                )
+                raw = result.stdout.strip()
+                if not raw:
+                    continue
                 parsed = _json.loads(raw)
-                if isinstance(parsed, str):
-                    return [parsed]
-                return list(parsed)
-        except Exception:
-            pass
-        return []
+                items = [parsed] if isinstance(parsed, str) else list(parsed)
+                for name in items:
+                    key = name.strip().lower()
+                    if key and key not in seen:
+                        seen.add(key)
+                        names.append(name.strip())
+            except Exception:
+                continue
+
+        return names
 
     def _populate_camera_combo(self):
         """Probe camera indices, validate by reading a frame, fetch real

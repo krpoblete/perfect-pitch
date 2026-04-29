@@ -26,8 +26,8 @@ warnings.filterwarnings("ignore")
 
 # Alert sound — played on every Incorrect Form verdict
 from src.config import ROOT_DIR as _ROOT
-_ALERT_PATH  = _ROOT / "assets" / "alert.mp3"
-_SETGO_PATH  = _ROOT / "assets" / "setgo.mp3"
+_ALERT_PATH  = _ROOT / "assets" / "sounds" / "alert.mp3"
+_SETGO_PATH  = _ROOT / "assets" / "sounds" / "setgo.mp3"
 _alert_data, _alert_sr = (None, None)
 _setgo_data, _setgo_sr = (None, None)
 
@@ -57,40 +57,52 @@ class PitchWorker(QThread):
     def stop(self):
         self._stop_event.set()
 
+    @staticmethod
+    def _preload_sounds():
+        """Load both sounds from disk once at session start so no I/O
+        happens mid-session. Called from run() before the main loop."""
+        global _alert_data, _alert_sr, _setgo_data, _setgo_sr
+        try:
+            if _alert_data is None and _ALERT_PATH.exists():
+                _alert_data, _alert_sr = sf.read(
+                    str(_ALERT_PATH), dtype="float32", always_2d=True
+                )
+        except Exception:
+            pass
+        try:
+            if _setgo_data is None and _SETGO_PATH.exists():
+                _setgo_data, _setgo_sr = sf.read(
+                    str(_SETGO_PATH), dtype="float32", always_2d=True
+                )
+        except Exception:
+            pass
+
     def _play_alert(self):
-        """Play alert.mp3 non-blocking — stops current playback first to
-        prevent overlapping distortion when joints change rapidly."""
+        """Play alert.mp3 fire-and-forget — no sd.wait() so the main
+        loop is never stalled waiting for audio to finish."""
         global _alert_data, _alert_sr
+        if _alert_data is None:
+            return
         import threading as _t
         def _play():
-            global _alert_data, _alert_sr
             try:
-                if _alert_data is None and _ALERT_PATH.exists():
-                    _alert_data, _alert_sr = sf.read(
-                        str(_ALERT_PATH), dtype="float32", always_2d=True
-                    )
-                if _alert_data is not None:
-                    sd.stop()
-                    sd.play(_alert_data, _alert_sr)
-                    sd.wait()
+                sd.stop()
+                sd.play(_alert_data, _alert_sr)
+                # no sd.wait() — return immediately
             except Exception:
                 pass
         _t.Thread(target=_play, daemon=True).start()
 
     def _play_setgo(self):
-        """Play setgo.mp3 non-blocking at countdown → recording transition."""
+        """Play setgo.mp3 in a daemon thread alongside the countdown.
+        No sd.wait() — the sound plays freely while the loop continues."""
         global _setgo_data, _setgo_sr
+        if _setgo_data is None:
+            return
         import threading as _t
         def _play():
-            global _setgo_data, _setgo_sr
             try:
-                if _setgo_data is None and _SETGO_PATH.exists():
-                    _setgo_data, _setgo_sr = sf.read(
-                        str(_SETGO_PATH), dtype="float32", always_2d=True
-                    )
-                if _setgo_data is not None:
-                    sd.play(_setgo_data, _setgo_sr)
-                    sd.wait()
+                sd.play(_setgo_data, _setgo_sr)
             except Exception:
                 pass
         _t.Thread(target=_play, daemon=True).start()
@@ -255,6 +267,9 @@ class PitchWorker(QThread):
             lastresult = None
             smoother.reset()
 
+        # Preload sounds before main loop so no disk I/O during session
+        self._preload_sounds()
+
         self.state_changed.emit(WAITING)
 
         # Main loop
@@ -271,12 +286,15 @@ class PitchWorker(QThread):
             frame_count += 1
             ts_ms = int((time.perf_counter() - t0) * 1000)
 
-            small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
-            mp_img = mp.Image(
-                image_format=mp.ImageFormat.SRGB,
-                data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
-            )
-            landmarker.detect_async(mp_img, ts_ms)
+            # Send every other frame to MediaPipe — halves colorspace/resize
+            # overhead while still running inference at ~15 fps on a 30fps feed.
+            if frame_count % 2 == 1:
+                small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
+                mp_img = mp.Image(
+                    image_format=mp.ImageFormat.SRGB,
+                    data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
+                )
+                landmarker.detect_async(mp_img, ts_ms)
 
             with result_lock:
                 detection = result_list[0]
@@ -327,6 +345,7 @@ class PitchWorker(QThread):
                 if person_seen:
                     state = COUNTDOWN
                     cd_start = time.perf_counter()
+                    self._play_setgo()   # plays "3...2...1...go!" alongside countdown
 
             elif state == COUNTDOWN:
                 if not person_seen:
@@ -338,7 +357,6 @@ class PitchWorker(QThread):
                     since_infer = 0
                     early_risk = None
                     alert_joint  = None
-                    self._play_setgo()
 
             elif state == COLLECTING:
                 if person_seen:
