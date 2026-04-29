@@ -292,8 +292,6 @@ class StartSessionPage(QWidget):
         self._worker_state = ""            # last state emitted by PitchWorker
         self._camera_index = 0             # active camera device index
         self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
-        # Start polling for camera connect/disconnect
-        # self._start_camera_monitor()
         self.setObjectName("contentPage")
         self.build_ui()
 
@@ -644,39 +642,6 @@ class StartSessionPage(QWidget):
         idx = self.camera_combo.itemData(combo_idx)
         if idx is not None and idx >= 0:
             self._camera_index = idx
-
-    # def _start_camera_monitor(self):
-    #     """Poll every 3 s for camera connect/disconnect and refresh combo."""
-    #     self._camera_monitor = QTimer(self)
-    #     self._camera_monitor.setInterval(3000)
-    #     self._camera_monitor.timeout.connect(self._check_camera_changes)
-    #     self._camera_monitor.start()
-
-    def _check_camera_changes(self):
-        """Refresh the camera combo if the device list has changed."""
-        if self._running:
-            return   # never disrupt a live session
-        import cv2 as _cv2
-        current_indices = set()
-        for idx in range(10):
-            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
-            if cap.isOpened():
-                current_indices.add(idx)
-                cap.release()
-        # Compare against what's currently in the combo
-        combo_indices = {
-            self.camera_combo.itemData(i)
-            for i in range(self.camera_combo.count())
-            if self.camera_combo.itemData(i) is not None and
-               self.camera_combo.itemData(i) >= 0
-        }
-        if current_indices != combo_indices:
-            prev = self._camera_index
-            self._populate_camera_combo()
-            # If the selected camera disappeared, reset to 0
-            if prev not in current_indices:
-                self._camera_index = 0
-                self.camera_combo.setCurrentIndex(0)
 
     def _toggle_guide_card(self):
         """Toggle the camera guide card visibility and update help icon color."""

@@ -152,7 +152,7 @@ class PitchWorker(QThread):
         DETECT_HEIGHT = max(1, round(actual_h * 0.1))
         
         # Mirror LHP so the model always see the same side-view
-        flip = (self.throwing_hand == "RHP")
+        flip = (self.throwing_hand == "LHP")
 
         cam_thread = CameraThread(cap)
         cam_thread.start()
@@ -274,6 +274,15 @@ class PitchWorker(QThread):
                     [[lm.x, lm.y] for lm in detection.pose_landmarks[0]],
                     dtype=np.float32,
                 )
+                if flip:
+                    # LHP: swap L↔R keypoints so model always sees RHP geometry
+                    _SWAP = [(11,12),(13,14),(15,16),(23,24),(25,26),(27,28)]
+                    for a, b in _SWAP:
+                        world_pts[[a, b]] = world_pts[[b, a]]
+                        image_pts[[a, b]] = image_pts[[b, a]]
+                    # Also mirror the x-axis for world coords (flip was spatial)
+                    world_pts[:, 0] *= -1
+                    image_pts[:, 0]  = 1.0 - image_pts[:, 0]
 
             if person_seen and new_detection:
                 display_lm = smoother.update(image_pts)

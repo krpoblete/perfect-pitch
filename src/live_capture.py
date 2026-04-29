@@ -148,14 +148,14 @@ class CameraThread(threading.Thread):
     def __init__(self, cap: cv2.VideoCapture):
         super().__init__(daemon=True)
         self._cap  = cap
-        self._q    = queue.Queue(maxsize=1)
+        self._q    = queue.Queue(maxsize=2)
         self._stop = threading.Event()
         self.ok    = True
 
     def run(self):
         while not self._stop.is_set():
             ret, frame = self._cap.read()
-            if not ret or frame is None:
+            if not ret:
                 self.ok = False
                 break
             if self._q.full():
@@ -167,7 +167,7 @@ class CameraThread(threading.Thread):
 
     def read(self):
         try:
-            return True, self._q.get(timeout=0.05)
+            return True, self._q.get(timeout=0.033)
         except queue.Empty:
             return self.ok, None
 
@@ -470,8 +470,8 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
 
 class LandmarkSmoother:
     def __init__(self):
-        self.alpha    = 1.0   # pure passthrough, no EMA lag
-        self.vel_gain = 0.0   # no velocity-based prediction
+        self.alpha    = 0.7   # pure passthrough, no EMA lag
+        self.vel_gain = 0.2   # no velocity-based prediction
         self._pts     = None
         self._vel     = None
 
@@ -502,7 +502,7 @@ class LandmarkSmoother:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
-def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
+def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_hand: str = "RHP"):
 
     # model
     print("Loading model...")
@@ -533,9 +533,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
     print(f"Per-joint : {dict(zip(SHORT_NAMES, thresholds.round(5)))}")
     print(f"Device    : {DEVICE}")
 
-    # camera — CAP_DSHOW for Windows DirectShow (works with OBS Virtual Camera).
-    # Do NOT force a FOURCC — let the driver negotiate its native format.
-    # OpenCV automatically converts YUY2/NV12 from OBS to BGR on read().
+    # camera — CAP_DSHOW works with OBS Virtual Camera on Windows
     cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -543,6 +541,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera {camera_id}")
+    flip = (throwing_hand == "LHP")
 
     print(f"Camera    : {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
           f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))} @ "
@@ -573,7 +572,13 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
     )
     landmarker = mp_vision.PoseLandmarker.create_from_options(options)
 
+    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # Window width = feed + panel; height = feed height
+    win_w = actual_w + PANEL_W
+    win_h = actual_h
     cv2.namedWindow("Live Pitch Analysis", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Live Pitch Analysis", win_w, win_h)
     t0 = time.perf_counter()
 
     # ── Session counters ───────────────────────────────────────────────────────
@@ -631,7 +636,8 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
         if frame is None:
             continue
 
-        frame        = cv2.flip(frame, 1)
+        if flip:
+            frame = cv2.flip(frame, 1)
         frame_count += 1
         ts_ms        = int((time.perf_counter() - t0) * 1000)
 
@@ -658,6 +664,14 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
             image_pts = np.array([[lm.x, lm.y]
                                    for lm in detection.pose_landmarks[0]],
                                   dtype=np.float32)
+            if flip:
+                # LHP: swap L↔R keypoints so model sees RHP geometry
+                _SWAP = [(11,12),(13,14),(15,16),(23,24),(25,26),(27,28)]
+                for a, b in _SWAP:
+                    world_pts[[a, b]] = world_pts[[b, a]]
+                    image_pts[[a, b]] = image_pts[[b, a]]
+                world_pts[:, 0] *= -1
+                image_pts[:, 0]  = 1.0 - image_pts[:, 0]
 
         if person_seen and new_detection:
             display_lm = smoother.update(image_pts)
@@ -842,8 +856,11 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real-time pitch form analysis.")
-    parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--width",  type=int, default=1980)
-    parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--camera", type=int,  default=0)
+    parser.add_argument("--width",  type=int,  default=1280)
+    parser.add_argument("--height", type=int,  default=720)
+    parser.add_argument("--hand",   type=str,  default="RHP",
+                        choices=["RHP", "LHP"], help="Pitcher throwing hand")
     args = parser.parse_args()
-    run_live(camera_id=args.camera, width=args.width, height=args.height)
+    run_live(camera_id=args.camera, width=args.width,
+             height=args.height, throwing_hand=args.hand)
