@@ -215,16 +215,16 @@ CLR_BAR_BG    = (48, 48, 48)
 
 
 def panel_layout(fw: int) -> tuple:
-    """Return (pw, bar_x, bar_w, val_x) scaled to the frame width fw.
+    """Return (pw, bar_x, bar_w, val_x) where fw is the CAMERA frame width.
 
-    The panel occupies 38% of the total composited frame width,
-    clamped to [300, 460] px so it is always readable.
+    Panel = 40% of camera width, clamped [240, 380] px.
+    This gives roughly a 60/40 camera/panel split at any resolution.
     Bar columns scale proportionally inside the panel.
     """
-    pw    = max(300, min(460, int(fw * 0.38)))
-    bar_x = max(80,  int(pw * 0.27))
-    bar_w = max(120, int(pw * 0.43))
-    val_x = bar_x + bar_w + 6
+    pw    = max(240, min(380, int(fw * 0.40)))
+    bar_x = max(72,  int(pw * 0.28))
+    bar_w = max(100, int(pw * 0.42))
+    val_x = bar_x + bar_w + 5
     return pw, bar_x, bar_w, val_x
 
 
@@ -257,7 +257,7 @@ def blend_panel(frame: np.ndarray, panel: np.ndarray) -> np.ndarray:
 
 def draw_waiting_overlay(frame: np.ndarray) -> np.ndarray:
     fh, fw = frame.shape[:2]
-    pw, _, _, _ = panel_layout(fw + PANEL_W)   # total width = camera + panel
+    pw, _, _, _ = panel_layout(fw)   # total width = camera + panel
     panel  = side_panel(fh, pw)
 
     # Header
@@ -296,7 +296,7 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     hw, _ = get_text_size(hint, FS_BODY)
     put_text(out, hint, (cx - hw // 2, cy + 138), FS_BODY, (200, 200, 200))
 
-    pw, _, _, _ = panel_layout(out.shape[1] + PANEL_W)
+    pw, _, _, _ = panel_layout(out.shape[1])
     panel = side_panel(fh, pw)
     cv2.rectangle(panel, (0, 0), (pw, HDR_H), (32, 88, 42), -1)
     put_text(panel, "DETECTED",      (10, 28), FS_TINY,   (130, 195, 130))
@@ -327,7 +327,7 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
                if early_risk is not None else np.zeros(33, dtype=np.float32))
     out    = draw_keypoints(frame, screen_pts, dot_risk)
     fh, fw = out.shape[:2]
-    pw, bar_x, bar_w_max, val_x = panel_layout(fw + PANEL_W)
+    pw, bar_x, bar_w_max, val_x = panel_layout(fw)
     panel  = side_panel(fh, pw)
 
     # Header
@@ -396,7 +396,7 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
         out = frame.copy()
 
     fh, fw = out.shape[:2]
-    pw, bar_x, bar_w_max, val_x = panel_layout(fw + PANEL_W)
+    pw, bar_x, bar_w_max, val_x = panel_layout(fw)
     panel  = side_panel(fh, pw)
 
     # Header

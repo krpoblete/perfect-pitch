@@ -274,15 +274,16 @@ class CameraReconnectDialog(QDialog):
     Always starts fresh — no attempt to resume incomplete pitch data.
     """
  
-    def __init__(self, parent, lost_camera_index: int):
+    def __init__(self, parent, lost_camera_index: int, lost_camera_name: str = ""):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setObjectName("reconnectDialog")
         self._selected_index = 0
         self._lost_index = lost_camera_index
+        self._lost_name = lost_camera_name
         self._build_ui()
-        self.setFixedSize(420, 260)
+        self.setFixedSize(440, 270)
         self._center_on_parent()
  
     def _center_on_parent(self):
@@ -298,16 +299,35 @@ class CameraReconnectDialog(QDialog):
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(14)
  
-        # Header
+        # Header — alert-triangle icon + title
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        alert_icon = QLabel()
+        alert_icon.setFixedSize(22, 22)
+        alert_icon.setStyleSheet("background: transparent;")
+        try:
+            alert_icon.setPixmap(
+                get_icon("alert-triangle", color="#e05555", size=22).pixmap(22, 22)
+            )
+        except Exception:
+            pass
+        title_row.addWidget(alert_icon)
+
         title = QLabel("Camera Disconnected")
         title.setObjectName("reconnectTitle")
         title.setStyleSheet(
             "color: #e05555; font-size: 18px; font-weight: 700; background: transparent;"
         )
-        root.addWidget(title)
- 
+        title_row.addWidget(title)
+        title_row.addStretch()
+        root.addLayout(title_row)
+
+        lost_name = self._lost_name or f"Camera {self._lost_index}"
         sub = QLabel(
-            f"Camera {self._lost_index} was lost mid-session. "
+            f"\"{lost_name}\" was lost mid-session. "
             "The current session has been discarded. Select a working "
             "camera below to start a fresh session."
         )
@@ -356,9 +376,14 @@ class CameraReconnectDialog(QDialog):
         root.addLayout(btn_row)
  
     def _probe_cameras(self):
-        """Probe available cameras and populate combo, excluding the lost one."""
+        """Probe cameras, fetch real device names via StartSessionPage._get_camera_names,
+        and populate combo — excluding or marking the disconnected device."""
         import cv2 as _cv2
         self._combo.clear()
+
+        # Use the same PnP name resolution as the main camera combo
+        device_names = StartSessionPage._get_camera_names()
+
         found = []
         for idx in range(8):
             cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
@@ -367,18 +392,22 @@ class CameraReconnectDialog(QDialog):
                 if ret:
                     found.append(idx)
                 cap.release()
- 
+
         if not found:
             self._combo.addItem("No cameras detected", -1)
         else:
-            for idx in found:
-                suffix = " ⚠ (disconnected)" if idx == self._lost_index else ""
-                label  = f"Camera {idx} (default){suffix}" if idx == 0 else f"Camera {idx}{suffix}"
+            for pos, idx in enumerate(found):
+                name = device_names[pos] if pos < len(device_names) else f"Camera {idx}"
+                if idx == self._lost_index:
+                    label = f"{name}  (disconnected)"
+                else:
+                    label = name
                 self._combo.addItem(label, idx)
             # Auto-select first camera that isn't the lost one
             for i in range(self._combo.count()):
                 if self._combo.itemData(i) != self._lost_index:
                     self._combo.setCurrentIndex(i)
+                    self._selected_index = self._combo.itemData(i)
                     break
  
     def _on_combo_changed(self, i: int):
@@ -388,6 +417,13 @@ class CameraReconnectDialog(QDialog):
  
     def selected_camera_index(self) -> int:
         return self._selected_index
+
+    def selected_camera_name(self) -> str:
+        for i in range(self._combo.count()):
+            if self._combo.itemData(i) == self._selected_index:
+                # Strip the disconnected suffix if present
+                return self._combo.itemText(i).replace("  ⚠  (disconnected)", "").strip()
+        return f"Camera {self._selected_index}"
 
 class StartSessionPage(QWidget):
     _worker_done = pyqtSignal()      # internal: waiter thread → main thread
@@ -809,7 +845,7 @@ class StartSessionPage(QWidget):
             self.feed_label.width(),
             self.feed_label.height(),
             Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+            Qt.TransformationMode.FastTransformation,
         )
         self.feed_label.setObjectName("feedLabel")
         self.feed_label.setPixmap(QPixmap.fromImage(scaled))
@@ -981,10 +1017,8 @@ class StartSessionPage(QWidget):
 
         feed_w = self.feed_label.width()
         feed_h = self.feed_label.height()
-        # The worker composites a side panel (PANEL_W=420) onto the frame.
-        # Subtract the panel so the camera portion fills the remaining width.
-        from src.live_capture import PANEL_W as _PANEL_W
-        feed_w = max(100, feed_w - _PANEL_W)
+        # Pass the full label width — the worker uses panel_layout() internally
+        # to split camera vs panel. Never subtract here.
 
         # Fallback: derive from screen geometry if label hasn't rendered yet
         if feed_w < 100 or feed_h < 100:
@@ -1187,21 +1221,35 @@ class StartSessionPage(QWidget):
         self.end_btn.setEnabled(False)
         self.session_finished.emit()
  
-        dlg = CameraReconnectDialog(self, lost_camera_index=self._camera_index)
+        # Get the real name of the lost camera for user-friendly messages
+        device_names = self._get_camera_names()
+        found_indices = []
+        import cv2 as _cv2_tmp
+        for idx in range(8):
+            cap = _cv2_tmp.VideoCapture(idx, _cv2_tmp.CAP_DSHOW)
+            if cap.isOpened():
+                cap.release()
+                found_indices.append(idx)
+        pos = found_indices.index(self._camera_index) if self._camera_index in found_indices else -1
+        lost_name = (device_names[pos] if 0 <= pos < len(device_names)
+                     else f"Camera {self._camera_index}")
+
+        dlg = CameraReconnectDialog(
+            self,
+            lost_camera_index=self._camera_index,
+            lost_camera_name=lost_name,
+        )
         if dlg.exec():
-            # User picked a camera — update index + combo and let them START fresh
             new_idx = dlg.selected_camera_index()
+            new_name = dlg.selected_camera_name()
             self._camera_index = new_idx
-            # Refresh the combo to reflect the new selection
             self._populate_camera_combo()
             toast_warning(
                 self,
-                f"Camera reconnected on Camera {new_idx}. "
-                "Press START to begin a new session."
+                f"\"{new_name}\" selected. Press START to begin a new session."
             )
         else:
-            # User cancelled — just leave the page in idle state
-            toast_warning(self, "Session discarded. Camera was disconnected.")
+            toast_warning(self, f"Session discarded — \"{lost_name}\" was disconnected.")
 
     def _on_worker_state_changed(self, state: str):
         """Track the worker's current state so _handle_end can use it."""

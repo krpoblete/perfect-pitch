@@ -287,12 +287,15 @@ class PitchWorker(QThread):
             frame_count += 1
             ts_ms = int((time.perf_counter() - t0) * 1000)
 
-            small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
-            mp_img = mp.Image(
-                image_format=mp.ImageFormat.SRGB,
-                data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
-            )
-            landmarker.detect_async(mp_img, ts_ms)
+            # Send to MediaPipe every other frame — halves inference overhead
+            # while display runs at full frame rate
+            if frame_count % 2 == 1:
+                small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
+                mp_img = mp.Image(
+                    image_format=mp.ImageFormat.SRGB,
+                    data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
+                )
+                landmarker.detect_async(mp_img, ts_ms)
 
             with result_lock:
                 detection = result_list[0]
