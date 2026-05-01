@@ -276,6 +276,7 @@ class PitchWorker(QThread):
         while not self._stop_event.is_set():
             cam_ok, frame = cam_thread.read()
             if not cam_ok:
+                self.error_occurred.emit("__camera_disconnected__")
                 break
             if frame is None:
                 continue
@@ -286,15 +287,12 @@ class PitchWorker(QThread):
             frame_count += 1
             ts_ms = int((time.perf_counter() - t0) * 1000)
 
-            # Send every other frame to MediaPipe — halves colorspace/resize
-            # overhead while still running inference at ~15 fps on a 30fps feed.
-            if frame_count % 2 == 1:
-                small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
-                mp_img = mp.Image(
-                    image_format=mp.ImageFormat.SRGB,
-                    data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
-                )
-                landmarker.detect_async(mp_img, ts_ms)
+            small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
+            mp_img = mp.Image(
+                image_format=mp.ImageFormat.SRGB,
+                data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB),
+            )
+            landmarker.detect_async(mp_img, ts_ms)
 
             with result_lock:
                 detection = result_list[0]

@@ -265,6 +265,129 @@ class SessionSummaryDialog(QDialog):
         row.addStretch()
         row.addWidget(val_lbl)
         return card
+    
+class CameraReconnectDialog(QDialog):
+    """Shown when the camera disconnects mid-session.
+ 
+    Lets the user pick a working camera from a fresh probe, then
+    dismisses so start_session_page can start a clean new session.
+    Always starts fresh — no attempt to resume incomplete pitch data.
+    """
+ 
+    def __init__(self, parent, lost_camera_index: int):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setObjectName("reconnectDialog")
+        self._selected_index = 0
+        self._lost_index = lost_camera_index
+        self._build_ui()
+        self.setFixedSize(420, 260)
+        self._center_on_parent()
+ 
+    def _center_on_parent(self):
+        from PyQt6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.move(
+            screen.x() + (screen.width() - self.width()) // 2,
+            screen.y() + (screen.height() - self.height()) // 2,
+        )
+ 
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(28, 24, 28, 24)
+        root.setSpacing(14)
+ 
+        # Header
+        title = QLabel("Camera Disconnected")
+        title.setObjectName("reconnectTitle")
+        title.setStyleSheet(
+            "color: #e05555; font-size: 18px; font-weight: 700; background: transparent;"
+        )
+        root.addWidget(title)
+ 
+        sub = QLabel(
+            f"Camera {self._lost_index} was lost mid-session. "
+            "The current session has been discarded. Select a working "
+            "camera below to start a fresh session."
+        )
+        sub.setObjectName("reconnectSub")
+        sub.setWordWrap(True)
+        sub.setStyleSheet("color: #888888; font-size: 12px; background: transparent;")
+        root.addWidget(sub)
+ 
+        # Camera selector
+        from PyQt6.QtWidgets import QComboBox
+        self._combo = QComboBox()
+        self._combo.setObjectName("cameraCombo")
+        self._combo.setFixedHeight(32)
+        self._probe_cameras()
+        self._combo.currentIndexChanged.connect(self._on_combo_changed)
+        root.addWidget(self._combo)
+ 
+        root.addStretch()
+ 
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+ 
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("reconnectCancelBtn")
+        cancel_btn.setFixedHeight(40)
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet(
+            "background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 6px;"
+            "color: #888888; font-size: 13px;"
+        )
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+ 
+        ok_btn = QPushButton("Use This Camera")
+        ok_btn.setObjectName("reconnectOkBtn")
+        ok_btn.setFixedHeight(40)
+        ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        ok_btn.setStyleSheet(
+            "background: #1a3a1a; border: 1px solid #2a5a2a; border-radius: 6px;"
+            "color: #4ecb71; font-size: 13px; font-weight: 600;"
+        )
+        ok_btn.clicked.connect(self.accept)
+        btn_row.addWidget(ok_btn)
+ 
+        root.addLayout(btn_row)
+ 
+    def _probe_cameras(self):
+        """Probe available cameras and populate combo, excluding the lost one."""
+        import cv2 as _cv2
+        self._combo.clear()
+        found = []
+        for idx in range(8):
+            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+            if cap.isOpened():
+                ret, _ = cap.read()
+                if ret:
+                    found.append(idx)
+                cap.release()
+ 
+        if not found:
+            self._combo.addItem("No cameras detected", -1)
+        else:
+            for idx in found:
+                suffix = " ⚠ (disconnected)" if idx == self._lost_index else ""
+                label  = f"Camera {idx} (default){suffix}" if idx == 0 else f"Camera {idx}{suffix}"
+                self._combo.addItem(label, idx)
+            # Auto-select first camera that isn't the lost one
+            for i in range(self._combo.count()):
+                if self._combo.itemData(i) != self._lost_index:
+                    self._combo.setCurrentIndex(i)
+                    break
+ 
+    def _on_combo_changed(self, i: int):
+        idx = self._combo.itemData(i)
+        if idx is not None and idx >= 0:
+            self._selected_index = idx
+ 
+    def selected_camera_index(self) -> int:
+        return self._selected_index
 
 class StartSessionPage(QWidget):
     _worker_done = pyqtSignal()      # internal: waiter thread → main thread
@@ -1045,7 +1168,40 @@ class StartSessionPage(QWidget):
     def _on_worker_error(self, message: str):
         """Called when PitchWorker hits a fatal error."""
         self._stop_capture()
-        toast_error(self, f"Camera error: {message}")
+ 
+        if message == "__camera_disconnected__":
+            self._handle_camera_disconnected()
+        else:
+            toast_error(self, f"Camera error: {message}")
+
+    def _handle_camera_disconnected(self):
+        """Camera was lost mid-session — discard session, offer reconnect."""
+        # Reset all session counters so the page is clean for a fresh start
+        self._pitch_count = 0
+        self._mistakes = 0
+        self._worker_state = ""
+        self.pitch_val.setText("0")
+        self.mistake_val.setText("0")
+        self.accuracy_val.setText("0.00%")
+        self._show_idle_feed()
+        self.end_btn.setEnabled(False)
+        self.session_finished.emit()
+ 
+        dlg = CameraReconnectDialog(self, lost_camera_index=self._camera_index)
+        if dlg.exec():
+            # User picked a camera — update index + combo and let them START fresh
+            new_idx = dlg.selected_camera_index()
+            self._camera_index = new_idx
+            # Refresh the combo to reflect the new selection
+            self._populate_camera_combo()
+            toast_warning(
+                self,
+                f"Camera reconnected on Camera {new_idx}. "
+                "Press START to begin a new session."
+            )
+        else:
+            # User cancelled — just leave the page in idle state
+            toast_warning(self, "Session discarded. Camera was disconnected.")
 
     def _on_worker_state_changed(self, state: str):
         """Track the worker's current state so _handle_end can use it."""
