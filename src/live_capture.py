@@ -202,7 +202,9 @@ FS_HUGE   = 84   # countdown number
 
 # ── UI constants ───────────────────────────────────────────────────────────────
 
-PANEL_W       = 420
+# PANEL_W is now computed per-frame — use panel_layout() to get all values.
+# The fallback constant is kept so importers of PANEL_W still work.
+PANEL_W       = 420   # fallback — overridden per-draw by panel_layout()
 PANEL_BG      = (18, 18, 18)
 HDR_H         = 72
 CLR_PRIMARY   = (230, 230, 230)
@@ -211,10 +213,19 @@ CLR_MUTED     = (82, 82, 82)
 CLR_DIVIDER   = (40, 40, 40)
 CLR_BAR_BG    = (48, 48, 48)
 
-# bar column positions (inside a 420-wide panel)
-BAR_X = 115
-BAR_W = 180
-VAL_X = BAR_X + BAR_W + 8
+
+def panel_layout(fw: int) -> tuple:
+    """Return (pw, bar_x, bar_w, val_x) scaled to the frame width fw.
+
+    The panel occupies 38% of the total composited frame width,
+    clamped to [300, 460] px so it is always readable.
+    Bar columns scale proportionally inside the panel.
+    """
+    pw    = max(300, min(460, int(fw * 0.38)))
+    bar_x = max(80,  int(pw * 0.27))
+    bar_w = max(120, int(pw * 0.43))
+    val_x = bar_x + bar_w + 6
+    return pw, bar_x, bar_w, val_x
 
 
 def _divider(panel: np.ndarray, y: int, pw: int) -> None:
@@ -246,7 +257,7 @@ def blend_panel(frame: np.ndarray, panel: np.ndarray) -> np.ndarray:
 
 def draw_waiting_overlay(frame: np.ndarray) -> np.ndarray:
     fh, fw = frame.shape[:2]
-    pw     = PANEL_W
+    pw, _, _, _ = panel_layout(fw + PANEL_W)   # total width = camera + panel
     panel  = side_panel(fh, pw)
 
     # Header
@@ -287,7 +298,7 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     hw, _ = get_text_size(hint, FS_BODY)
     put_text(out, hint, (cx - hw // 2, cy + 138), FS_BODY, (200, 200, 200))
 
-    pw    = PANEL_W
+    pw, _, _, _ = panel_layout(out.shape[1] + PANEL_W)
     panel = side_panel(fh, pw)
     cv2.rectangle(panel, (0, 0), (pw, HDR_H), (32, 88, 42), -1)
     put_text(panel, "DETECTED",      (10, 28), FS_TINY,   (130, 195, 130))
@@ -299,7 +310,7 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     put_text(panel, f"Recording in  {secs_left:.1f}s", (10, y), FS_BODY, (140, 200, 140))
 
     prog  = max(0.0, 1.0 - secs_left / COUNTDOWN_SECS)
-    bar_w = int(prog * (PANEL_W - 20))
+    bar_w = int(prog * (pw - 20))
     y += 18
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
     cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (70, 180, 70), -1)
@@ -319,7 +330,7 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
                if early_risk is not None else np.zeros(33, dtype=np.float32))
     out    = draw_keypoints(frame, screen_pts, dot_risk)
     fh, fw = out.shape[:2]
-    pw     = PANEL_W
+    pw, bar_x, bar_w_max, val_x = panel_layout(fw + PANEL_W)
     panel  = side_panel(fh, pw)
 
     # Header
@@ -339,9 +350,9 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
     _divider(panel, HDR_H + 2, pw)
 
     # Progress bar
-    y        = HDR_H + 28
-    progress = n_collected / MAX_PITCH_FRAMES
-    bar_w    = int(progress * (pw - 20))
+    y         = HDR_H + 28
+    progress  = n_collected / MAX_PITCH_FRAMES
+    prog_bw   = int(progress * (pw - 20))
     frame_lbl = f"{n_collected} / {MAX_PITCH_FRAMES} frames"
     fps_lbl   = f"{fps_live:.0f} fps"
     put_text(panel, frame_lbl, (10, y), FS_SMALL, CLR_SECONDARY)
@@ -349,27 +360,28 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
     put_text(panel, fps_lbl, (pw - fw2 - 10, y), FS_SMALL, CLR_MUTED)
     y += 16
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
-    cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (80, 160, 80), -1)
+    cv2.rectangle(panel, (10, y), (10 + prog_bw, y + 9), (80, 160, 80), -1)
 
     y += 24
     _divider(panel, y, pw)
     y += 20
 
-    # Joint risk table
+    # Joint risk table — row height scales with available vertical space
     _section_label(panel, "Live Joint Risk", y)
     y += 26
 
     if early_risk is not None:
+        row_h = max(18, (fh - y - 24) // NUM_JOINTS)
         for k in range(NUM_JOINTS):
             risk   = float(early_risk[k])
             thresh = float(thresholds[k])
             color  = risk_color(risk, thresh)
-            bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * BAR_W)
+            bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * bar_w_max)
             put_text(panel, SHORT_NAMES[k], (10, y), FS_SMALL, CLR_SECONDARY)
-            cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + BAR_W, y + 4), CLR_BAR_BG, -1)
-            cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + bw,    y + 4), color,       -1)
-            put_text(panel, f"{risk:.3f}", (VAL_X, y), FS_TINY, CLR_MUTED)
-            y += 26
+            cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bar_w_max, y + 4), CLR_BAR_BG, -1)
+            cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bw,        y + 4), color,       -1)
+            put_text(panel, f"{risk:.3f}", (val_x, y), FS_TINY, CLR_MUTED)
+            y += row_h
     else:
         put_text(panel, "Warming up...", (10, y), FS_BODY, CLR_MUTED)
 
@@ -388,7 +400,7 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
         out = frame.copy()
 
     fh, fw = out.shape[:2]
-    pw     = PANEL_W
+    pw, bar_x, bar_w_max, val_x = panel_layout(fw + PANEL_W)
     panel  = side_panel(fh, pw)
 
     # Header
@@ -411,12 +423,12 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
     if n_pitches > 0:
         acc     = n_correct / n_pitches * 100
         acc_col = (50, 205, 50) if acc >= 70 else (0, 215, 255) if acc >= 50 else (0, 80, 220)
-        bw      = int((acc / 100.0) * (pw - 20))
+        acc_bw  = int((acc / 100.0) * (pw - 20))
         lbl     = f"{n_correct} / {n_pitches} correct  —  {acc:.0f}%"
         put_text(panel, lbl, (10, y), FS_SMALL, acc_col)
         y += 16
         cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
-        cv2.rectangle(panel, (10, y), (10 + bw,  y + 9), acc_col,   -1)
+        cv2.rectangle(panel, (10, y), (10 + acc_bw, y + 9), acc_col, -1)
         y += 22
 
     _divider(panel, y, pw)
@@ -424,21 +436,24 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
     _section_label(panel, "Joint Risk", y)
     y += 26
 
+    # Dynamic row height so joints + feedback + cooldown always fit
+    joint_budget  = int((fh - y - 120) * 0.50)
+    joint_row_h   = max(16, joint_budget // NUM_JOINTS)
     for k in range(NUM_JOINTS):
         risk   = float(result["joint_risks"][k])
         thresh = float(thresholds[k])
         color  = risk_color(risk, thresh)
-        bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * BAR_W)
+        bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * bar_w_max)
         put_text(panel, SHORT_NAMES[k], (10, y), FS_SMALL, CLR_SECONDARY)
-        cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + BAR_W, y + 4), CLR_BAR_BG, -1)
-        cv2.rectangle(panel, (BAR_X, y - 14), (BAR_X + bw,    y + 4), color,       -1)
-        put_text(panel, f"{risk:.3f}", (VAL_X, y), FS_TINY, CLR_MUTED)
-        y += 26
+        cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bar_w_max, y + 4), CLR_BAR_BG, -1)
+        cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bw,        y + 4), color,       -1)
+        put_text(panel, f"{risk:.3f}", (val_x, y), FS_TINY, CLR_MUTED)
+        y += joint_row_h
 
     _divider(panel, y, pw)
-    y += 20
+    y += 14
     _section_label(panel, "Top Feedback", y)
-    y += 26
+    y += 20
 
     for _, row in result["feedback_df"].head(3).iterrows():
         color = risk_color(row["Risk"], row["Threshold"])
@@ -446,20 +461,20 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
         while fb and get_text_size(fb, FS_SMALL)[0] > pw - 20:
             fb = fb[:-1]
         put_text(panel, fb, (10, y), FS_SMALL, color)
-        y += 22
+        y += 20
         put_text(panel, row["Severity"], (10, y), FS_TINY, color)
-        y += 24
+        y += 18
 
     _divider(panel, y, pw)
-    y += 20
+    y += 14
 
     # Cooldown countdown
     put_text(panel, f"Next pitch in  {secs_left:.1f}s", (10, y), FS_BODY, CLR_SECONDARY)
-    prog  = max(0.0, 1.0 - secs_left / COOLDOWN)
-    bar_w = int(prog * (pw - 20))
+    prog   = max(0.0, 1.0 - secs_left / COOLDOWN)
+    cd_bw  = int(prog * (pw - 20))
     y += 16
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
-    cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (80, 160, 80), -1)
+    cv2.rectangle(panel, (10, y), (10 + cd_bw, y + 9), (80, 160, 80), -1)
 
     put_text(panel, "R  —  Reset now    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
 

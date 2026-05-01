@@ -167,30 +167,6 @@
     background-color: #2a2a2a;
 }
 
-/* Recommended threshold card */
-#recThresholdCard {
-    background-color: #161616;
-    border: 1px solid #1e1e1e;
-    border-radius: 10px;
-}
-
-#recIcon {
-    background: transparent;
-}
-
-#recTitle {
-    font-size: 11px;
-    color: #555555;
-    background: transparent;
-}
-
-#recValue {
-    font-size: 13px;
-    font-weight: 600;
-    color: #888888;
-    background: transparent;
-}
-
 /* Token status widget */
 #tokenStatusWidget {
     background-color: #1a1a1a;

@@ -341,10 +341,6 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.pitch_card)
         panel_layout.addWidget(self.mistake_card)
         panel_layout.addWidget(self.accuracy_card)
-        # Recommended threshold card — shows USA Baseball recommended daily limit
-        self.rec_card = self._rec_card()
-        panel_layout.addWidget(self.rec_card)
-
         # Pitches Left card — shows remaining pitches for today
         self.token_card = self._stat_card("Pitches Left", "ball-baseball", "#f0a500")
         self.token_val = self.token_card.findChild(QLabel, "statValue")
@@ -509,38 +505,6 @@ class StartSessionPage(QWidget):
         caution_row.addWidget(alert_icon, alignment=Qt.AlignmentFlag.AlignTop)
         caution_row.addWidget(caution_lbl) 
         layout.addLayout(caution_row)
-
-        return card
-
-    # Recommended threshold card builder
-    def _rec_card(self) -> QWidget:
-        """Small info card show the USA Baseball recommended daily threshold."""
-        card = QWidget()
-        card.setObjectName("recThresholdCard")
-        layout = QHBoxLayout(card)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(8)
-
-        icon_lbl = QLabel()
-        icon_lbl.setObjectName("recIcon")
-        icon_lbl.setFixedSize(16, 16)
-        icon_lbl.setPixmap(get_icon("target-arrow", color="#666666", size=16).pixmap(16, 16))
-
-        text_col = QVBoxLayout()
-        text_col.setSpacing(1)
-
-        rec_title = QLabel("Recommended")
-        rec_title.setObjectName("recTitle")
-
-        self.rec_val_lbl = QLabel("—")
-        self.rec_val_lbl.setObjectName("recValue")
-
-        text_col.addWidget(rec_title)
-        text_col.addWidget(self.rec_val_lbl)
-
-        layout.addWidget(icon_lbl, alignment=Qt.AlignmentFlag.AlignVCenter)
-        layout.addLayout(text_col)
-        layout.addStretch()
 
         return card
 
@@ -774,11 +738,6 @@ class StartSessionPage(QWidget):
         self._recommended_cap = cap
         self._used_today = used_today
         self._tokens_remaining = min(threshold, effective_max)
-
-        # Update recommended threshold card
-        self.rec_val_lbl.setText(
-            f"{cap} pitches/day" if cap else "—"
-        )
 
         # Update pitches left card
         self.token_val.setText(str(self._tokens_remaining))
