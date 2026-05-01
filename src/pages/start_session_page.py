@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSizePolicy, QDialog, QGridLayout, QFrame,
+    QComboBox,
 )
 from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
@@ -266,6 +267,28 @@ class SessionSummaryDialog(QDialog):
         row.addWidget(val_lbl)
         return card
     
+class LiveCameraCombo(QComboBox):
+    """QComboBox that re-probes available cameras every time the dropdown
+    is opened, so newly connected or disconnected devices appear
+    immediately without any background polling or page lag.
+    """
+
+    def __init__(self, parent=None, repopulate_fn=None):
+        super().__init__(parent)
+        self._repopulate_fn = repopulate_fn
+        self._is_session_live = False
+
+    def set_session_live(self, live: bool):
+        """Prevent re-probe while a session is running."""
+        self._is_session_live = live
+
+    def showPopup(self):
+        """Refresh the camera list before the dropdown opens."""
+        if not self._is_session_live and self._repopulate_fn:
+            self._repopulate_fn()
+        super().showPopup()
+
+
 class CameraReconnectDialog(QDialog):
     """Shown when the camera disconnects mid-session.
  
@@ -337,7 +360,6 @@ class CameraReconnectDialog(QDialog):
         root.addWidget(sub)
  
         # Camera selector
-        from PyQt6.QtWidgets import QComboBox
         self._combo = QComboBox()
         self._combo.setObjectName("cameraCombo")
         self._combo.setFixedHeight(32)
@@ -533,16 +555,18 @@ class StartSessionPage(QWidget):
         panel_layout.addWidget(self.camera_guide_card)
 
         # Bottom row: camera selector + guide toggle
-        from PyQt6.QtWidgets import QComboBox
         guide_toggle_row = QHBoxLayout()
         guide_toggle_row.setContentsMargins(0, 0, 0, 0)
         guide_toggle_row.setSpacing(6)
 
-        self.camera_combo = QComboBox()
+        self.camera_combo = LiveCameraCombo(
+            parent=self,
+            repopulate_fn=self._populate_camera_combo,
+        )
         self.camera_combo.setObjectName("cameraCombo")
         self.camera_combo.setFixedHeight(28)
         self.camera_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.camera_combo.setToolTip("Select camera source")
+        self.camera_combo.setToolTip("Select camera source — opens fresh list on click")
         self._populate_camera_combo()
         self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
         guide_toggle_row.addWidget(self.camera_combo, stretch=1)
@@ -999,6 +1023,7 @@ class StartSessionPage(QWidget):
         self.end_btn.setEnabled(True)
         if hasattr(self, "camera_combo"):
             self.camera_combo.setEnabled(False)
+            self.camera_combo.set_session_live(True)
         self.session_started.emit()
 
         # Reset stats for new sessions
@@ -1159,7 +1184,10 @@ class StartSessionPage(QWidget):
                 worker.wait(2000)
 
         self.start_btn.setEnabled(True)
+        if hasattr(self, "guide_toggle_btn"):
+            self.guide_toggle_btn.setEnabled(True)
         if hasattr(self, "camera_combo"):
+            self.camera_combo.set_session_live(False)
             self.camera_combo.setEnabled(True)
         self._refresh_token_status()
 
