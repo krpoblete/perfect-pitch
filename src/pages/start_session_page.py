@@ -444,7 +444,7 @@ class CameraReconnectDialog(QDialog):
         for i in range(self._combo.count()):
             if self._combo.itemData(i) == self._selected_index:
                 # Strip the disconnected suffix if present
-                return self._combo.itemText(i).replace("  ⚠  (disconnected)", "").strip()
+                return self._combo.itemText(i)(" (disconnected)", "").strip()
         return f"Camera {self._selected_index}"
 
 class StartSessionPage(QWidget):
@@ -499,16 +499,16 @@ class StartSessionPage(QWidget):
 
         root.addWidget(feed_wrapper, stretch=3)
 
-        # Stats panel — width scales with screen so it fits smaller monitors
+        # Stats panel
         from PyQt6.QtWidgets import QApplication as _QApp
         _sw = _QApp.primaryScreen().availableGeometry().width()
-        _panel_w = max(220, min(300, int(_sw * 0.155)))
+        _panel_w = max(180, min(240, int(_sw * 0.13)))
         panel = QWidget()
         panel.setObjectName("sessionPanel")
         panel.setFixedWidth(_panel_w)
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(20, 28, 20, 28)
-        panel_layout.setSpacing(14)
+        panel_layout.setContentsMargins(12, 18, 12, 18)
+        panel_layout.setSpacing(8)
 
         # Stats cards
         self.pitch_card = self._stat_card("Pitch Count", "play-handball", "#4a9eff")
@@ -588,7 +588,7 @@ class StartSessionPage(QWidget):
         # START button
         self.start_btn = QPushButton("START")
         self.start_btn.setObjectName("sessionStartBtn")
-        self.start_btn.setFixedHeight(60)
+        self.start_btn.setFixedHeight(48)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setAutoDefault(False)
         self.start_btn.setDefault(False)
@@ -598,7 +598,7 @@ class StartSessionPage(QWidget):
         # END button
         self.end_btn = QPushButton("END")
         self.end_btn.setObjectName("sessionEndBtn")
-        self.end_btn.setFixedHeight(60)
+        self.end_btn.setFixedHeight(48)
         self.end_btn.setEnabled(False)
         self.end_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setAutoDefault(False)
@@ -613,25 +613,26 @@ class StartSessionPage(QWidget):
         card = QWidget()
         card.setObjectName("cameraGuideCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
 
         # Header row: title + dismiss button
         header_row = QHBoxLayout()
         header_row.setSpacing(0)
 
         title_row = QHBoxLayout()
-        title_row.setSpacing(6)
+        title_row.setSpacing(5)
 
         cam_icon = QLabel()
         cam_icon.setObjectName("guideIcon")
-        cam_icon.setFixedSize(16, 16)
+        cam_icon.setFixedSize(13, 13)
         cam_icon.setPixmap(
-            get_icon("camera", color="#aaaaaa", size=16).pixmap(16, 16)
+            get_icon("camera", color="#aaaaaa", size=13).pixmap(13, 13)
         )
 
         guide_title = QLabel("Camera Setup")
         guide_title.setObjectName("guideTitle")
+        guide_title.setStyleSheet("font-size: 11px; background: transparent;")
 
         title_row.addWidget(cam_icon)
         title_row.addWidget(guide_title)
@@ -645,13 +646,14 @@ class StartSessionPage(QWidget):
         div.setObjectName("guideDivider")
         div.setFixedHeight(1)
         layout.addWidget(div)
-        layout.addSpacing(4)
+        layout.addSpacing(2)
 
         # Registered as row
         reg_row = QHBoxLayout()
-        reg_row.setSpacing(6)
+        reg_row.setSpacing(4)
         reg_lbl = QLabel("Registered as:")
         reg_lbl.setObjectName("guideLabel")
+        reg_lbl.setStyleSheet("font-size: 10px; background: transparent;")
         self.hand_badge = QLabel("RHP")
         self.hand_badge.setObjectName("guideHandBadge")
         reg_row.addWidget(reg_lbl)
@@ -659,34 +661,34 @@ class StartSessionPage(QWidget):
         reg_row.addStretch()
         layout.addLayout(reg_row)
 
-        layout.addSpacing(2)
-
         # Camera position instruction
         self.camera_side_lbl = QLabel()
         self.camera_side_lbl.setObjectName("guideSideLabel")
         self.camera_side_lbl.setWordWrap(True)
+        self.camera_side_lbl.setStyleSheet("font-size: 10px; background: transparent;")
         layout.addWidget(self.camera_side_lbl)
 
-        layout.addSpacing(4)
+        layout.addSpacing(2)
 
-        # Caution note — alert-triangle icon inherits guideCaution color
+        # Caution note
         caution_row = QHBoxLayout()
-        caution_row.setSpacing(6)
+        caution_row.setSpacing(4)
         caution_row.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         alert_icon = QLabel()
         alert_icon.setObjectName("guideCautionIcon")
-        alert_icon.setFixedSize(14, 14)
+        alert_icon.setFixedSize(11, 11)
         alert_icon.setPixmap(
-            get_icon("alert-triangle", color="#888888", size=14).pixmap(14, 14)
+            get_icon("alert-triangle", color="#888888", size=11).pixmap(11, 11)
         )
 
         caution_lbl = QLabel("Your throwing arm must face the camera for accurate analysis.")
         caution_lbl.setObjectName("guideCaution")
         caution_lbl.setWordWrap(True)
+        caution_lbl.setStyleSheet("font-size: 10px; background: transparent;")
 
         caution_row.addWidget(alert_icon, alignment=Qt.AlignmentFlag.AlignTop)
-        caution_row.addWidget(caution_lbl) 
+        caution_row.addWidget(caution_lbl)
         layout.addLayout(caution_row)
 
         return card
@@ -696,33 +698,35 @@ class StartSessionPage(QWidget):
         card = QWidget()
         card.setObjectName("sessionStatCard")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(4)
 
         # Title row
         title_row = QHBoxLayout()
-        title_row.setSpacing(8)
+        title_row.setSpacing(5)
 
         icon_lbl = QLabel()
         icon_lbl.setObjectName("statIcon")
-        icon_lbl.setFixedSize(20, 20)
-        icon_lbl.setPixmap(get_icon(icon_name, color=color, size=20).pixmap(20, 20))
+        icon_lbl.setFixedSize(14, 14)
+        icon_lbl.setPixmap(get_icon(icon_name, color=color, size=14).pixmap(14, 14))
 
         title_lbl = QLabel(title)
         title_lbl.setObjectName("statTitle")
-        title_lbl.setStyleSheet(f"color: {color}; background: transparent;")
+        title_lbl.setStyleSheet(
+            f"color: {color}; background: transparent; font-size: 11px;"
+        )
 
         title_row.addWidget(icon_lbl)
         title_row.addWidget(title_lbl)
         title_row.addStretch()
         layout.addLayout(title_row)
 
-        # Value
-        # Accuracy card gets a formatted default; others use plain "0"
+        # Value — inline font size so it scales with panel width
         default = "0.00%" if title == "Accuracy" else "0"
         val = QLabel(default)
         val.setObjectName("statValue")
         val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        val.setStyleSheet("font-size: 28px; font-weight: 700; background: transparent;")
         layout.addWidget(val)
 
         return card
