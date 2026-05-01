@@ -271,9 +271,7 @@ def draw_waiting_overlay(frame: np.ndarray) -> np.ndarray:
     y = HDR_H + 32
     _section_label(panel, "Instructions", y)
     y += 28
-    for line in ["Step into frame to begin.", "R  —  Reset session", "Q  —  Quit"]:
-        put_text(panel, line, (10, y), FS_BODY, CLR_SECONDARY)
-        y += 32
+    put_text(panel, "Step into frame to begin.", (10, y), FS_BODY, CLR_SECONDARY)
 
     # Bottom status
     put_text(panel, "System ready", (10, fh - 16), FS_TINY, CLR_MUTED)
@@ -315,7 +313,6 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
     cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (70, 180, 70), -1)
 
-    put_text(panel, "R  —  Cancel    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
     return blend_panel(out, panel)
 
 
@@ -385,7 +382,6 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
     else:
         put_text(panel, "Warming up...", (10, y), FS_BODY, CLR_MUTED)
 
-    put_text(panel, "R  —  Reset    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
     return blend_panel(out, panel)
 
 
@@ -475,8 +471,6 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
     y += 16
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
     cv2.rectangle(panel, (10, y), (10 + cd_bw, y + 9), (80, 160, 80), -1)
-
-    put_text(panel, "R  —  Reset now    Q  —  Quit", (10, fh - 16), FS_TINY, CLR_MUTED)
 
     return blend_panel(out, panel)
 
@@ -851,12 +845,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
 
         cv2.imshow("Live Pitch Analysis", display)
 
-        key = cv2.waitKey(1) & 0xFF
-        if key in (ord("q"), 27):
-            break
-        if key == ord("r"):
-            reset()
-            print("Reset, waiting for pitcher.")
+        cv2.waitKey(1)
 
     cam_thread.stop()
     landmarker.close()
