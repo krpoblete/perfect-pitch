@@ -485,28 +485,23 @@ class AccountSettingsPage(QWidget):
         cap = get_pitch_max(self._dob)
         user_today = get_pitches_used_today(self.user_id)
 
-        # effective_max = remaining pitches available under the recommended cap today
-        effective_max = max(0, cap - user_today)
-
-        # saved threshold from DB
+        # threshold = user's total daily budget stored in DB
         saved = user["pitch_threshold"] or recommended
-
-        # The displayed/active threshold is the saved value, clamped to the cap
         threshold = min(saved, cap)
         self._original_threshold = threshold
 
-        # Spinbox range:
-        #   min = user_today + 1  so the user can never set a threshold they already exceeded
-        #   max = cap             can't exceed the recommended cap
-        spinbox_min = min(user_today + 1, cap)  # clamp so min never exceeds max
-        self.threshold_input.blockSignals(True)
-        self.threshold_input.setRange(spinbox_min, cap)
-        self.threshold_input.setValue(max(threshold, spinbox_min))
-        self.threshold_input.blockSignals(False)
+        # remaining = pitches left under the threshold today
+        remaining = max(0, threshold - user_today)
 
-        # Lock spinbox only when the full cap is exhausted (not just the threshold)
-        # — that way the user can always raise their threshold to keep pitching
+        # Spinbox range: 1 → cap always — user sets a daily budget freely.
+        # They can set any value; remaining = threshold - used_today updates live.
+        # Only lock when the full cap is consumed (nothing left to budget).
         cap_exhausted = user_today >= cap
+        self.threshold_input.blockSignals(True)
+        self.threshold_input.setRange(1, cap)
+        self.threshold_input.setValue(threshold)
+        self.threshold_input.blockSignals(False)
+ 
         self.threshold_input.setEnabled(not cap_exhausted and self._role != "Coach")
         if cap_exhausted:
             self.threshold_input.setToolTip(
@@ -521,7 +516,6 @@ class AccountSettingsPage(QWidget):
         self.rec_cap_lbl.setText(f"Recommended: {cap} pitches/day")
 
         # Remaining today = threshold - used_today, matches Start Session exactly
-        remaining = max(0, threshold - user_today)
         self.remaining_lbl.setText(f"Remaining today: {remaining}")
         self.remaining_lbl.setStyleSheet(
             "color: #4ecb71; background: transparent;"
@@ -570,9 +564,8 @@ class AccountSettingsPage(QWidget):
             self.lhp_btn.setObjectName("handBtnActive" if active_hand == "LHP" else "handBtn")
             self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            # Do NOT unconditionally re-enable spinbox here —
-            # cap_exhausted state was already applied above and must be preserved
-            self.threshold_input.setObjectName("thresholdSpinBox")
+            # Do NOT override cap_exhausted state set above — spinbox enabled state is already correct
+            self.threshold_input.setObjectName("thresholdSpinBox") 
 
         # Force QSS re-evaluation on hand buttons and spinbox
         for w in (self.rhp_btn, self.lhp_btn, self.threshold_input):
@@ -631,9 +624,10 @@ class AccountSettingsPage(QWidget):
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
+        from src.db import get_pitches_used_today
+        used_today = get_pitches_used_today(self.user_id)
         cap = get_pitch_max(self._dob)
-        # Save the spinbox value directly — it is already constrained to [used_today+1, cap]
-        # by the spinbox range set in refresh(), so no further clamping is needed.
+        # Clamp to cap only — spinbox range is already 1→cap, so this is just a safety guard
         threshold = min(self.threshold_input.value(), cap)
         hand = "RHP" if self.rhp_btn.isChecked() else "LHP" 
 
@@ -661,6 +655,15 @@ class AccountSettingsPage(QWidget):
         self.header_name.setText(f"{first_name} {last_name}")
 
         self._set_save_enabled(False)
+
+        # Update remaining label immediately so it reflects the newly saved threshold
+        remaining = max(0, threshold - used_today)
+        self.remaining_lbl.setText(f"Remaining today: {remaining}")
+        self.remaining_lbl.setStyleSheet(
+            "color: #4ecb71; background: transparent;"
+            if remaining > 0 else
+            "color: #e05555; background: transparent;"
+        )
 
         # Signal MainWindow to reload sidebar user info
         self.profile_updated.emit()

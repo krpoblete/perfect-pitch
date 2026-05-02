@@ -936,35 +936,31 @@ class StartSessionPage(QWidget):
         used_today = status["used_today"]
         threshold = status["threshold"]
 
-        # effective_max: how many pitches remain under the recommended cap today
+        # remaining = pitches left under the user's threshold today
+        # mirrors account_settings: remaining = max(0, threshold - used_today)
         effective_max = max(0, cap - used_today)
+        remaining = max(0, threshold - used_today)
 
         self._threshold = threshold
         self._recommended_cap = cap
         self._used_today = used_today
-
-        # Tokens remaining = pitches left under the user's set threshold.
-        # Uses threshold - used_today so that once the user burns through their
-        # threshold it stays at 0 until they raise it in Account Settings —
-        # raising the threshold immediately unlocks START without waiting for midnight.
-        self._tokens_remaining = max(0, threshold - used_today)
+        self._tokens_remaining = remaining
 
         # Update pitches left card
         self.token_val.setText(str(self._tokens_remaining))
 
-        # Build a status dict consistent with _apply_token_locked expectations
+        # headroom = pitches still available under the cap beyond the threshold
         locked_status = {
             "threshold": threshold,
             "recommended_cap": cap,
             "used_today": used_today,
             "headroom": max(0, effective_max - threshold),
             "locked": self._tokens_remaining <= 0,
-        }
+        } 
 
         if locked_status["locked"]:
             self._apply_token_locked(locked_status)
         else:
-            # Hide the whole warning widget — not just the inner label
             self.token_status_widget.hide()
             self.token_status_lbl.hide()
             if not self._running:
