@@ -562,11 +562,6 @@ class StartSessionPage(QWidget):
         self.camera_guide_card = self._build_guide_card()
         panel_layout.addWidget(self.camera_guide_card)
 
-        # Bottom row: camera selector + guide toggle
-        guide_toggle_row = QHBoxLayout()
-        guide_toggle_row.setContentsMargins(0, 0, 0, 0)
-        guide_toggle_row.setSpacing(6)
-
         self.camera_combo = LiveCameraCombo(
             parent=self,
             populate_fn=self._populate_camera_combo,
@@ -579,21 +574,7 @@ class StartSessionPage(QWidget):
         # Initial background probe; combo shows "No cameras found" until done
         self._refresh_camera_cache()
         self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
-        guide_toggle_row.addWidget(self.camera_combo, stretch=1)
-
-        self.guide_toggle_btn = QPushButton()
-        self.guide_toggle_btn.setObjectName("guideToggleBtn")
-        self.guide_toggle_btn.setFixedSize(28, 28)
-        self.guide_toggle_btn.setIcon(get_icon("help", color="#555555", size=20))
-        self.guide_toggle_btn.setIconSize(QSize(20, 20))
-        self.guide_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.guide_toggle_btn.setToolTip("Show/hide camera setup guide")
-        self.guide_toggle_btn.setAutoDefault(False)
-        self.guide_toggle_btn.setDefault(False)
-        self.guide_toggle_btn.clicked.connect(self._toggle_guide_card)
-        guide_toggle_row.addWidget(self.guide_toggle_btn)
-
-        panel_layout.addLayout(guide_toggle_row)
+        panel_layout.addWidget(self.camera_combo)
 
         # START button
         self.start_btn = QPushButton("START")
@@ -691,6 +672,7 @@ class StartSessionPage(QWidget):
         alert_icon.setPixmap(
             get_icon("alert-triangle", color="#888888", size=11).pixmap(11, 11)
         )
+        alert_icon.setStyleSheet("background: transparent;")
 
         caution_lbl = QLabel("Your throwing arm must face the camera for accurate analysis.")
         caution_lbl.setObjectName("guideCaution")
@@ -870,14 +852,6 @@ class StartSessionPage(QWidget):
             if name:
                 self._desired_camera_name = name   # user's explicit choice
 
-    def _toggle_guide_card(self):
-        """Toggle the camera guide card visibility and update help icon color."""
-        if self.camera_guide_card.isVisible():
-            self.camera_guide_card.hide()
-            self.guide_toggle_btn.setIcon(get_icon("help", color="#555555", size=20))
-        else:
-            self.camera_guide_card.show()
-            self.guide_toggle_btn.setIcon(get_icon("help", color="#aaaaaa", size=20))
 
     # Camera guide updater
     def _update_camera_guide(self):
@@ -895,9 +869,7 @@ class StartSessionPage(QWidget):
         )
         self.camera_side_lbl.setText(f"Position camera at:\n{side}")
 
-        # Re-show the guide card (in case it was dismissed and user navigated away)
-        self.camera_guide_card.show()
-        self.guide_toggle_btn.setIcon(get_icon("help", color="#aaaaaa", size=20))
+
 
     # Feed
     def _show_idle_feed(self):
@@ -1065,7 +1037,6 @@ class StartSessionPage(QWidget):
             return
     
         self.token_status_widget.hide()
-        self.camera_guide_card.hide()
         self._running = True
         # Confirm active camera name at START from desired (or index fallback)
         self._active_camera_name = (
@@ -1241,8 +1212,6 @@ class StartSessionPage(QWidget):
                 worker.wait(2000)
 
         self.start_btn.setEnabled(True)
-        if hasattr(self, "guide_toggle_btn"):
-            self.guide_toggle_btn.setEnabled(True)
         if hasattr(self, "camera_combo"):
             self.camera_combo.set_session_live(False)
             self.camera_combo.setEnabled(True)
