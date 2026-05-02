@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt, QSize
 from qframelesswindow import FramelessMainWindow
 
 from src.pages.dashboard_page import DashboardPage
-from src.pages.tutorial_page import TutorialPage
 from src.pages.users_page import UsersPage
 from src.pages.pitchers_page import PitchersPage
 from src.pages.start_session_page import StartSessionPage
@@ -19,13 +18,11 @@ from src.widgets.confirm_dialog import ConfirmDialog
 # Nav items per role
 NAV_PITCHER = [
     ("dashboard", "home", "Dashboard"),
-    ("tutorial", "help", "Tutorial"),
     ("start_session", "play-handball", "Start Session"),
 ]
 
 NAV_COACH = [
     ("dashboard", "home", "Dashboard"),
-    ("tutorial", "help", "Tutorial"),
     ("pitchers", "users", "Pitchers"),
 ]
 
@@ -200,15 +197,12 @@ class MainWindow(FramelessMainWindow):
 
         self.pages = {
             "dashboard": DashboardPage(self.user_id),
-            "tutorial": TutorialPage(),
             "pitchers": PitchersPage(),
             "users": UsersPage(),
             "start_session": StartSessionPage(self.user_id, ml_bundle=self.ml_bundle),
             "account_settings": AccountSettingsPage(self.user_id),
         }
 
-        # Give tutorial page the user's role
-        self.pages["tutorial"].set_role(self.role)
         for page in self.pages.values():
             self.stack.addWidget(page)
 
@@ -288,12 +282,6 @@ class MainWindow(FramelessMainWindow):
         self._load_user_info(self._sb_layout)
 
     def _switch_page(self, key: str, icon_name: str = None):
-        # Stop tutorial video when leaving the page
-        tutorial = self.pages.get("tutorial")
-        if tutorial and key != "tutorial":
-            tutorial._player.stop()
-            tutorial.clearFocus()
-
         icon_map = {k: i for k, i, _ in self.nav_items}
         icon_map["account_settings"] = "settings"
 
@@ -351,9 +339,6 @@ class MainWindow(FramelessMainWindow):
         dlg = ConfirmDialog(self, title="Exit Perfect Pitch", message="Are you sure you want to exit?")
         dlg.exec()
         if dlg.result_yes():
-            tutorial = self.pages.get("tutorial")
-            if tutorial:
-                tutorial._player.stop() 
             event.accept()
         else:
             event.ignore()
@@ -364,10 +349,6 @@ class MainWindow(FramelessMainWindow):
         dlg.exec() 
         if not dlg.result_yes():
             return
-        # Stop tutorial video if playing
-        tutorial = self.pages.get("tutorial")
-        if tutorial:
-            tutorial._player.stop() 
         from src.utils.toast import dismiss_active_toast
         dismiss_active_toast()
         self._logging_out = True
