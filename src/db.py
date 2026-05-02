@@ -42,7 +42,8 @@ def init_db():
             date TEXT DEFAULT (datetime('now')),
             total_pitch INTEGER DEFAULT 0,
             mistakes INTEGER DEFAULT 0,
-            accuracy REAL DEFAULT 0.0, 
+            accuracy REAL DEFAULT 0.0,
+            path TEXT DEFAULT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
     """)
@@ -67,6 +68,11 @@ def _migrate(conn):
     conn.execute(
         "UPDATE users SET pitch_threshold = 120 WHERE role = 'Admin' AND pitch_threshold IS NULL"
     )
+
+    session_cols = [row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()]
+    if "path" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN path TEXT DEFAULT NULL")
+
     conn.commit()
 
 RETENTION_DAYS = 1
@@ -302,6 +308,15 @@ def get_sessions_for_user(user_id):
     ).fetchall()
     conn.close()
     return rows
+
+def get_session_skeleton_path(session_id: int) -> str | None:
+    """Return the skeleton PNG path for a session, or None if unavailable."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT path FROM sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    conn.close()
+    return row["path"] if row else None
 
 # Pitch token helpers
 def get_pitches_used_today(user_id: int) -> int:

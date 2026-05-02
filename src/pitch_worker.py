@@ -44,13 +44,14 @@ class PitchWorker(QThread):
 
     def __init__(self, camera_id: int = 0, width: int = 1920,
                  height: int = 1080, throwing_hand: str = "RHP",
-                 ml_bundle=None, parent = None):
+                 ml_bundle=None, user_id: int = 0, parent = None):
         super().__init__(parent)
         self.camera_id = camera_id
         self.width = width
         self.height = height
         self.throwing_hand = throwing_hand
         self._ml_bundle = ml_bundle           # pre-loaded (model, scaler, threshold, thresholds)
+        self.user_id = user_id                # used for artifact folder naming (collision-safe)
         self._stop_event = threading.Event()
         self.skeleton_path = ""               # written by worker thread, read by main after wait()
 
@@ -222,12 +223,15 @@ class PitchWorker(QThread):
         )
         landmarker = mp_vision.PoseLandmarker.create_from_options(options)
 
-        # Session log
+        # Session log — each session gets its own subfolder under output/artifacts/
+        # Named session_<timestamp>_uid<user_id> to prevent collisions between
+        # two pitchers whose sessions happen to start at the same second.
         from src.config import ROOT_DIR
-        log_dir = ROOT_DIR / "output"
-        log_dir.mkdir(exist_ok=True)
         session_start = datetime.now()
-        log_path = log_dir / f"session_{session_start.strftime('%Y-%m-%d_%H-%M-%S')}.json"
+        session_slug = f"session_{session_start.strftime('%Y%m%d_%H%M%S')}_uid{self.user_id}"
+        session_dir = ROOT_DIR / "output" / "artifacts" / session_slug
+        session_dir.mkdir(parents=True, exist_ok=True)
+        log_path = session_dir / f"{session_slug}.json"
         session_log = []
 
         # State
@@ -509,7 +513,7 @@ class PitchWorker(QThread):
                 from src.config import ROOT_DIR
                 images_folder = ROOT_DIR / "assets" / "skeletons"
                 stats = compute_summary(session_log)
-                out_png = log_path.parent / f"{log_path.stem}_skeleton.png"
+                out_png = session_dir / f"{session_slug}_combined_skeleton.png"
                 build_combined_skeleton(stats, images_folder, out_png)
                 if out_png.exists():
                     self.skeleton_path = str(out_png)

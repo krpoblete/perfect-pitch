@@ -1115,6 +1115,7 @@ class StartSessionPage(QWidget):
             height=feed_h,
             throwing_hand=self._throwing_hand,
             ml_bundle=self._ml_bundle,
+            user_id=self.user_id,
             parent=self,
         )
         self._worker.frame_ready.connect(self.update_frame)
@@ -1249,13 +1250,15 @@ class StartSessionPage(QWidget):
 
     def _save_session(self, accuracy: float):
         toast_success(self, "Session saved successfully.")
+        skeleton_path = getattr(self._ending_worker, "skeleton_path", "") or None
         from src.db import get_connection, _manila_now
         conn = get_connection()
         conn.execute(
-            """INSERT INTO sessions (user_id, date, total_pitch, mistakes, accuracy)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO sessions (user_id, date, total_pitch, mistakes, accuracy, path)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (self.user_id, _manila_now(),
-             self._pitch_count, self._mistakes, round(accuracy, 2)),
+             self._pitch_count, self._mistakes, round(accuracy, 2),
+             skeleton_path),
         )
         conn.commit()
         conn.close()
