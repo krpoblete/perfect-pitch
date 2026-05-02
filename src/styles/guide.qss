@@ -1,0 +1,89 @@
+/* Guide Sidebar Button */
+
+#guideBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 7px;
+    color: #666666;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+#guideBtn:hover {
+    background-color: #1a1a1a;
+    color: #bbbbbb;
+}
+
+#guideBtnActive {
+    background-color: #202020;
+    border: none;
+    border-radius: 7px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+/* Guide Drawer */
+
+#guideDrawer {
+    background-color: transparent;
+}
+
+#guideDrawerRoleLabel {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #333333;
+    background: transparent;
+    padding-left: 10px;
+}
+
+/* Guide Action Rows */
+
+#guideActionRow {
+    background-color: transparent;
+    border: none;
+    border-radius: 7px;
+    text-align: left;
+    padding: 0;
+    margin: 0 0;
+}
+
+#guideActionRow:hover {
+    background-color: #1a1a1a;
+}
+
+#guideActionRow:pressed {
+    background-color: #202020;
+}
+
+#guideActionIcon {
+    background: transparent;
+}
+
+#guideActionLabel {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666666;
+    background: transparent;
+}
+
+#guideActionRow:hover #guideActionLabel {
+    color: #bbbbbb;
+}
+
+#guideActionArrow {
+    font-size: 15px;
+    color: #2a2a2a;
+    background: transparent;
+}
+
+#guideActionRow:hover #guideActionArrow {
+    color: #555555;
+}

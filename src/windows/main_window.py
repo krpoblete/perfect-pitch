@@ -1,9 +1,9 @@
 import os
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QStackedWidget
+    QLabel, QPushButton, QStackedWidget, QScrollArea, QFrame
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve
 from qframelesswindow import FramelessMainWindow
 
 from src.pages.dashboard_page import DashboardPage
@@ -32,6 +32,23 @@ NAV_ADMIN = [
     ("start_session", "play-handball", "Start Session"),
 ]
 
+# Guide actions per role: (label, icon_name, page_key or None)
+GUIDE_ACTIONS = {
+    "Pitcher": [
+        ("View Dashboard",       "home",          "dashboard"),
+        ("Start Session",        "play-handball", "start_session"),
+        ("View Result",          "target",        "dashboard"),
+        ("Account Settings",     "settings",      "account_settings"),
+        ("Edit Pitch Threshold", "settings",      "account_settings"),
+    ],
+    "Coach": [
+        ("View Dashboard",   "home",  "dashboard"),
+        ("View Pitchers",    "users", "pitchers"),
+        ("Remove Pitcher",   "trash", "pitchers"),
+        ("Remove Own Account", "logout", "account_settings"),
+    ],
+}
+
 class MainWindow(FramelessMainWindow):
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
@@ -56,8 +73,16 @@ class MainWindow(FramelessMainWindow):
         else:
             self.nav_items = NAV_PITCHER
 
+        self._guide_open = False
         self.build_ui()
         self._switch_page("dashboard")
+
+        # Auto-open guide for first-time users (Pitcher and Coach only)
+        if self.role != "Admin":
+            from src.db import get_has_seen_guide, set_has_seen_guide
+            if not get_has_seen_guide(self.user_id):
+                set_has_seen_guide(self.user_id)
+                self._open_guide()
 
     def _disable_rounded_corners(self):
         """Remove rounded corners on the main window (Windows 11 only)."""
@@ -170,13 +195,34 @@ class MainWindow(FramelessMainWindow):
 
         sb_layout.addStretch()
 
+        # Guide button + drawer (Pitcher and Coach only)
+        if self.role != "Admin":
+            self.guide_btn = QPushButton("  Help")
+            self.guide_btn.setObjectName("guideBtn")
+            self.guide_btn.setFixedHeight(44)
+            self.guide_btn.setIcon(get_icon("help", color="#555555", size=18))
+            self.guide_btn.setIconSize(QSize(18, 18))
+            self.guide_btn.setToolTip("Quick guide")
+            self.guide_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.guide_btn.clicked.connect(self._toggle_guide)
+            sb_layout.addWidget(self.guide_btn)
+
+            # Drawer — hidden by default via maximumHeight animation
+            self.guide_drawer = self._build_guide_drawer()
+            self.guide_drawer.setMaximumHeight(0)
+            self.guide_drawer.setVisible(True)
+            sb_layout.addWidget(self.guide_drawer)
+        else:
+            self.guide_btn = None
+            self.guide_drawer = None
+
         # Account Settings
         divider = QWidget()
         divider.setObjectName("sidebarDivider")
         divider.setFixedHeight(1)
         sb_layout.addWidget(divider)
 
-        acc_btn = QPushButton("Account Settings")
+        acc_btn = QPushButton("  Account Settings")
         acc_btn.setObjectName("navBtn")
         acc_btn.setFixedHeight(44)
         acc_btn.setIcon(get_icon("settings", color="#666666", size=18))
@@ -191,13 +237,13 @@ class MainWindow(FramelessMainWindow):
         # User info at bottom
         self._load_user_info(sb_layout)
 
-        # Content stack 
+        # Content stack
         self.stack = QStackedWidget()
         self.stack.setObjectName("contentStack")
 
         self.pages = {
             "dashboard": DashboardPage(self.user_id),
-            "pitchers": PitchersPage(),
+"pitchers": PitchersPage(),
             "users": UsersPage(),
             "start_session": StartSessionPage(self.user_id, ml_bundle=self.ml_bundle),
             "account_settings": AccountSettingsPage(self.user_id),
@@ -223,6 +269,134 @@ class MainWindow(FramelessMainWindow):
         bw = self.win_btns.sizeHint().width()
         self.win_btns.move(self.screen().availableGeometry().width() - bw - 10, 10)
         self.win_btns.raise_()
+
+
+    def _build_guide_drawer(self) -> QWidget:
+        """Build the inline sidebar drawer for the quick guide."""
+        drawer = QWidget()
+        drawer.setObjectName("guideDrawer")
+        drawer.setSizePolicy(
+            drawer.sizePolicy().horizontalPolicy(),
+            __import__("PyQt6.QtWidgets", fromlist=["QSizePolicy"]).QSizePolicy.Policy.Fixed
+        )
+
+        outer = QVBoxLayout(drawer)
+        outer.setContentsMargins(12, 4, 12, 8)
+        outer.setSpacing(4)
+
+        # Role label
+        role_lbl = QLabel(f"{self.role} Actions")
+        role_lbl.setObjectName("guideDrawerRoleLabel")
+        outer.addWidget(role_lbl)
+
+        outer.addSpacing(2)
+
+        # Action rows
+        actions = GUIDE_ACTIONS.get(self.role, GUIDE_ACTIONS["Pitcher"])
+        seen = set()
+        for label, icon_name, page_key in actions:
+            uid = (label, page_key)
+            if uid in seen:
+                continue
+            seen.add(uid)
+
+            row_btn = QPushButton()
+            row_btn.setObjectName("guideActionRow")
+            row_btn.setFixedHeight(40)
+            row_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            row_layout = QHBoxLayout(row_btn)
+            row_layout.setContentsMargins(10, 0, 10, 0)
+            row_layout.setSpacing(10)
+
+            icon_lbl = QLabel()
+            icon_lbl.setObjectName("guideActionIcon")
+            icon_lbl.setFixedSize(16, 16)
+            icon_lbl.setPixmap(get_icon(icon_name, color="#555555", size=16).pixmap(16, 16))
+            icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+            text_lbl = QLabel(label)
+            text_lbl.setObjectName("guideActionLabel")
+            text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+            arrow_lbl = QLabel("›")
+            arrow_lbl.setObjectName("guideActionArrow")
+            arrow_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+            row_layout.addWidget(icon_lbl)
+            row_layout.addWidget(text_lbl)
+            row_layout.addStretch()
+            row_layout.addWidget(arrow_lbl)
+
+            def _make_handler(key):
+                def _handler():
+                    if self._session_live:
+                        from src.utils.toast import toast_warning
+                        toast_warning(self, "Finish your session before navigating.")
+                        return
+                    self._close_guide()
+                    self._switch_page(key)
+                return _handler
+
+            row_btn.clicked.connect(_make_handler(page_key))
+            outer.addWidget(row_btn)
+
+        return drawer
+
+    def _get_drawer_full_height(self) -> int:
+        """Calculate the natural height of the drawer content."""
+        if not self.guide_drawer:
+            return 0
+        self.guide_drawer.setMaximumHeight(16777215)
+        h = self.guide_drawer.sizeHint().height()
+        self.guide_drawer.setMaximumHeight(
+            0 if not self._guide_open else h
+        )
+        return h
+
+    def _toggle_guide(self):
+        """Animate the guide drawer open or closed."""
+        if self._guide_open:
+            self._close_guide()
+        else:
+            self._open_guide()
+
+    def _open_guide(self):
+        if not self.guide_drawer:
+            return
+        self._guide_open = True
+        full_h = self._get_drawer_full_height()
+        anim = QPropertyAnimation(self.guide_drawer, b"maximumHeight", self)
+        anim.setDuration(180)
+        anim.setStartValue(self.guide_drawer.maximumHeight())
+        anim.setEndValue(full_h)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.start()
+        self._guide_anim = anim  # keep reference alive
+        # Update button style
+        if self.guide_btn:
+            self.guide_btn.setObjectName("guideBtnActive")
+            self.guide_btn.setIcon(get_icon("help", color="#ffffff", size=18))
+            self.guide_btn.style().unpolish(self.guide_btn)
+            self.guide_btn.style().polish(self.guide_btn)
+
+    def _close_guide(self):
+        if not self.guide_drawer:
+            return
+        self._guide_open = False
+        anim = QPropertyAnimation(self.guide_drawer, b"maximumHeight", self)
+        anim.setDuration(150)
+        anim.setStartValue(self.guide_drawer.maximumHeight())
+        anim.setEndValue(0)
+        anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        anim.start()
+        self._guide_anim = anim
+        # Restore button style
+        if self.guide_btn:
+            self.guide_btn.setObjectName("guideBtn")
+            self.guide_btn.setIcon(get_icon("help", color="#555555", size=18))
+            self.guide_btn.style().unpolish(self.guide_btn)
+            self.guide_btn.style().polish(self.guide_btn)
 
     def _load_user_info(self, sb_layout):
         from src.db import get_user_by_id

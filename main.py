@@ -32,6 +32,7 @@ def main():
         'users.qss',
         'pitchers.qss',
         'start_session.qss',
+        'guide.qss',
         'account_settings.qss',
     ]
     combined = ""

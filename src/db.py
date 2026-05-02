@@ -69,6 +69,9 @@ def _migrate(conn):
         "UPDATE users SET pitch_threshold = 120 WHERE role = 'Admin' AND pitch_threshold IS NULL"
     )
 
+    if "has_seen_guide" not in existing:
+        conn.execute("ALTER TABLE users ADD COLUMN has_seen_guide INTEGER NOT NULL DEFAULT 0")
+
     session_cols = [row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()]
     if "path" not in session_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN path TEXT DEFAULT NULL")
@@ -298,6 +301,27 @@ def update_throwing_hand(user_id: int, hand: str) -> bool:
     conn.commit()
     conn.close()
     return True
+
+# Guide helpers
+def get_has_seen_guide(user_id: int) -> bool:
+    """Return True if the user has already seen the guide panel."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT has_seen_guide FROM users WHERE id = ? AND is_active = 1",
+        (user_id,)
+    ).fetchone()
+    conn.close()
+    return bool(row["has_seen_guide"]) if row else False
+
+def set_has_seen_guide(user_id: int) -> None:
+    """Mark the guide as seen for a user."""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET has_seen_guide = 1 WHERE id = ?",
+        (user_id,)
+    )
+    conn.commit()
+    conn.close()
 
 # Session helpers
 def get_sessions_for_user(user_id):
