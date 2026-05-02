@@ -700,7 +700,7 @@ class AccountSettingsPage(QWidget):
 
     def _handle_change_password(self):
         from src.db import get_user_by_id, verify_password, update_user_password
-        import re
+        from src.utils.validators import validate_password
 
         current = self.current_pw_input.text()
         new_pw = self.new_pw_input.text()
@@ -709,22 +709,14 @@ class AccountSettingsPage(QWidget):
         if not current or not new_pw or not confirm:
             toast_error(self, "Please fill in all password fields.")
             return
-        
+
         user = get_user_by_id(self.user_id)
         if not verify_password(current, user["password"]):
             toast_error(self, "Current password is incorrect.")
             return
-        if len(new_pw) < 8:
-            toast_error(self, "New password must be at least 8 characters long.")
-            return
-        if not re.search(r"[a-z]", new_pw):
-            toast_error(self, "Password must contain at least one lowercase letter.")
-            return
-        if not re.search(r"[A-Z]", new_pw):
-            toast_error(self, "Password must contain at least one uppercase letter.")
-            return
-        if not re.search(r"\d", new_pw):
-            toast_error(self, "Password must contain at least one number.")
+        valid_pw, pw_msg = validate_password(new_pw)
+        if not valid_pw:
+            toast_error(self, pw_msg)
             return
         if new_pw != confirm:
             toast_error(self, "Passwords do not match. Please try again.")
