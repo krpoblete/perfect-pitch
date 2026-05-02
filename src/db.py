@@ -72,21 +72,26 @@ def _migrate(conn):
 RETENTION_DAYS = 1
 
 def _purge_expired(conn):
-    """Permanently delete users inactive for longer than RETENTION_DAYS."""
+    """Permanently delete users inactive for longer than RETENTION_DAYS.
+    Uses Manila time (UTC+8) to be consistent with how deleted_at is stamped.
+    """
+    from datetime import datetime, timezone, timedelta
+    utc8 = timezone(timedelta(hours=8))
+    cutoff = (datetime.now(utc8) - timedelta(days=RETENTION_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute("""
         DELETE FROM sessions WHERE user_id IN (
-            SELECT id from users
+            SELECT id FROM users
             WHERE is_active = 0
             AND deleted_at IS NOT NULL
-            AND julianday('now') - julianday(deleted_at) > ?
+            AND deleted_at <= ?
         )
-    """, (RETENTION_DAYS,))
+    """, (cutoff,))
     conn.execute("""
         DELETE FROM users
         WHERE is_active = 0
         AND deleted_at IS NOT NULL
-        AND julianday('now') - julianday(deleted_at) > ?
-    """, (RETENTION_DAYS,))
+        AND deleted_at <= ?
+    """, (cutoff,))
     conn.commit()
 
 def _seed_admin(conn):
@@ -138,56 +143,30 @@ def _calc_threshold(date_of_birth: str) -> int:
 
 def create_user(first_name, last_name, date_of_birth, email, password,
                 throwing_hand: str = "RHP"):
-    """Register a new user. If a soft-deleted account exists with the same
-    email, restore it with the new credentials instead."""
+    """Register a brand-new user. Soft-deleted accounts with the same email.
+    Reactivation is handled by Admin via reactivate_user()."""
     conn = get_connection()
     try:
-        # Check for an inactive account with the same email
+        # Block registration if any account (active or soft-deleted) already holds this email
         existing = conn.execute(
-            "SELECT * FROM users WHERE email = ? AND is_active = 0",
-            (email,)
+            "SELECT id FROM users WHERE email = ?", (email,)
         ).fetchone()
+        if existing:
+            return False, "Email already registered."
 
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         threshold = _calc_threshold(date_of_birth)
 
-        if existing:
-            # Restore the account with fresh credentials and profile
-            conn.execute("""
-                UPDATE users SET
-                    first_name = ?,
-                    last_name = ?,
-                    date_of_birth = ?,
-                    password = ?,
-                    pitch_threshold = ?,
-                    throwing_hand = ?,
-                    is_active = 1,
-                    deleted_at = NULL
-                WHERE email = ? AND is_active = 0
-            """, (first_name, last_name, date_of_birth,
-                  hashed.decode('utf-8'), threshold, throwing_hand, email))
-            conn.commit()
-            return True, "restored"
-        
-        # Check for an already active account
-        active = conn.execute(
-            "SELECT id FROM users WHERE email = ? AND is_active = 1",
-            (email,)
-        ).fetchone()
-        if active:
-            return False, "Email already registered."
-
-        # Brand new account
         conn.execute(
             """INSERT INTO users
                 (first_name, last_name, date_of_birth, email, password,
-                 role, pitch_threshold, throwing_hand, created_at) 
+                 role, pitch_threshold, throwing_hand, created_at)
                 VALUES (?, ?, ?, ?, ?, 'Pitcher', ?, ?, ?)""",
-            (first_name, last_name, date_of_birth, email, 
+            (first_name, last_name, date_of_birth, email,
              hashed.decode('utf-8'), threshold, throwing_hand, _manila_now()),
         )
         conn.commit()
-        return True, "Account created successfully." 
+        return True, "Account created successfully."
     except sqlite3.IntegrityError:
         return False, "Email already registered."
     finally:
@@ -243,6 +222,18 @@ def deactivate_user(user_id: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+def reactivate_user(user_id: int) -> bool:
+    """Admin: restore a soft-deleted user by clearing deleted_at and marking active."""
+    conn = get_connection()
+    cursor = conn.execute(
+        "UPDATE users SET is_active = 1, deleted_at = NULL WHERE id = ? AND is_active = 0",
+        (user_id,),
+    )
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
 
 def update_user_role(user_id: int, role: str) -> bool:
     """Admin: assign a role to a user."""

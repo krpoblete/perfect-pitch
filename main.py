@@ -29,7 +29,6 @@ def main():
         'auth.qss',
         'main.qss',
         'dashboard.qss',
-        'tutorial.qss',
         'users.qss',
         'pitchers.qss',
         'start_session.qss',

@@ -78,7 +78,31 @@
     letter-spacing: 0.5px;
 }
 
-/* Expires In column */
+/* Restore button */
+#restoreBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0;
+}
+
+#restoreBtn:hover {
+    background-color: #1a2a1a;
+    border-color: #2a4a2a;
+}
+
+#restoreBtn:pressed {
+    background-color: #152015;
+    border-color: #1e3a1e;
+}
+
+#restoreBtnDisabled {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0;
+}
+
 #daysLeftNormal {
     font-size: 12px;
     font-family: "Consolas", "Courier New", monospace;

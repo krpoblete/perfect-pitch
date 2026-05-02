@@ -10,7 +10,7 @@ from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
 
 ROWS_PER_PAGE = 10
-COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Expires In (90 Day Retention)"]
+COLUMNS = ["Full Name", "Email", "Role", "Status", "Date Joined", "Deleted At", "Purge Date", ""]
 ROLE_OPTIONS = ["Pitcher", "Coach"]
 RETENTION_DAYS = 1
 
@@ -19,44 +19,23 @@ def _fmt_date(dt_str: str) -> str:
         return date.fromisoformat(dt_str[:10]).strftime("%b %d, %Y")
     except Exception:
         return dt_str or "—"
-    
-def _time_remaining(deleted_at_str: str) -> tuple[int, int, int, int] | None:
-    """Returns (days, hours, minutes, seconds) remaining until purge,
-    or None if already expired.
+
+def _fmt_purge_datetime(deleted_at_str: str) -> tuple[str, bool]:
+    """Return (purge_datetime_string, is_critical).
+    is_critical = True when less than 24 hours remain until purge.
     """
     try:
         from datetime import datetime, timezone, timedelta
         utc8 = timezone(timedelta(hours=8))
         deleted = datetime.fromisoformat(deleted_at_str).replace(tzinfo=utc8)
-        expires = deleted + timedelta(days=RETENTION_DAYS)
+        purge = deleted + timedelta(days=RETENTION_DAYS)
         now = datetime.now(utc8)
-        delta = expires - now
-        if delta.total_seconds() <= 0:
-            return (0, 0, 0, 0)
-        total_secs = int(delta.total_seconds())
-        days, rem = divmod(total_secs, 86400)
-        hours, rem = divmod(rem, 3600)
-        mins, secs = divmod(rem, 60)
-        return (days, hours, mins, secs) 
+        remaining = purge - now
+        critical = remaining.total_seconds() < 86400
+        purge_str = purge.strftime("%b %d, %Y  %H:%M:%S")
+        return purge_str, critical
     except Exception:
-        return None
-
-def _fmt_remaining(deleted_at_str: str) -> tuple[str, bool]:
-    """
-    Returns (formatted_string, is_critical).
-    is_critical = True when less than 24 hours remain. 
-    """
-    t = _time_remaining(deleted_at_str)
-    if t is None:
         return "—", False
-    days, hours, mins, secs = t
-    if days > 0:
-        text = f"{days}d {hours:02d}:{mins:02d}:{secs:02d}"
-        critical = days == 0
-    else:
-        text = f"{hours:02d}:{mins:02d}:{secs:02d}"
-        critical = True
-    return text, critical
 
 class UsersPage(QWidget):
     def __init__(self):
@@ -67,9 +46,9 @@ class UsersPage(QWidget):
         self._page = 0
         self._build_ui()
 
-        # Refresh expires-in countdown every second 
+        # Refresh every minute to keep status badges current (purge date is static)
         self._timer = QTimer(self)
-        self._timer.setInterval(1_000)
+        self._timer.setInterval(60_000)
         self._timer.timeout.connect(self._refresh_days)
         self._timer.start()
 
@@ -164,7 +143,7 @@ class UsersPage(QWidget):
         h = QHBoxLayout(row)
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
-        stretches = [3, 3, 2, 2, 2, 2, 2]
+        stretches = [3, 3, 2, 2, 2, 2, 2, 1]
         for col, stretch in zip(COLUMNS, stretches):
             lbl = QLabel(col)
             lbl.setObjectName("tableHeaderCell")
@@ -182,7 +161,7 @@ class UsersPage(QWidget):
         h.setContentsMargins(20, 0, 20, 0)
         h.setSpacing(0)
 
-        stretches = [3, 3, 2, 2, 2, 2, 2]
+        stretches = [3, 3, 2, 2, 2, 2, 2, 1]
         full_name = f"{user['first_name']} {user['last_name']}"
         joined = _fmt_date(user["created_at"])
 
@@ -191,7 +170,7 @@ class UsersPage(QWidget):
         name_lbl.setObjectName("tableCell")
         h.addWidget(name_lbl, stretch=stretches[0])
 
-        # Email 
+        # Email
         email_lbl = QLabel(user["email"])
         email_lbl.setObjectName("tableCell")
         h.addWidget(email_lbl, stretch=stretches[1])
@@ -199,7 +178,7 @@ class UsersPage(QWidget):
         # Role — inline dropdown for non-admins, plain label for Admin
         current_role = user["role"]
         is_admin = current_role == "Admin"
-        
+
         if is_admin:
             role_lbl = QLabel("Admin")
             role_lbl.setObjectName("roleAdminLabel")
@@ -252,18 +231,45 @@ class UsersPage(QWidget):
         deleted_lbl = QLabel(_fmt_date(deleted_at) if deleted_at else "—")
         deleted_lbl.setObjectName("tableCellMuted" if deleted_at else "tableCell")
         h.addWidget(deleted_lbl, stretch=stretches[5])
-        
-        # Expires in — live countdown for inactive accounts 
-        if deleted_at:
-            expires_text, critical = _fmt_remaining(deleted_at)
-            expires_obj = "daysLeftWarning" if critical else "daysLeftNormal"
-        else:
-            expires_text = "—"
-            expires_obj = "tableCell"
 
-        expires_lbl = QLabel(expires_text)
-        expires_lbl.setObjectName(expires_obj)
-        h.addWidget(expires_lbl, stretch=stretches[6])
+        # Purge Date — static datetime when the account will be permanently deleted
+        if deleted_at:
+            purge_str, critical = _fmt_purge_datetime(deleted_at)
+            purge_obj = "daysLeftWarning" if critical else "daysLeftNormal"
+        else:
+            purge_str = "—"
+            purge_obj = "tableCell"
+
+        purge_lbl = QLabel(purge_str)
+        purge_lbl.setObjectName(purge_obj)
+        h.addWidget(purge_lbl, stretch=stretches[6])
+
+        # Restore button — always visible; disabled/grey for active accounts
+        can_restore = not is_active and bool(deleted_at)
+        restore_btn = QPushButton()
+        restore_btn.setObjectName("restoreBtn" if can_restore else "restoreBtnDisabled")
+        restore_btn.setFixedSize(QSize(30, 30))
+        restore_btn.setIcon(get_icon("restore"))
+        restore_btn.setIconSize(QSize(16, 16))
+        if can_restore:
+            restore_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            restore_btn.setToolTip(f"Reactivate {full_name}")
+            restore_btn.clicked.connect(
+                lambda _, uid=user["id"], name=full_name:
+                    self._handle_restore(uid, name)
+            )
+        else:
+            restore_btn.setCursor(Qt.CursorShape.ForbiddenCursor)
+            restore_btn.setToolTip("Account is already active")
+            restore_btn.setEnabled(False)
+
+        restore_wrapper = QHBoxLayout()
+        restore_wrapper.setContentsMargins(0, 0, 0, 0)
+        restore_wrapper.setSpacing(0)
+        restore_wrapper.addStretch()
+        restore_wrapper.addWidget(restore_btn)
+        h.addLayout(restore_wrapper)
+        h.setStretch(h.count() - 1, stretches[7])
 
         return row
 
@@ -368,8 +374,27 @@ class UsersPage(QWidget):
             toast_error(self, f"Failed to update {name}'s role.")
 
     def _refresh_days(self):
-        """Re-render the page to update remaining days without a full DB reload."""
-        self._render_page()
+        pass  # No-op — purge date is static, no per-second re-render needed
+
+    # Restore
+    def _handle_restore(self, user_id: int, name: str):
+        from src.db import reactivate_user
+        from src.widgets.confirm_dialog import ConfirmDialog
+
+        dlg = ConfirmDialog(
+            self.window(),
+            title="Reactivate Account",
+            message=f"Reactivate {name}'s account? Their data will be fully restored."
+        )
+        dlg.exec()
+        if not dlg.result_yes():
+            return
+
+        if reactivate_user(user_id):
+            toast_success(self, f"{name}'s account has been reactivated.")
+            self.refresh()
+        else:
+            toast_error(self, f"Failed to reactivate {name}'s account.")
 
     # Lifecycle
     def refresh(self):
