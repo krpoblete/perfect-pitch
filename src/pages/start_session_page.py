@@ -268,24 +268,29 @@ class SessionSummaryDialog(QDialog):
         return card
     
 class LiveCameraCombo(QComboBox):
-    """QComboBox that re-probes available cameras every time the dropdown
-    is opened, so newly connected or disconnected devices appear
-    immediately without any background polling or page lag.
+    """QComboBox backed by a background-probed camera cache.
+
+    showPopup() populates instantly from the cache (zero main-thread
+    blocking), then kicks off a background re-probe so the next open
+    is always fresh. Never probes during a live session.
     """
 
-    def __init__(self, parent=None, repopulate_fn=None):
+    def __init__(self, parent=None, populate_fn=None, refresh_fn=None):
         super().__init__(parent)
-        self._repopulate_fn = repopulate_fn
+        self._populate_fn     = populate_fn
+        self._refresh_fn      = refresh_fn
         self._is_session_live = False
 
     def set_session_live(self, live: bool):
-        """Prevent re-probe while a session is running."""
         self._is_session_live = live
 
     def showPopup(self):
-        """Refresh the camera list before the dropdown opens."""
-        if not self._is_session_live and self._repopulate_fn:
-            self._repopulate_fn()
+        """Show cached list instantly, then trigger background refresh."""
+        if not self._is_session_live:
+            if self._populate_fn:
+                self._populate_fn()
+            if self._refresh_fn:
+                self._refresh_fn()
         super().showPopup()
 
 
@@ -421,7 +426,7 @@ class CameraReconnectDialog(QDialog):
             for pos, idx in enumerate(found):
                 name = device_names[pos] if pos < len(device_names) else f"Camera {idx}"
                 if idx == self._lost_index:
-                    label = f"{name}  (disconnected)"
+                    label = f"{name}"
                 else:
                     label = name
                 self._combo.addItem(label, idx)
@@ -444,7 +449,7 @@ class CameraReconnectDialog(QDialog):
         for i in range(self._combo.count()):
             if self._combo.itemData(i) == self._selected_index:
                 # Strip the disconnected suffix if present
-                return self._combo.itemText(i)(" (disconnected)", "").strip()
+                return self._combo.itemText(i).replace("  ⚠  (disconnected)", "").strip()
         return f"Camera {self._selected_index}"
 
 class StartSessionPage(QWidget):
@@ -455,23 +460,26 @@ class StartSessionPage(QWidget):
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
-        self._ml_bundle = ml_bundle   # (model, scaler, threshold, joint_thresholds)
+        self._ml_bundle = ml_bundle    # (model, scaler, threshold, joint_thresholds)
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
-        self._threshold = None        # user's current token pool
-        self._recommended_cap = None  # USA Baseball age-based cap
-        self._used_today = 0          # pitches thrown today
-        self._tokens_remaining = 0    # threshold - used_today 
+        self._threshold = None         # user's current token pool
+        self._recommended_cap = None   # USA Baseball age-based cap
+        self._used_today = 0           # pitches thrown today
+        self._tokens_remaining = 0     # threshold - used_today 
         self._throwing_hand = "RHP"   
         self._worker = None
-        self._summary_dlg = None      # ref to open dialog for skeleton injection
-        self._skeleton_path = ""      # path to last generated skeleton PNG
-        self._end_pitch_count = 0     # snapshot at END time for dialog
-        self._end_mistakes = 0        # snapshot at END time for dialog
-        self._ending_worker = None    # strong ref held during async shutdown
-        self._worker_state = ""       # last state emitted by PitchWorker
-        self._camera_index = 0        # active camera device index
+        self._summary_dlg = None       # ref to open dialog for skeleton injection
+        self._skeleton_path = ""       # path to last generated skeleton PNG
+        self._end_pitch_count = 0      # snapshot at END time for dialog
+        self._end_mistakes = 0         # snapshot at END time for dialog
+        self._ending_worker = None     # strong ref held during async shutdown
+        self._worker_state = ""        # last state emitted by PitchWorker
+        self._camera_index        = 0   # active camera device index
+        self._desired_camera_name = ""  # name user wants — survives index shifts
+        self._active_camera_name  = ""  # name actually in use (set on START)
+        self._camera_cache        = []  # cached (idx, name) pairs from last probe
         self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
         self.setObjectName("contentPage")
         self.build_ui()
@@ -499,7 +507,7 @@ class StartSessionPage(QWidget):
 
         root.addWidget(feed_wrapper, stretch=3)
 
-        # Stats panel
+        # Stats panel — width 13% of screen, clamped 180-240 px
         from PyQt6.QtWidgets import QApplication as _QApp
         _sw = _QApp.primaryScreen().availableGeometry().width()
         _panel_w = max(180, min(240, int(_sw * 0.13)))
@@ -561,13 +569,15 @@ class StartSessionPage(QWidget):
 
         self.camera_combo = LiveCameraCombo(
             parent=self,
-            repopulate_fn=self._populate_camera_combo,
+            populate_fn=self._populate_camera_combo,
+            refresh_fn=self._refresh_camera_cache,
         )
         self.camera_combo.setObjectName("cameraCombo")
         self.camera_combo.setFixedHeight(28)
         self.camera_combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.camera_combo.setToolTip("Select camera source — opens fresh list on click")
-        self._populate_camera_combo()
+        # Initial background probe; combo shows "No cameras found" until done
+        self._refresh_camera_cache()
         self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
         guide_toggle_row.addWidget(self.camera_combo, stretch=1)
 
@@ -784,47 +794,81 @@ class StartSessionPage(QWidget):
         return names
 
     def _populate_camera_combo(self):
-        """Probe camera indices, validate by reading a frame, fetch real
-        device names via PnP. Avoids phantom ghost devices that isOpened()
-        returns True for but never deliver frames."""
-        import cv2 as _cv2
+        """Fill the combo from _camera_cache and restore the user's desired camera.
+
+        Selection priority:
+          1. _desired_camera_name — the user's explicit choice (survives index shifts)
+          2. _camera_index — fallback if name not found in new cache
+        Never overwrites _desired_camera_name so it always reflects user intent.
+        """
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
- 
-        device_names = self._get_camera_names()
- 
-        # Validate each index by actually grabbing a frame — ghost DirectShow
-        # devices (e.g. old webcam drivers) open but never deliver data.
-        found = []
-        for idx in range(8):
-            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
-            if cap.isOpened():
-                ret, _ = cap.read()
-                if ret:
-                    found.append(idx)
-                cap.release()
- 
-        if not found:
+        cache = self._camera_cache
+
+        if not cache:
             self.camera_combo.addItem("No cameras found", -1)
-        else:
-            for pos, idx in enumerate(found):
-                # Match by position in PnP list (same order as DirectShow enumeration)
-                name = device_names[pos] if pos < len(device_names) else f"Camera {idx}"
-                label = f"{name} (default)" if idx == 0 else name
-                self.camera_combo.addItem(label, idx)
- 
-        for i in range(self.camera_combo.count()):
-            if self.camera_combo.itemData(i) == self._camera_index:
-                self.camera_combo.setCurrentIndex(i)
-                break
- 
+            self.camera_combo.blockSignals(False)
+            return
+
+        for idx, name in cache:
+            label = f"{name} (default)" if idx == 0 else name
+            self.camera_combo.addItem(label, idx)
+
+        # 1. Try to match by desired name
+        selected = False
+        if self._desired_camera_name:
+            for i in range(self.camera_combo.count()):
+                item_idx = self.camera_combo.itemData(i)
+                item_name = next((n for ix, n in cache if ix == item_idx), "")
+                if item_name == self._desired_camera_name:
+                    self.camera_combo.setCurrentIndex(i)
+                    self._camera_index = item_idx   # sync index to new position
+                    selected = True
+                    break
+
+        # 2. Fall back to index match
+        if not selected:
+            for i in range(self.camera_combo.count()):
+                if self.camera_combo.itemData(i) == self._camera_index:
+                    self.camera_combo.setCurrentIndex(i)
+                    # Also set desired name so future probes select correctly
+                    item_idx = self.camera_combo.itemData(i)
+                    self._desired_camera_name = next(
+                        (n for ix, n in cache if ix == item_idx), ""
+                    )
+                    break
+
         self.camera_combo.blockSignals(False)
 
+    def _refresh_camera_cache(self):
+        """Probe cameras in a daemon thread; update cache + repopulate combo
+        on the main thread when done. Uses isOpened() only — no cap.read()."""
+        import threading as _t, cv2 as _cv2
+        def _probe():
+            device_names = self._get_camera_names()
+            found = []
+            for idx in range(8):
+                cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+                if cap.isOpened():
+                    found.append(idx)
+                    cap.release()
+            cache = []
+            for pos, idx in enumerate(found):
+                name = (device_names[pos]
+                        if pos < len(device_names) else f"Camera {idx}")
+                cache.append((idx, name))
+            self._camera_cache = cache
+            QTimer.singleShot(0, self._populate_camera_combo)
+        _t.Thread(target=_probe, daemon=True).start()
+
     def _on_camera_changed(self, combo_idx: int):
-        """Update active camera index — takes effect on next START."""
+        """Update camera index and desired name — takes effect on next START."""
         idx = self.camera_combo.itemData(combo_idx)
         if idx is not None and idx >= 0:
             self._camera_index = idx
+            name = next((n for ix, n in self._camera_cache if ix == idx), "")
+            if name:
+                self._desired_camera_name = name   # user's explicit choice
 
     def _toggle_guide_card(self):
         """Toggle the camera guide card visibility and update help icon color."""
@@ -1023,6 +1067,14 @@ class StartSessionPage(QWidget):
         self.token_status_widget.hide()
         self.camera_guide_card.hide()
         self._running = True
+        # Confirm active camera name at START from desired (or index fallback)
+        self._active_camera_name = (
+            self._desired_camera_name
+            or next(
+                (name for idx, name in self._camera_cache if idx == self._camera_index),
+                f"Camera {self._camera_index}",
+            )
+        )
         self.start_btn.setEnabled(False)
         self.end_btn.setEnabled(True)
         if hasattr(self, "camera_combo"):
@@ -1253,18 +1305,8 @@ class StartSessionPage(QWidget):
         self.end_btn.setEnabled(False)
         self.session_finished.emit()
  
-        # Get the real name of the lost camera for user-friendly messages
-        device_names = self._get_camera_names()
-        found_indices = []
-        import cv2 as _cv2_tmp
-        for idx in range(8):
-            cap = _cv2_tmp.VideoCapture(idx, _cv2_tmp.CAP_DSHOW)
-            if cap.isOpened():
-                cap.release()
-                found_indices.append(idx)
-        pos = found_indices.index(self._camera_index) if self._camera_index in found_indices else -1
-        lost_name = (device_names[pos] if 0 <= pos < len(device_names)
-                     else f"Camera {self._camera_index}")
+        # Use the name captured at START — no re-probing needed
+        lost_name = self._active_camera_name or f"Camera {self._camera_index}"
 
         dlg = CameraReconnectDialog(
             self,
@@ -1275,7 +1317,9 @@ class StartSessionPage(QWidget):
             new_idx = dlg.selected_camera_index()
             new_name = dlg.selected_camera_name()
             self._camera_index = new_idx
-            self._populate_camera_combo()
+            self._desired_camera_name = new_name
+            self._active_camera_name  = ""
+            self._refresh_camera_cache()   # re-probe then repopulate
             toast_warning(
                 self,
                 f"\"{new_name}\" selected. Press START to begin a new session."
