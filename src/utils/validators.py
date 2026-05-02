@@ -35,6 +35,35 @@ def validate_name(value: str, field: str = "Name") -> tuple[bool, str]:
 
 ALLOWED_DOMAINS = {"cvsu.edu.ph", "gmail.com", "yahoo.com", "outlook.com"}
 
+def validate_password(password: str) -> tuple[bool, str]:
+    """
+    Validate password strength, collecting ALL failing rules at once.
+    Returns (True, "") on success or (False, error_message) listing every issue.
+    Rules:
+        - At least 8 characters
+        - At least one lowercase letter
+        - At least one uppercase letter
+        - At least one digit
+    """
+    errors = []
+    if len(password) < 8:
+        errors.append("at least 8 characters")
+    if not re.search(r"[a-z]", password):
+        errors.append("one lowercase letter")
+    if not re.search(r"[A-Z]", password):
+        errors.append("one uppercase letter")
+    if not re.search(r"\d", password):
+        errors.append("one number")
+    if not errors:
+        return True, ""
+    if len(errors) == 1:
+        msg = f"Password must contain {errors[0]}."
+    else:
+        joined = ", ".join(errors[:-1]) + f", and {errors[-1]}"
+        msg = f"Password must contain {joined}."
+    return False, msg
+
+
 def validate_email(email: str) -> tuple[bool, str]:
     """Validate email format and allowed domain."""
     import re

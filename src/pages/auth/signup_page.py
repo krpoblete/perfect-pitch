@@ -200,18 +200,6 @@ class SignupPage(QWidget):
         from src.utils.validators import validate_email
         return validate_email(email)
     
-    def _is_strong_password(self, password):
-        import re
-        if len(password) < 8:
-            return False, "Password must be at least 8 characters long."
-        if not re.search(r"[a-z]", password):
-            return False, "Password must contain at least one lowercase letter."
-        if not re.search(r"[A-Z]", password):
-            return False, "Password must contain at least one uppercase letter."
-        if not re.search(r"\d", password):
-            return False, "Password must contain at least one number."
-        return True, ""
-
     def _handle_signup(self):
         from src.db import create_user
 
@@ -226,7 +214,7 @@ class SignupPage(QWidget):
         if not all([first_name, last_name, email, password, confirm_pw]):
             toast_error(self, "Please fill in all fields.")
             return
-        from src.utils.validators import validate_name
+        from src.utils.validators import validate_name, validate_password
         ok, msg = validate_name(first_name, "First Name")
         if not ok:
             toast_error(self, msg)
@@ -239,7 +227,7 @@ class SignupPage(QWidget):
         if not valid_email:
             toast_error(self, email_msg)
             return
-        valid_pw, pw_msg = self._is_strong_password(password)
+        valid_pw, pw_msg = validate_password(password)
         if not valid_pw:
             toast_error(self, pw_msg)
             return 

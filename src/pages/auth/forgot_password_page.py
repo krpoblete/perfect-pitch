@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
@@ -240,7 +239,6 @@ class ForgotPasswordPage(QWidget):
         self.stack.setCurrentIndex(1)
 
     def _handle_reset(self):
-        import re
         import bcrypt
         from src.db import get_connection, get_user_by_id
 
@@ -250,17 +248,11 @@ class ForgotPasswordPage(QWidget):
         if not password or not confirm:
             toast_error(self, "Please fill in all fields.")
             return
-        if len(password) < 8:
-            toast_error(self, "Password must be at least 8 characters long.")
-            return
-        if not re.search(r"[a-z]", password):
-            toast_error(self, "Password must contain at least one lowercase letter.")
-            return
-        if not re.search(r"[A-Z]", password):
-            toast_error(self, "Password must contain at least one uppercase letter.")
-            return
-        if not re.search(r"\d", password):
-            toast_error(self, "Password must contain at least one number.")
+
+        from src.utils.validators import validate_password
+        valid_pw, pw_msg = validate_password(password)
+        if not valid_pw:
+            toast_error(self, pw_msg)
             return
         if password != confirm:
             toast_error(self, "Passwords do not match. Please try again.")
