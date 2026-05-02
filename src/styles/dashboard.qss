@@ -71,3 +71,85 @@
 #dashVertDivider {
     background-color: #1e1e1e;
 }
+
+/* Clickable date link in history table */
+#sessionDateLink {
+    background: transparent;
+    border: none;
+    color: #4a9eff;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    padding: 0;
+    text-decoration: underline;
+}
+
+#sessionDateLink:hover {
+    color: #79b8ff;
+}
+
+#sessionDateLink:pressed {
+    color: #2a7edf;
+}
+
+/* Skeleton viewer dialog */
+#skeletonViewerDialog {
+    background-color: #0e0e0e;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+}
+
+#skeletonViewerHeader {
+    background-color: #111111;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+
+#skeletonViewerBadge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #555555;
+    background: transparent;
+}
+
+#skeletonViewerCloseBtn {
+    background: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-radius: 6px;
+    color: #888888;
+    font-size: 12px;
+    padding: 0 12px;
+}
+
+#skeletonViewerCloseBtn:hover {
+    background: #222222;
+    color: #cccccc;
+    border-color: #3e3e3e;
+}
+
+#skeletonViewerDivider {
+    background-color: #1e1e1e;
+}
+
+#skeletonViewerImage {
+    background: transparent;
+}
+
+#skeletonViewerMissing {
+    color: #555555;
+    font-size: 13px;
+    background: transparent;
+}
+
+#skeletonViewerFooter {
+    background-color: #111111;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+#skeletonViewerFooterLabel {
+    font-size: 12px;
+    color: #555555;
+    background: transparent;
+}

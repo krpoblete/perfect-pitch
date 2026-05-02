@@ -1,9 +1,11 @@
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy
+    QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy,
+    QDialog,
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtGui import QPixmap
 
 from src.utils.icons import get_icon
 
@@ -15,6 +17,135 @@ def _fmt_dt(dt_str: str) -> str:
         return dt.strftime("%b %d, %Y %I:%M %p")
     except Exception:
         return dt_str or "—"
+
+
+class SkeletonViewerDialog(QDialog):
+    def __init__(self, parent, session):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint
+        )
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setObjectName("skeletonViewerDialog")
+
+        self._path     = session["path"] or ""
+        self._date_str = _fmt_dt(session["date"])
+        self._pitches  = int(session["total_pitch"])
+        self._accuracy = float(session["accuracy"] or 0.0)
+
+        self._build_ui()
+        self._size_and_position(parent)
+
+    def _size_and_position(self, parent):
+        try:
+            top = parent.window()
+            geo = top.frameGeometry()
+            w   = int(geo.width()  * 0.75)
+            h   = int(geo.height() * 0.75)
+            cx  = geo.x() + (geo.width()  - w) // 2
+            cy  = geo.y() + (geo.height() - h) // 2
+        except Exception:
+            from PyQt6.QtWidgets import QApplication
+            sg  = QApplication.primaryScreen().availableGeometry()
+            w, h = int(sg.width() * 0.75), int(sg.height() * 0.75)
+            cx  = sg.x() + (sg.width()  - w) // 2
+            cy  = sg.y() + (sg.height() - h) // 2
+        self.setFixedSize(w, h)
+        self.move(cx, cy)
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header.setObjectName("skeletonViewerHeader")
+        header.setFixedHeight(52)
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(24, 0, 16, 0)
+        hl.setSpacing(10)
+
+        badge = QLabel("SESSION REVIEW")
+        badge.setObjectName("skeletonViewerBadge")
+        hl.addWidget(badge)
+        hl.addStretch()
+
+        close_btn = QPushButton("✕  Close")
+        close_btn.setObjectName("skeletonViewerCloseBtn")
+        close_btn.setFixedHeight(32)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self.reject)
+        hl.addWidget(close_btn)
+
+        root.addWidget(header)
+
+        # Header divider
+        div_top = QFrame()
+        div_top.setObjectName("skeletonViewerDivider")
+        div_top.setFixedHeight(1)
+        root.addWidget(div_top)
+
+        # Image body
+        self._img_lbl = QLabel()
+        self._img_lbl.setObjectName("skeletonViewerImage")
+        self._img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._img_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        root.addWidget(self._img_lbl, stretch=1)
+
+        # Footer divider
+        div_bot = QFrame()
+        div_bot.setObjectName("skeletonViewerDivider")
+        div_bot.setFixedHeight(1)
+        root.addWidget(div_bot)
+
+        # Footer stat strip
+        footer = QWidget()
+        footer.setObjectName("skeletonViewerFooter")
+        footer.setFixedHeight(44)
+        fl = QHBoxLayout(footer)
+        fl.setContentsMargins(24, 0, 24, 0)
+        fl.setSpacing(0)
+
+        dot = "  ·  "
+        stat_text = (
+            f"{self._date_str}"
+            f"{dot}{self._pitches} pitch{'es' if self._pitches != 1 else ''}"
+            f"{dot}{self._accuracy:.2f}% accuracy"
+        )
+        stat_lbl = QLabel(stat_text)
+        stat_lbl.setObjectName("skeletonViewerFooterLabel")
+        fl.addWidget(stat_lbl)
+        fl.addStretch()
+
+        root.addWidget(footer)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._load_image)
+
+    def _load_image(self):
+        import os
+        if self._path and os.path.exists(self._path):
+            px = QPixmap(self._path)
+            if not px.isNull():
+                tw = self._img_lbl.width()
+                th = self._img_lbl.height()
+                scaled = px.scaled(
+                    tw, th,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                self._img_lbl.setPixmap(scaled)
+                return
+
+        # Graceful fallback — file missing or unreadable
+        self._img_lbl.setText("⚠  Skeleton image not found on disk.")
+        self._img_lbl.setObjectName("skeletonViewerMissing")
+        self._img_lbl.style().unpolish(self._img_lbl)
+        self._img_lbl.style().polish(self._img_lbl)
 
 class DashboardPage(QWidget):
     def __init__(self, user_id: int):
@@ -217,24 +348,55 @@ class DashboardPage(QWidget):
 
         accuracy = session["accuracy"]
         acc_str = f"{accuracy:.2f}%" if accuracy else "0.00%"
+        date_str = _fmt_dt(session["date"])
+        has_skeleton = bool(session["path"])
 
-        cells = []
-        if extra_col:
-            cells.append((extra_col(session), stretches[0]))
-            cells.append((_fmt_dt(session["date"]), stretches[1]))
-            cells.append((str(session["total_pitch"]), stretches[2]))
-            cells.append((str(session["mistakes"]), stretches[3]))
-            cells.append((acc_str, stretches[4]))
-        else:
-            cells.append((_fmt_dt(session["date"]), stretches[0]))
-            cells.append((str(session["total_pitch"]), stretches[1]))
-            cells.append((str(session["mistakes"]), stretches[2]))
-            cells.append((acc_str, stretches[3]))
-
-        for text, stretch in cells:
-            lbl = QLabel(str(text))
+        def _date_widget(stretch: int) -> tuple:
+            """Return (widget, stretch) for the Date column.
+            A link-styled QPushButton when a skeleton image exists,
+            a plain QLabel otherwise."""
+            if has_skeleton:
+                btn = QPushButton(date_str)
+                btn.setObjectName("sessionDateLink")
+                btn.setFlat(True)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.clicked.connect(lambda: self._open_skeleton_viewer(session))
+                return btn, stretch
+            lbl = QLabel(date_str)
             lbl.setObjectName("tableCell")
-            h.addWidget(lbl, stretch=stretch)
+            return lbl, stretch
+
+        if extra_col:
+            # Coach layout: Pitcher | Date | Pitches | Mistakes | Accuracy
+            pitcher_lbl = QLabel(str(extra_col(session)))
+            pitcher_lbl.setObjectName("tableCell")
+            h.addWidget(pitcher_lbl, stretch=stretches[0])
+
+            date_w, date_s = _date_widget(stretches[1])
+            h.addWidget(date_w, stretch=date_s)
+
+            for text, stretch in [
+                (str(session["total_pitch"]), stretches[2]),
+                (str(session["mistakes"]),    stretches[3]),
+                (acc_str,                     stretches[4]),
+            ]:
+                lbl = QLabel(text)
+                lbl.setObjectName("tableCell")
+                h.addWidget(lbl, stretch=stretch)
+        else:
+            # Pitcher / Admin layout: Date | Pitches | Mistakes | Accuracy
+            date_w, date_s = _date_widget(stretches[0])
+            h.addWidget(date_w, stretch=date_s)
+
+            for text, stretch in [
+                (str(session["total_pitch"]), stretches[1]),
+                (str(session["mistakes"]),    stretches[2]),
+                (acc_str,                     stretches[3]),
+            ]:
+                lbl = QLabel(text)
+                lbl.setObjectName("tableCell")
+                h.addWidget(lbl, stretch=stretch)
+
         return row
     
     # Role dasboards
@@ -420,6 +582,11 @@ class DashboardPage(QWidget):
             lambda s, alternate: self._make_session_row(s, alternate, stretches)
         ) 
         self._render_rows()
+
+    # Skeleton viewer
+    def _open_skeleton_viewer(self, session):
+        dlg = SkeletonViewerDialog(self, session)
+        dlg.exec()
 
     # Lifecycle
     def refresh(self):
