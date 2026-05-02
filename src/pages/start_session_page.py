@@ -480,6 +480,10 @@ class StartSessionPage(QWidget):
         self._desired_camera_name = ""  # name user wants — survives index shifts
         self._active_camera_name  = ""  # name actually in use (set on START)
         self._camera_cache        = []  # cached (idx, name) pairs from last probe
+        # Resolution recorded the first time the external webcam is used.
+        # When the integrated camera is later selected, PitchWorker crops its
+        # feed to this size so both cameras share the same effective FOV.
+        self._reference_resolution: tuple | None = None  # (width, height) or None
         self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
         self.setObjectName("contentPage")
         self.build_ui()
@@ -932,15 +936,18 @@ class StartSessionPage(QWidget):
         used_today = status["used_today"]
         threshold = status["threshold"]
 
-        # effective_max mirrors account_settings deduction logic exactly
-        effective_max = max(0, cap - used_today) 
+        # effective_max: how many pitches remain under the recommended cap today
+        effective_max = max(0, cap - used_today)
 
-        # Tokens remaining = what the user can actually still pitch today
-        # clamped to both their saved threshold and the effective_max
         self._threshold = threshold
         self._recommended_cap = cap
         self._used_today = used_today
-        self._tokens_remaining = min(threshold, effective_max)
+
+        # Tokens remaining = pitches left under the user's set threshold.
+        # Uses threshold - used_today so that once the user burns through their
+        # threshold it stays at 0 until they raise it in Account Settings —
+        # raising the threshold immediately unlocks START without waiting for midnight.
+        self._tokens_remaining = max(0, threshold - used_today)
 
         # Update pitches left card
         self.token_val.setText(str(self._tokens_remaining))
@@ -957,6 +964,8 @@ class StartSessionPage(QWidget):
         if locked_status["locked"]:
             self._apply_token_locked(locked_status)
         else:
+            # Hide the whole warning widget — not just the inner label
+            self.token_status_widget.hide()
             self.token_status_lbl.hide()
             if not self._running:
                 self.start_btn.setEnabled(True)
@@ -998,6 +1007,7 @@ class StartSessionPage(QWidget):
         )
         self.token_status_lbl.setText(msg)
         self.token_status_lbl.show()
+        self.token_status_widget.show()
 
     def _handle_token_exhausted_mid_session(self):
         """Called during a live session when tokens hit zero mid-pitch."""
@@ -1013,10 +1023,12 @@ class StartSessionPage(QWidget):
 
         self._stop_capture()
 
-        headroom = max(0, (self._recommended_cap or 0) - (self._threshold or 0))
+        effective_max = max(0, (self._recommended_cap or 0) - (self._used_today or 0))
+        headroom = max(0, effective_max - (self._threshold or 0))
         status = {
             "threshold": self._threshold,
             "recommended_cap": self._recommended_cap,
+            "used_today": self._used_today,
             "headroom": headroom,
         }
         self._apply_token_locked(status)
@@ -1079,6 +1091,30 @@ class StartSessionPage(QWidget):
             feed_w = screen.width() - 300 - 280
             feed_h = screen.height() - 48
 
+        # Determine whether this is the first (external) camera or the
+        # integrated camera.  Index 0 is almost always the integrated webcam
+        # on laptops; any index > 0 is treated as the external webcam.
+        #
+        # When the external webcam runs for the first time we record its
+        # resolution.  On subsequent sessions with the integrated camera that
+        # stored resolution is passed to PitchWorker, which crops/letterboxes
+        # the integrated feed to match — giving both cameras the same FOV.
+        is_external = self._camera_index != 0
+
+        if is_external:
+            # Peek at the external camera's actual resolution (MSMF, no LED)
+            try:
+                import cv2 as _cv2
+                _peek = _cv2.VideoCapture(self._camera_index, _cv2.CAP_MSMF)
+                if _peek.isOpened():
+                    _rw = int(_peek.get(_cv2.CAP_PROP_FRAME_WIDTH))
+                    _rh = int(_peek.get(_cv2.CAP_PROP_FRAME_HEIGHT))
+                    if _rw > 0 and _rh > 0:
+                        self._reference_resolution = (_rw, _rh)
+                _peek.release()
+            except Exception:
+                pass
+
         # Start PitchWorker
         self._worker = PitchWorker(
             camera_id=self._camera_index,
@@ -1087,6 +1123,7 @@ class StartSessionPage(QWidget):
             throwing_hand=self._throwing_hand,
             ml_bundle=self._ml_bundle,
             user_id=self.user_id,
+            reference_resolution=self._reference_resolution if not is_external else None,
             parent=self,
         )
         self._worker.frame_ready.connect(self.update_frame)

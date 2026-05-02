@@ -44,16 +44,18 @@ class PitchWorker(QThread):
 
     def __init__(self, camera_id: int = 0, width: int = 1920,
                  height: int = 1080, throwing_hand: str = "RHP",
-                 ml_bundle=None, user_id: int = 0, parent = None):
+                 ml_bundle=None, user_id: int = 0, 
+                 reference_resolution: tuple | None = None, parent = None):
         super().__init__(parent)
         self.camera_id = camera_id
         self.width = width
         self.height = height
         self.throwing_hand = throwing_hand
-        self._ml_bundle = ml_bundle           # pre-loaded (model, scaler, threshold, thresholds)
-        self.user_id = user_id                # used for artifact folder naming (collision-safe)
+        self._ml_bundle = ml_bundle                        # pre-loaded (model, scaler, threshold, thresholds)
+        self.user_id = user_id                             # used for artifact folder naming (collision-safe)
+        self._reference_resolution = reference_resolution  # (w, h) of external cam, or None
         self._stop_event = threading.Event()
-        self.skeleton_path = ""               # written by worker thread, read by main after wait()
+        self.skeleton_path = ""                            # written by worker thread, read by main after wait()
 
     def stop(self):
         self._stop_event.set()
@@ -190,6 +192,32 @@ class PitchWorker(QThread):
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         DETECT_WIDTH = max(1, round(actual_w * 0.1))
         DETECT_HEIGHT = max(1, round(actual_h * 0.1))
+
+        # --- Integrated-camera FOV normalisation ---
+        # When _reference_resolution is set the user previously ran the external
+        # webcam which has "the perfect view".  We centre-crop the integrated
+        # camera's larger (or differently-shaped) frame to match the external
+        # camera's aspect ratio, so MediaPipe sees the same framing on both.
+        _crop_rect: tuple | None = None   # (x, y, w, h) in actual_w × actual_h space
+        if self._reference_resolution is not None:
+            ref_w, ref_h = self._reference_resolution
+            ref_ar = ref_w / max(ref_h, 1)
+            src_ar = actual_w / max(actual_h, 1)
+            if abs(src_ar - ref_ar) > 0.02:          # only crop when AR differs
+                if src_ar > ref_ar:
+                    # source is wider — crop sides
+                    crop_w = int(actual_h * ref_ar)
+                    crop_h = actual_h
+                else:
+                    # source is taller — crop top/bottom
+                    crop_w = actual_w
+                    crop_h = int(actual_w / ref_ar)
+                cx = (actual_w - crop_w) // 2
+                cy = (actual_h - crop_h) // 2
+                _crop_rect = (cx, cy, crop_w, crop_h)
+                # Recompute DETECT size from the cropped region
+                DETECT_WIDTH  = max(1, round(crop_w * 0.1))
+                DETECT_HEIGHT = max(1, round(crop_h * 0.1))
         
         # Mirror LHP so the model always see the same side-view
         flip = (self.throwing_hand == "LHP")
@@ -287,6 +315,11 @@ class PitchWorker(QThread):
 
             if flip:
                 frame = cv2.flip(frame, 1)
+
+            # Centre-crop to match external webcam's aspect ratio (integrated cam only)
+            if _crop_rect is not None:
+                cx, cy, cw, ch = _crop_rect
+                frame = frame[cy:cy + ch, cx:cx + cw]
 
             frame_count += 1
             ts_ms = int((time.perf_counter() - t0) * 1000)

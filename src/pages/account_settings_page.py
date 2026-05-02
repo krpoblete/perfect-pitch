@@ -485,28 +485,32 @@ class AccountSettingsPage(QWidget):
         cap = get_pitch_max(self._dob)
         user_today = get_pitches_used_today(self.user_id)
 
-        # effective_max = remaining pitches available today 
-        effective_max = max(1, cap - user_today)
+        # effective_max = remaining pitches available under the recommended cap today
+        effective_max = max(0, cap - user_today)
 
-        # Exhausted = user has used at or beyond their threshold today 
+        # saved threshold from DB
         saved = user["pitch_threshold"] or recommended
-        is_exhausted = user_today >= saved
 
-        # Clamp saved threshold to what's still available (handles mid-day changes) 
-        threshold = min(saved, effective_max)
+        # The displayed/active threshold is the saved value, clamped to the cap
+        threshold = min(saved, cap)
         self._original_threshold = threshold
 
-        # Spinbox range: always 1 → effective_max so user can raise/lower freely
+        # Spinbox range:
+        #   min = user_today + 1  so the user can never set a threshold they already exceeded
+        #   max = cap             can't exceed the recommended cap
+        spinbox_min = min(user_today + 1, cap)  # clamp so min never exceeds max
         self.threshold_input.blockSignals(True)
-        self.threshold_input.setRange(1, effective_max)
-        self.threshold_input.setValue(threshold)
+        self.threshold_input.setRange(spinbox_min, cap)
+        self.threshold_input.setValue(max(threshold, spinbox_min))
         self.threshold_input.blockSignals(False)
 
-        # Lock spinbox only when truly exhausted
-        self.threshold_input.setEnabled(not is_exhausted and self._role != "Coach")
-        if is_exhausted:
+        # Lock spinbox only when the full cap is exhausted (not just the threshold)
+        # — that way the user can always raise their threshold to keep pitching
+        cap_exhausted = user_today >= cap
+        self.threshold_input.setEnabled(not cap_exhausted and self._role != "Coach")
+        if cap_exhausted:
             self.threshold_input.setToolTip(
-                "You've used all your pitches today. Replenishes at midnight."
+                "You've reached your maximum daily pitch limit. Replenishes at midnight."
             )
             self.threshold_input.setCursor(Qt.CursorShape.ForbiddenCursor)
         else:
@@ -516,8 +520,8 @@ class AccountSettingsPage(QWidget):
         # Recommended cap indicator
         self.rec_cap_lbl.setText(f"Recommended: {cap} pitches/day")
 
-        # Remaining pitches today indicator
-        remaining = max(0, effective_max)
+        # Remaining today = threshold - used_today, matches Start Session exactly
+        remaining = max(0, threshold - user_today)
         self.remaining_lbl.setText(f"Remaining today: {remaining}")
         self.remaining_lbl.setStyleSheet(
             "color: #4ecb71; background: transparent;"
@@ -562,13 +566,13 @@ class AccountSettingsPage(QWidget):
         else:
             # Restore hand buttons to correct active/inactive state
             active_hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
-            self.rhp_btn.setObjectName("handBtnActive" if active_hand == "RHP" else "handBtn") 
+            self.rhp_btn.setObjectName("handBtnActive" if active_hand == "RHP" else "handBtn")
             self.lhp_btn.setObjectName("handBtnActive" if active_hand == "LHP" else "handBtn")
             self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            self.threshold_input.setEnabled(True)
+            # Do NOT unconditionally re-enable spinbox here —
+            # cap_exhausted state was already applied above and must be preserved
             self.threshold_input.setObjectName("thresholdSpinBox")
-            self.threshold_input.setCursor(Qt.CursorShape.IBeamCursor)
 
         # Force QSS re-evaluation on hand buttons and spinbox
         for w in (self.rhp_btn, self.lhp_btn, self.threshold_input):
@@ -627,11 +631,10 @@ class AccountSettingsPage(QWidget):
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
-        from src.db import get_pitches_used_today
-        used_today = get_pitches_used_today(self.user_id)
         cap = get_pitch_max(self._dob)
-        effective_max = max(1, cap - used_today)
-        threshold = min(self.threshold_input.value(), effective_max)
+        # Save the spinbox value directly — it is already constrained to [used_today+1, cap]
+        # by the spinbox range set in refresh(), so no further clamping is needed.
+        threshold = min(self.threshold_input.value(), cap)
         hand = "RHP" if self.rhp_btn.isChecked() else "LHP" 
 
         ok, msg = validate_name(first_name, "First Name")
