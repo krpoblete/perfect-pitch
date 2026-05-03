@@ -253,6 +253,11 @@ class MainWindow(FramelessMainWindow):
             "account_settings": AccountSettingsPage(self.user_id),
         }
 
+        # Hide all pages before adding to the stack — prevents Qt from briefly
+        # painting unparented QWidgets as top-level windows on first show().
+        for page in self.pages.values():
+            page.hide()
+
         for page in self.pages.values():
             self.stack.addWidget(page)
 
@@ -479,44 +484,38 @@ class MainWindow(FramelessMainWindow):
 
     def _lock_nav(self):
         """Disable all nav buttons and window actions while a session is live."""
-        self._session_live = True 
+        self._session_live = True
         for btn in self.nav_buttons.values():
             btn.setEnabled(False)
-        # Disable Help button, close the drawer, and disable all its action buttons 
-        if hasattr(self, "guide_btn"):
+        if self.guide_btn is not None:
             self.guide_btn.setEnabled(False)
             self._close_guide()
-        if hasattr(self, "guide_drawer"):
+        if self.guide_drawer is not None:
             for child in self.guide_drawer.findChildren(QPushButton):
                 child.setEnabled(False)
-        # Disable logout button
         bottom = getattr(self, "_sidebar_bottom", None)
         if bottom:
             for child in bottom.findChildren(QPushButton):
                 if child.objectName() == "logoutBtn":
                     child.setEnabled(False)
-        # Disable window minimize/close via WindowButtons widget
         if hasattr(self, "win_btns"):
             self.win_btns.setEnabled(False)
 
     def _unlock_nav(self):
         """Re-enable all nav, logout, and window actions after session ends."""
-        self._session_live = False 
+        self._session_live = False
         for btn in self.nav_buttons.values():
             btn.setEnabled(True)
-        # Re-enable Help button and its drawer action buttons 
-        if hasattr(self, "guide_btn"):
+        if self.guide_btn is not None:
             self.guide_btn.setEnabled(True)
-        if hasattr(self, "guide_drawer"):
+        if self.guide_drawer is not None:
             for child in self.guide_drawer.findChildren(QPushButton):
                 child.setEnabled(True)
-        # Re-enable logout button
         bottom = getattr(self, "_sidebar_bottom", None)
         if bottom:
             for child in bottom.findChildren(QPushButton):
                 if child.objectName() == "logoutBtn":
                     child.setEnabled(True)
-        # Re-enable window buttons
         if hasattr(self, "win_btns"):
             self.win_btns.setEnabled(True)
 
