@@ -399,44 +399,53 @@ class CameraReconnectDialog(QDialog):
         """Probe cameras and populate the reconnect combo.
 
         Uses CAP_MSMF (no LED activation, no cap.read()).
-        Names are fetched via StartSessionPage._get_camera_names() — the same
-        single-process PowerShell call used by the main probe, which also
-        covers OBS Virtual Camera via the 'obs' WMI filter.
+        Names are fetched via StartSessionPage._get_camera_names(), which
+        returns a (physical_names, virtual_names) tuple — both lists are
+        merged in order to match the MSMF + DSHOW enumeration sequence.
+
+        The lost camera is already gone from the OS by the time this runs,
+        so its index will not appear in the MSMF scan. We therefore show
+        every found camera and auto-select the first one — no skip needed.
         """
         import cv2 as _cv2
         self._combo.clear()
 
-        device_names = StartSessionPage._get_camera_names()
+        # _get_camera_names returns (phys_names, virt_names) — flatten in order
+        phys_names, virt_names = StartSessionPage._get_camera_names()
+        all_names = phys_names + virt_names
 
         # MSMF: isOpened() only — no read, no LED
-        found = []
+        msmf_found = []
         for idx in range(8):
             cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
             if cap.isOpened():
-                found.append(idx)
+                msmf_found.append(idx)
             cap.release()
+
+        # DSHOW-only (virtual cameras not visible via MSMF)
+        dshow_only = []
+        for idx in range(8):
+            if idx in msmf_found:
+                continue
+            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+            if cap.isOpened():
+                dshow_only.append(idx)
+            cap.release()
+
+        found = msmf_found + dshow_only
 
         if not found:
             self._combo.addItem("No cameras detected", -1)
             return
 
-        used_name_indices: set = set()
-        for idx in found:
-            matched_name = None
-            for ni, name in enumerate(device_names):
-                if ni not in used_name_indices:
-                    matched_name = name
-                    used_name_indices.add(ni)
-                    break
-            label = matched_name or f"Camera {idx}"
+        for i, idx in enumerate(found):
+            label = all_names[i] if i < len(all_names) else f"Camera {idx}"
             self._combo.addItem(label, idx)
 
-        # Auto-select first camera that isn't the lost one
-        for i in range(self._combo.count()):
-            if self._combo.itemData(i) != self._lost_index:
-                self._combo.setCurrentIndex(i)
-                self._selected_index = self._combo.itemData(i)
-                break
+        # Auto-select the first available camera — the lost device is already
+        # gone from the OS so it will not appear in `found`
+        self._combo.setCurrentIndex(0)
+        self._selected_index = self._combo.itemData(0)
  
     def _on_combo_changed(self, i: int):
         idx = self._combo.itemData(i)
@@ -477,7 +486,7 @@ class StartSessionPage(QWidget):
         self._end_mistakes = 0         # snapshot at END time for dialog
         self._ending_worker = None     # strong ref held during async shutdown
         self._worker_state = ""        # last state emitted by PitchWorker
-        self._camera_index        = 0   # active camera device index
+        self._camera_index        = -1  # -1 = no camera selected yet; set after first probe
         self._desired_camera_name = ""  # name user wants — survives index shifts
         self._active_camera_name  = ""  # name actually in use (set on START)
         self._camera_cache        = []  # cached (idx, name) pairs from last probe
@@ -615,13 +624,14 @@ class StartSessionPage(QWidget):
 
         panel_layout.addLayout(find_test_row)
 
-        # START button
+        # START button — disabled until Find Cameras succeeds
         self.start_btn = QPushButton("START")
         self.start_btn.setObjectName("sessionStartBtn")
         self.start_btn.setFixedHeight(48)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.setAutoDefault(False)
         self.start_btn.setDefault(False)
+        self.start_btn.setEnabled(False)
         self.start_btn.clicked.connect(self._handle_start)
         panel_layout.addWidget(self.start_btn)
 
@@ -765,32 +775,35 @@ class StartSessionPage(QWidget):
     # Camera guide toggle
     @staticmethod
     def _get_camera_names() -> list:
-        """Return ordered list of camera friendly names exactly as DirectShow
-        enumerates them — matching the index order OpenCV uses with CAP_DSHOW.
+        """Return two separate name lists for the camera pairing step.
 
-        Root cause of the OBS problem
-        ──────────────────────────────
-        OBS Virtual Camera is a pure DirectShow virtual device. It does NOT
-        appear in Get-PnpDevice, Win32_PnPEntity, or any other WMI/PnP query.
-        It registers itself under the DirectShow video-input device category:
+        Returns a tuple (physical_names, virtual_names):
+          - physical_names: WMI Win32_PnPEntity names for real hardware cameras
+            (USB Camera, built-in webcams), sorted by PNPDeviceID to match
+            the MSMF enumeration order OpenCV uses for physical indices.
+          - virtual_names: registry KSCATEGORY_VIDEO names for software/virtual
+            cameras (Windows Virtual Camera, etc.) that only appear via
+            DirectShow, not in WMI. Sorted by registry subkey name.
 
-          HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\
-          {65e8773d-8f56-11d0-a3b9-00a0c9223196}   ← KSCATEGORY_VIDEO_CAMERA
-
-        Reading FriendlyName values directly from that registry path gives us
-        exactly the same device list OpenCV sees with CAP_DSHOW, in the same
-        order — so index 0 here = index 0 in OpenCV, including OBS.
-
-        Falls back to an empty list if PowerShell is unavailable or times out.
+        The caller pairs physical_names sequentially with MSMF-found indices,
+        then virtual_names sequentially with DSHOW-only indices.
         """
         import subprocess, json as _json
 
         ps_script = (
-            "$guid = '{65e8773d-8f56-11d0-a3b9-00a0c9223196}'; "
+            # Physical cameras via WMI — stable sort matches MSMF order
+            "$phys = Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue "
+            "| Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' } "
+            "| Sort-Object PNPDeviceID "
+            "| Select-Object -ExpandProperty Name; "
+            # Virtual/software cameras via KSCATEGORY_VIDEO registry key
+            "$guid = '{e5323777-f976-4f5b-9b55-b94699c46e44}'; "
             "$base = \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\$guid\"; "
-            "$names = @(); "
+            "$virt = @(); "
             "if (Test-Path $base) { "
-            "  Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object { "
+            "  Get-ChildItem $base -ErrorAction SilentlyContinue "
+            "  | Sort-Object Name "
+            "  | ForEach-Object { "
             "    $fn = $null; "
             "    $hash = Join-Path $_.PSPath '#'; "
             "    if (Test-Path $hash) { "
@@ -799,26 +812,29 @@ class StartSessionPage(QWidget):
             "    if (-not $fn) { "
             "      $fn = (Get-ItemProperty $_.PSPath -Name FriendlyName "
             "             -ErrorAction SilentlyContinue).FriendlyName } "
-            "    if ($fn) { $names += $fn.Trim() } "
+            "    if ($fn) { $virt += $fn.Trim() } "
             "  } "
             "}; "
-            "$names | ConvertTo-Json -Compress"
+            # Remove from virt any name already in phys (avoid double-counting)
+            "$physLower = $phys | ForEach-Object { $_.ToLower() }; "
+            "$virtOnly = $virt | Where-Object { $physLower -notcontains $_.ToLower() }; "
+            "@{ phys = @($phys); virt = @($virtOnly) } | ConvertTo-Json -Compress"
         )
 
         try:
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-                capture_output=True, text=True, timeout=6
+                capture_output=True, text=True, timeout=8
             )
             raw = result.stdout.strip()
             if not raw:
-                return []
+                return ([], [])
             parsed = _json.loads(raw)
-            if isinstance(parsed, str):
-                return [parsed]
-            return [n.strip() for n in parsed if n and n.strip()]
+            phys = [n.strip() for n in (parsed.get("phys") or []) if n and n.strip()]
+            virt = [n.strip() for n in (parsed.get("virt") or []) if n and n.strip()]
+            return (phys, virt)
         except Exception:
-            return []
+            return ([], [])
 
     def _populate_camera_combo(self):
         """Fill the combo from _camera_cache and restore the user's desired camera.
@@ -837,8 +853,10 @@ class StartSessionPage(QWidget):
             self.camera_combo.blockSignals(False)
             return
 
+        names_in_cache = [n for _, n in cache]
         for idx, name in cache:
-            label = f"{name} (default)" if idx == 0 else name
+            is_duplicate = names_in_cache.count(name) > 1
+            label = f"{name} ({idx})" if is_duplicate else name
             self.camera_combo.addItem(label, idx)
 
         # 1. Try to match by desired name
@@ -884,6 +902,7 @@ class StartSessionPage(QWidget):
         self.find_cam_btn.setText("⏳  Searching...")
         self.camera_combo.setEnabled(False)
         self.test_cam_btn.setEnabled(False)
+        self.start_btn.setEnabled(False)   # re-enabled by _on_camera_probe_done on success
         self._refresh_camera_cache()
 
     def _handle_test_camera(self):
@@ -968,57 +987,51 @@ class StartSessionPage(QWidget):
         import threading as _t, cv2 as _cv2
 
         def _probe():
-            # Run name fetch and MSMF enum simultaneously
-            device_names: list = []
-            found: list = []
+            physical_names: list = []
+            virtual_names:  list = []
+            msmf_found: list = []
+            dshow_only: list = []
 
             def _fetch_names():
-                device_names.extend(self._get_camera_names())
+                result = self._get_camera_names()
+                physical_names.extend(result[0])
+                virtual_names.extend(result[1])
 
-            def _enum_msmf():
-                # Pass 1 — MSMF: enumerates physical cameras without activating LEDs.
-                msmf_found = set()
+            def _enum_cameras():
+                msmf_set = set()
                 for idx in range(8):
                     cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
                     if cap.isOpened():
-                        msmf_found.add(idx)
+                        msmf_set.add(idx)
                     cap.release()
 
-                # Pass 2 — DirectShow: catches virtual cameras (OBS, etc.) that
-                # MSMF cannot see. We only call isOpened(), never cap.read(), so
-                # no physical camera LED activates. Virtual devices have no LED.
-                dshow_found = set()
+                dshow_set = set()
                 for idx in range(8):
                     cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
                     if cap.isOpened():
-                        dshow_found.add(idx)
+                        dshow_set.add(idx)
                     cap.release()
 
-                # Merge: physical cameras come first (MSMF order), then any
-                # virtual-only indices that DirectShow added.
-                for idx in sorted(msmf_found):
-                    found.append(idx)
-                for idx in sorted(dshow_found - msmf_found):
-                    found.append(idx)
+                msmf_found.extend(sorted(msmf_set))
+                dshow_only.extend(sorted(dshow_set - msmf_set))
 
             t_names = _t.Thread(target=_fetch_names, daemon=True)
-            t_msmf  = _t.Thread(target=_enum_msmf,  daemon=True)
+            t_enum  = _t.Thread(target=_enum_cameras, daemon=True)
             t_names.start()
-            t_msmf.start()
+            t_enum.start()
             t_names.join()
-            t_msmf.join()
+            t_enum.join()
 
-            # Pair device indices with PnP names in order
+            # Physical cameras: pair sequentially with WMI names (same stable order)
             cache: list = []
-            used_name_indices: set = set()
-            for idx in found:
-                matched_name = None
-                for ni, name in enumerate(device_names):
-                    if ni not in used_name_indices:
-                        matched_name = name
-                        used_name_indices.add(ni)
-                        break
-                cache.append((idx, matched_name or f"Camera {idx}"))
+            for i, idx in enumerate(msmf_found):
+                name = physical_names[i] if i < len(physical_names) else f"Camera {idx}"
+                cache.append((idx, name))
+
+            # Virtual/software cameras: pair sequentially with registry names
+            for i, idx in enumerate(dshow_only):
+                name = virtual_names[i] if i < len(virtual_names) else f"Camera {idx}"
+                cache.append((idx, name))
 
             self._camera_cache = cache
             QTimer.singleShot(0, self._on_camera_probe_done)
@@ -1041,11 +1054,13 @@ class StartSessionPage(QWidget):
             self.camera_combo.addItem("No cameras found", -1)
             self.camera_combo.setEnabled(False)
             self.test_cam_btn.setEnabled(False)
+            self.start_btn.setEnabled(False)
             return
 
         self._populate_camera_combo()
         self.camera_combo.setEnabled(True)
         self.test_cam_btn.setEnabled(True)
+        self.start_btn.setEnabled(True)
 
         n = self.camera_combo.count()   # derive from combo — always matches what the user sees
         self.find_cam_btn.setText(f"✅  Found ({n})")
@@ -1167,7 +1182,9 @@ class StartSessionPage(QWidget):
             self.token_status_widget.hide()
             self.token_status_lbl.hide()
             if not self._running:
-                self.start_btn.setEnabled(True)
+                # Only re-enable START if a camera has been confirmed by Find Cameras
+                if self._camera_index >= 0:
+                    self.start_btn.setEnabled(True)
 
     def _apply_token_locked(self, status: dict):
         """Block START and show appropriate message when tokens are exhausted.
