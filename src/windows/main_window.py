@@ -78,11 +78,15 @@ class MainWindow(FramelessMainWindow):
         self._switch_page("dashboard")
 
         # Auto-open guide for first-time users (Pitcher and Coach only)
+        # Deferred via singleShot so it runs after show() + _go_maximized(),
+        # preventing the window from briefly rendering at its default small size.
         if self.role != "Admin":
             from src.db import get_has_seen_guide, set_has_seen_guide
             if not get_has_seen_guide(self.user_id):
                 set_has_seen_guide(self.user_id)
-                self._open_guide()
+                # self._open_guide()
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(300, self._open_guide)
 
     def _disable_rounded_corners(self):
         """Remove rounded corners on the main window (Windows 11 only)."""
@@ -478,6 +482,13 @@ class MainWindow(FramelessMainWindow):
         self._session_live = True 
         for btn in self.nav_buttons.values():
             btn.setEnabled(False)
+        # Disable Help button, close the drawer, and disable all its action buttons 
+        if hasattr(self, "guide_btn"):
+            self.guide_btn.setEnabled(False)
+            self._close_guide()
+        if hasattr(self, "guide_drawer"):
+            for child in self.guide_drawer.findChildren(QPushButton):
+                child.setEnabled(False)
         # Disable logout button
         bottom = getattr(self, "_sidebar_bottom", None)
         if bottom:
@@ -493,6 +504,12 @@ class MainWindow(FramelessMainWindow):
         self._session_live = False 
         for btn in self.nav_buttons.values():
             btn.setEnabled(True)
+        # Re-enable Help button and its drawer action buttons 
+        if hasattr(self, "guide_btn"):
+            self.guide_btn.setEnabled(True)
+        if hasattr(self, "guide_drawer"):
+            for child in self.guide_drawer.findChildren(QPushButton):
+                child.setEnabled(True)
         # Re-enable logout button
         bottom = getattr(self, "_sidebar_bottom", None)
         if bottom:

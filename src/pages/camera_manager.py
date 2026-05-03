@@ -258,6 +258,9 @@ class CameraMixin:
                 cache.append((idx, name))
 
             self._camera_cache = cache
+            # Store virtual indices separately so _handle_start can skip
+            # the MSMF resolution peek for DSHOW-only (virtual) cameras.
+            self._virt_indices = set(virt_indices)
             QTimer.singleShot(0, self._on_camera_probe_done)
 
         _t.Thread(target=_probe, daemon=True).start()

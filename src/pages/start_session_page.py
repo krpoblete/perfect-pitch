@@ -41,6 +41,7 @@ class StartSessionPage(QWidget, CameraMixin):
         self._desired_camera_name = ""  # name user wants — survives index shifts
         self._active_camera_name  = ""  # name actually in use (set on START)
         self._camera_cache        = []  # cached (idx, name) pairs from last probe
+        self._virt_indices        = set()  # subset of _camera_cache indices that are virtual
         # Resolution recorded the first time the external webcam is used.
         # When the integrated camera is later selected, PitchWorker crops its
         # feed to this size so both cameras share the same effective FOV.
@@ -79,7 +80,7 @@ class StartSessionPage(QWidget, CameraMixin):
         panel.setObjectName("sessionPanel")
         panel.setFixedWidth(_panel_w)
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(12, 18, 12, 18)
+        panel_layout.setContentsMargins(12, 40, 12, 18)
         panel_layout.setSpacing(8)
 
         # Stats cards
@@ -393,7 +394,14 @@ class StartSessionPage(QWidget, CameraMixin):
             feed_h = screen.height() - 48
 
         is_external = self._camera_index != 0
-        if is_external:
+
+        # Only peek resolution for physical external cameras.
+        # Virtual cameras (OBS, etc.) are DSHOW-only — opening them via
+        # CAP_MSMF can hold the device long enough to make PitchWorker's
+        # subsequent CAP_DSHOW open fail or return no frames.
+        is_physical_external = is_external and self._camera_index not in self._virt_indices
+
+        if is_physical_external:
             try:
                 import cv2 as _cv2
                 _peek = _cv2.VideoCapture(self._camera_index, _cv2.CAP_MSMF)
