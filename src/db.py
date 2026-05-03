@@ -78,7 +78,7 @@ def _migrate(conn):
 
     conn.commit()
 
-RETENTION_DAYS = 1
+RETENTION_DAYS = 90 
 
 def _purge_expired(conn):
     """Permanently delete users inactive for longer than RETENTION_DAYS.
