@@ -9,7 +9,7 @@ from src.utils.icons import get_icon
 from src.utils.toast import toast_warning, toast_error, toast_success
 from src.pitch_worker import PitchWorker
 
-from .camera_manager import CameraMixin, LiveCameraCombo, CameraReconnectDialog
+from .camera_manager import CameraMixin, LiveCameraCombo
 from .session_summary import SessionSummaryDialog
 
 class StartSessionPage(QWidget, CameraMixin):

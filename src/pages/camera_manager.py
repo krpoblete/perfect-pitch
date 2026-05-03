@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
 
 from src.utils.icons import get_icon
-from src.utils.toast import toast_warning
+from src.utils.toast import toast_warning, toast_error
 
 # LiveCameraCombo
 class LiveCameraCombo(QComboBox):
@@ -30,182 +30,6 @@ class LiveCameraCombo(QComboBox):
         super().showPopup()
 
 
-# CameraReconnectDialog
-class CameraReconnectDialog(QDialog):
-    """Shown when the camera disconnects mid-session.
-
-    Lets the user pick a working camera from a fresh probe, then
-    dismisses so start_session_page can start a clean new session.
-    Always starts fresh — no attempt to resume incomplete pitch data.
-    """
-
-    def __init__(self, parent, lost_camera_index: int, lost_camera_name: str = ""):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-        self.setWindowModality(Qt.WindowModality.ApplicationModal)
-        self.setObjectName("reconnectDialog")
-        self._selected_index = 0
-        self._lost_index = lost_camera_index
-        self._lost_name = lost_camera_name
-        self._build_ui()
-        self.setFixedSize(440, 270)
-        self._center_on_parent()
-
-    def _center_on_parent(self):
-        from PyQt6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().availableGeometry()
-        self.move(
-            screen.x() + (screen.width() - self.width()) // 2,
-            screen.y() + (screen.height() - self.height()) // 2,
-        )
-
-    def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(14)
-
-        # Header — alert-triangle icon + title
-        title_row = QHBoxLayout()
-        title_row.setSpacing(10)
-        title_row.setContentsMargins(0, 0, 0, 0)
-        title_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-
-        alert_icon = QLabel()
-        alert_icon.setFixedSize(22, 22)
-        alert_icon.setStyleSheet("background: transparent;")
-        try:
-            alert_icon.setPixmap(
-                get_icon("alert-triangle", color="#e05555", size=22).pixmap(22, 22)
-            )
-        except Exception:
-            pass
-        title_row.addWidget(alert_icon)
-
-        title = QLabel("Camera Disconnected")
-        title.setObjectName("reconnectTitle")
-        title.setStyleSheet(
-            "color: #e05555; font-size: 18px; font-weight: 700; background: transparent;"
-        )
-        title_row.addWidget(title)
-        title_row.addStretch()
-        root.addLayout(title_row)
-
-        lost_name = self._lost_name or f"Camera {self._lost_index}"
-        sub = QLabel(
-            f"\"{lost_name}\" was lost mid-session. "
-            "The current session has been discarded. Select a working "
-            "camera below to start a fresh session."
-        )
-        sub.setObjectName("reconnectSub")
-        sub.setWordWrap(True)
-        sub.setStyleSheet("color: #888888; font-size: 12px; background: transparent;")
-        root.addWidget(sub)
-
-        # Camera selector
-        self._combo = QComboBox()
-        self._combo.setObjectName("cameraCombo")
-        self._combo.setFixedHeight(32)
-        self._probe_cameras()
-        self._combo.currentIndexChanged.connect(self._on_combo_changed)
-        root.addWidget(self._combo)
-
-        root.addStretch()
-
-        # Buttons
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setObjectName("reconnectCancelBtn")
-        cancel_btn.setFixedHeight(40)
-        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_btn.setStyleSheet(
-            "background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 6px;"
-            "color: #888888; font-size: 13px;"
-        )
-        cancel_btn.clicked.connect(self.reject)
-        btn_row.addWidget(cancel_btn)
-
-        ok_btn = QPushButton("Use This Camera")
-        ok_btn.setObjectName("reconnectOkBtn")
-        ok_btn.setFixedHeight(40)
-        ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        ok_btn.setStyleSheet(
-            "background: #1a3a1a; border: 1px solid #2a5a2a; border-radius: 6px;"
-            "color: #4ecb71; font-size: 13px; font-weight: 600;"
-        )
-        ok_btn.clicked.connect(self.accept)
-        btn_row.addWidget(ok_btn)
-
-        root.addLayout(btn_row)
-
-    def _probe_cameras(self):
-        """Probe cameras and populate the reconnect combo.
-
-        Uses CAP_MSMF (no LED activation, no cap.read()).
-        Names are fetched via CameraMixin._get_camera_names(), which
-        returns a (physical_names, virtual_names) tuple — both lists are
-        merged in order to match the MSMF + DSHOW enumeration sequence.
-
-        The lost camera is already gone from the OS by the time this runs,
-        so its index will not appear in the MSMF scan. We therefore show
-        every found camera and auto-select the first one — no skip needed.
-        """
-        import cv2 as _cv2
-        self._combo.clear()
-
-        # _get_camera_names returns (phys_names, virt_names) — flatten in order
-        phys_names, virt_names = CameraMixin._get_camera_names()
-        all_names = phys_names + virt_names
-
-        # MSMF: isOpened() only — no read, no LED
-        msmf_found = []
-        for idx in range(8):
-            cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
-            if cap.isOpened():
-                msmf_found.append(idx)
-            cap.release()
-
-        # DSHOW-only (virtual cameras not visible via MSMF)
-        dshow_only = []
-        for idx in range(8):
-            if idx in msmf_found:
-                continue
-            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
-            if cap.isOpened():
-                dshow_only.append(idx)
-            cap.release()
-
-        found = msmf_found + dshow_only
-
-        if not found:
-            self._combo.addItem("No cameras detected", -1)
-            return
-
-        for i, idx in enumerate(found):
-            label = all_names[i] if i < len(all_names) else f"Camera {idx}"
-            self._combo.addItem(label, idx)
-
-        # Auto-select the first available camera — the lost device is already
-        # gone from the OS so it will not appear in `found`
-        self._combo.setCurrentIndex(0)
-        self._selected_index = self._combo.itemData(0)
-
-    def _on_combo_changed(self, i: int):
-        idx = self._combo.itemData(i)
-        if idx is not None and idx >= 0:
-            self._selected_index = idx
-
-    def selected_camera_index(self) -> int:
-        return self._selected_index
-
-    def selected_camera_name(self) -> str:
-        for i in range(self._combo.count()):
-            if self._combo.itemData(i) == self._selected_index:
-                return self._combo.itemText(i).replace("  ⚠  (disconnected)", "").strip()
-        return f"Camera {self._selected_index}"
-
-
 # CameraMixin
 class CameraMixin:
     """Camera probe, combo management, preview, and guide card logic.
@@ -223,22 +47,66 @@ class CameraMixin:
     def _get_camera_names() -> tuple:
         """Return (physical_names, virtual_names) for the camera pairing step.
 
-        - physical_names: WMI Win32_PnPEntity names for real hardware cameras
-          sorted by PNPDeviceID to match the MSMF enumeration order OpenCV uses.
-        - virtual_names: registry KSCATEGORY_VIDEO names for software/virtual
-          cameras (OBS Virtual Camera, etc.) that only appear via DirectShow.
+        Primary path — PyGrabber (pygrabber):
+        ───────────────────────────────────────
+        PyGrabber wraps the Windows DirectShow ICreateDevEnum COM interface —
+        the exact same enumeration OpenCV uses with CAP_DSHOW. It returns
+        FriendlyName values in the same order as OpenCV device indices, so
+        index 0 here == index 0 in CAP_DSHOW, including OBS Virtual Camera.
 
-        The caller pairs physical_names with MSMF-found indices sequentially,
-        then virtual_names with DSHOW-only indices sequentially.
+        We split the flat list into physical vs virtual by cross-checking
+        with MSMF-visible indices: devices MSMF can open are physical
+        hardware (no LED activated — isOpened() only); the rest are virtual.
+
+        Fallback path — PowerShell + registry:
+        ───────────────────────────────────────
+        Used when pygrabber is not installed. Queries WMI for physical camera
+        names and reads KSCATEGORY_VIDEO_CAMERA registry for virtual cameras.
+        Less reliable for OBS because OBS's FriendlyName registry subkey
+        structure varies between OBS versions and Windows builds.
+
+        Install pygrabber once to make OBS detection permanent:
+            pip install pygrabber
         """
+        # Primary: PyGrabber
+        try:
+            from pygrabber.dshow_graph import FilterGraph as _FG
+            import cv2 as _cv2
+
+            all_names: list[str] = _FG().get_input_devices()   # DirectShow order
+
+            # Classify physical vs virtual via MSMF (no LED — isOpened only)
+            msmf_set: set[int] = set()
+            for idx in range(len(all_names)):
+                cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
+                if cap.isOpened():
+                    msmf_set.add(idx)
+                cap.release()
+
+            physical_names = [n for i, n in enumerate(all_names) if i in msmf_set]
+            virtual_names  = [n for i, n in enumerate(all_names) if i not in msmf_set]
+            return (physical_names, virtual_names)
+
+        except ImportError:
+            pass   # pygrabber not installed — fall through to PowerShell
+        except Exception:
+            pass   # COM error, driver issue, etc. — fall through
+
+        # Fallback: PowerShell + registry
         import subprocess, json as _json
 
         ps_script = (
+            # Physical cameras from WMI PnP, sorted by PNPDeviceID to match
+            # the MSMF enumeration order OpenCV uses internally.
             "$phys = Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue "
             "| Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' } "
             "| Sort-Object PNPDeviceID "
             "| Select-Object -ExpandProperty Name; "
-            "$guid = '{e5323777-f976-4f5b-9b55-b94699c46e44}'; "
+
+            # Virtual cameras from KSCATEGORY_VIDEO_CAMERA registry.
+            # This GUID is what OpenCV's CAP_DSHOW reads internally.
+            # OBS Virtual Camera registers here; WMI cannot see it at all.
+            "$guid = '{65e8773d-8f56-11d0-a3b9-00a0c9223196}'; "
             "$base = \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\$guid\"; "
             "$virt = @(); "
             "if (Test-Path $base) { "
@@ -256,6 +124,7 @@ class CameraMixin:
             "    if ($fn) { $virt += $fn.Trim() } "
             "  } "
             "}; "
+            # Deduplicate: drop any virtual name that already appears in phys
             "$physLower = $phys | ForEach-Object { $_.ToLower() }; "
             "$virtOnly = $virt | Where-Object { $physLower -notcontains $_.ToLower() }; "
             "@{ phys = @($phys); virt = @($virtOnly) } | ConvertTo-Json -Compress"
@@ -342,15 +211,17 @@ class CameraMixin:
         def _probe():
             physical_names: list = []
             virtual_names:  list = []
-            msmf_found: list = []
-            dshow_only: list = []
 
             def _fetch_names():
                 result = CameraMixin._get_camera_names()
                 physical_names.extend(result[0])
                 virtual_names.extend(result[1])
 
-            def _enum_cameras():
+            def _enum_cameras(out_phys: list, out_virt: list):
+                # DSHOW is the source of truth for indices — PitchWorker opens
+                # cameras via CAP_DSHOW, so we must use the same index space.
+                # MSMF is only used to classify physical vs virtual: cameras
+                # visible to MSMF are physical hardware; DSHOW-only are virtual.
                 msmf_set = set()
                 for idx in range(8):
                     cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
@@ -358,28 +229,30 @@ class CameraMixin:
                         msmf_set.add(idx)
                     cap.release()
 
-                dshow_set = set()
                 for idx in range(8):
                     cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
                     if cap.isOpened():
-                        dshow_set.add(idx)
+                        if idx in msmf_set:
+                            out_phys.append(idx)
+                        else:
+                            out_virt.append(idx)
                     cap.release()
 
-                msmf_found.extend(sorted(msmf_set))
-                dshow_only.extend(sorted(dshow_set - msmf_set))
+            phys_indices: list = []
+            virt_indices: list = []
 
             t_names = _t.Thread(target=_fetch_names, daemon=True)
-            t_enum  = _t.Thread(target=_enum_cameras, daemon=True)
+            t_enum  = _t.Thread(target=_enum_cameras, args=(phys_indices, virt_indices), daemon=True)
             t_names.start()
             t_enum.start()
             t_names.join()
             t_enum.join()
 
             cache: list = []
-            for i, idx in enumerate(msmf_found):
+            for i, idx in enumerate(phys_indices):
                 name = physical_names[i] if i < len(physical_names) else f"Camera {idx}"
                 cache.append((idx, name))
-            for i, idx in enumerate(dshow_only):
+            for i, idx in enumerate(virt_indices):
                 name = virtual_names[i] if i < len(virtual_names) else f"Camera {idx}"
                 cache.append((idx, name))
 
@@ -409,11 +282,23 @@ class CameraMixin:
         self._populate_camera_combo()
         self.camera_combo.setEnabled(True)
         self.test_cam_btn.setEnabled(True)
-        self.start_btn.setEnabled(True)
 
         n = self.camera_combo.count()
         self.find_cam_btn.setText(f"✅  Found ({n})")
         self.find_cam_btn.setEnabled(True)
+
+        # _populate_camera_combo blocks signals so _on_camera_changed never fires
+        # and _camera_index stays at -1. Sync it from the combo now.
+        idx = self.camera_combo.itemData(self.camera_combo.currentIndex())
+        if idx is not None and idx >= 0:
+            self._camera_index = idx
+            cam_name = next((nm for ix, nm in self._camera_cache if ix == idx), "")
+            if cam_name:
+                self._desired_camera_name = cam_name
+
+        # Do NOT enable START unconditionally — respect token status.
+        # _refresh_token_status enables START only if tokens remain.
+        self._refresh_token_status()
 
     # Button handlers
     def _handle_find_cameras(self):
@@ -441,8 +326,15 @@ class CameraMixin:
         Uses CAP_DSHOW for the actual frame grab (MSMF is slow to produce
         the first frame on some drivers, and won't stream OBS at all).
         """
-        if self._camera_index < 0 or self._running:
+        if self._running:
             return
+
+        # Read directly from the combo — _camera_index may be stale if signals
+        # were blocked during _populate_camera_combo (which they are).
+        cam_idx = self.camera_combo.itemData(self.camera_combo.currentIndex())
+        if cam_idx is None or cam_idx < 0:
+            return
+        self._camera_index = cam_idx
 
         import cv2 as _cv2
 
@@ -457,7 +349,7 @@ class CameraMixin:
         lbl.setGeometry(0, 0, 400, 270)
         lbl.setStyleSheet("background:#0a0a0a; color:#555555; font-size:12px;")
 
-        close_lbl = QLabel("Click to close", dlg)
+        close_lbl = QLabel("Click anywhere to close", dlg)
         close_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         close_lbl.setGeometry(0, 270, 400, 30)
         close_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -472,7 +364,7 @@ class CameraMixin:
             sg.y() + (sg.height() - dlg.height()) // 2,
         )
 
-        cap = _cv2.VideoCapture(self._camera_index, _cv2.CAP_DSHOW)
+        cap = _cv2.VideoCapture(cam_idx, _cv2.CAP_DSHOW)
 
         def _tick():
             if not cap.isOpened():
@@ -629,9 +521,19 @@ class CameraMixin:
 
     # Disconnection handler (called by StartSessionPage._on_worker_error)
     def _handle_camera_disconnected(self):
-        """Camera was lost mid-session — discard session, offer reconnect."""
-        self._pitch_count = 0
-        self._mistakes = 0
+        """Camera was lost mid-session.
+
+        Discards the session, locks the combo and Test button so the user
+        cannot interact with stale state, resets Find Cameras back to its
+        idle state, and shows a toast telling the user exactly what to do.
+
+        No reconnect dialog — the user simply clicks 'Find Cameras' to run
+        a fresh probe, picks the working camera from the repopulated combo,
+        and hits START. One code path, no modal, no stale indices.
+        """
+        # Reset session counters
+        self._pitch_count  = 0
+        self._mistakes     = 0
         self._worker_state = ""
         self.pitch_val.setText("0")
         self.mistake_val.setText("0")
@@ -642,23 +544,28 @@ class CameraMixin:
 
         lost_name = self._active_camera_name or f"Camera {self._camera_index}"
 
-        dlg = CameraReconnectDialog(
+        # Reset camera selection state — indices are stale after a disconnect
+        self._camera_index        = -1
+        self._desired_camera_name = ""
+        self._active_camera_name  = ""
+        self._camera_cache        = []
+
+        # Lock combo and Test — their contents are stale
+        self.camera_combo.blockSignals(True)
+        self.camera_combo.clear()
+        self.camera_combo.addItem("No camera selected", -1)
+        self.camera_combo.blockSignals(False)
+        self.camera_combo.setEnabled(False)
+        self.camera_combo.set_session_live(False)
+        self.test_cam_btn.setEnabled(False)
+        self.start_btn.setEnabled(False)
+
+        # Reset Find Cameras to idle so it's the obvious next action
+        self.find_cam_btn.setText("🔍  Find Cameras")
+        self.find_cam_btn.setEnabled(True)
+
+        toast_error(
             self,
-            lost_camera_index=self._camera_index,
-            lost_camera_name=lost_name,
+            f"⚠  \"{lost_name}\" disconnected — session discarded. "
+            f"Click 'Find Cameras' to reconnect."
         )
-        if dlg.exec():
-            new_idx = dlg.selected_camera_index()
-            new_name = dlg.selected_camera_name()
-            self._camera_index = new_idx
-            self._desired_camera_name = new_name
-            self._active_camera_name  = ""
-            self.find_cam_btn.setText("⏳  Searching...")
-            self.find_cam_btn.setEnabled(False)
-            self._refresh_camera_cache()
-            toast_warning(
-                self,
-                f"\"{new_name}\" selected. Press START to begin a new session."
-            )
-        else:
-            toast_warning(self, f"Session discarded — \"{lost_name}\" was disconnected.")
