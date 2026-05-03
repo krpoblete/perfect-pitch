@@ -243,7 +243,7 @@ class MainWindow(FramelessMainWindow):
 
         self.pages = {
             "dashboard": DashboardPage(self.user_id),
-"pitchers": PitchersPage(),
+            "pitchers": PitchersPage(),
             "users": UsersPage(),
             "start_session": StartSessionPage(self.user_id, ml_bundle=self.ml_bundle),
             "account_settings": AccountSettingsPage(self.user_id),

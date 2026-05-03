@@ -139,11 +139,11 @@ class LoginPage(QWidget):
             return
 
         ml_bundle = getattr(self.auth, "ml_bundle", None)
+        self.main_window = MainWindow(user_id=user["id"], ml_bundle=ml_bundle)
+        self.main_window.show()
 
         def _close():
             self.auth._suppress_close_dialog = True
             self.auth.close()
-            self.main_window = MainWindow(user_id=user["id"], ml_bundle=ml_bundle)
-            self.main_window.show()
 
         fade_out(self.auth, on_finish=_close)
