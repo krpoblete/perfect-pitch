@@ -36,6 +36,7 @@ class StartSessionPage(QWidget, CameraMixin):
         self._end_mistakes = 0          # snapshot at END time for dialog
         self._ending_worker = None      # strong ref held during async shutdown
         self._worker_state = ""         # last state emitted by PitchWorker
+        self._summary_open = False      # True while SessionSummaryDialog is open
         self._camera_index        = -1  # -1 = no camera selected yet
         self._desired_camera_name = ""  # name user wants — survives index shifts
         self._active_camera_name  = ""  # name actually in use (set on START)
@@ -289,7 +290,7 @@ class StartSessionPage(QWidget, CameraMixin):
         else:
             self.token_status_widget.hide()
             self.token_status_lbl.hide()
-            if not self._running and self._camera_index >= 0:
+            if not self._running and not self._summary_open and self._camera_index >= 0:
                 self.start_btn.setEnabled(True)
 
     def _apply_token_locked(self, status: dict):
@@ -503,6 +504,7 @@ class StartSessionPage(QWidget, CameraMixin):
         )
 
         self._summary_dlg = dlg
+        self._summary_open = True
         if dlg.exec():
             self._save_session(accuracy)
             from src.db import get_pitch_token_status
@@ -518,6 +520,7 @@ class StartSessionPage(QWidget, CameraMixin):
                 }
                 self._apply_token_locked(locked_status)
 
+        self._summary_open  = False
         self._summary_dlg   = None
         self._ending_worker = None
         self._refresh_token_status()

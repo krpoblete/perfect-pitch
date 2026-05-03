@@ -103,10 +103,11 @@ class CameraMixin:
             "| Sort-Object PNPDeviceID "
             "| Select-Object -ExpandProperty Name; "
 
-            # Virtual cameras from KSCATEGORY_VIDEO_CAMERA registry.
-            # This GUID is what OpenCV's CAP_DSHOW reads internally.
-            # OBS Virtual Camera registers here; WMI cannot see it at all.
-            "$guid = '{65e8773d-8f56-11d0-a3b9-00a0c9223196}'; "
+            # Virtual cameras from KSCATEGORY_VIDEO registry.
+            # Windows Virtual Camera registers under this GUID.
+            # KSCATEGORY_VIDEO_CAMERA (65e8773d) is for physical UVC devices
+            # and is NOT where Windows Virtual Camera appears.
+            "$guid = '{e5323777-f976-4f5b-9b55-b94699c46e44}'; "
             "$base = \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\$guid\"; "
             "$virt = @(); "
             "if (Test-Path $base) { "
@@ -281,20 +282,25 @@ class CameraMixin:
 
         self._populate_camera_combo()
         self.camera_combo.setEnabled(True)
-        self.test_cam_btn.setEnabled(True)
 
         n = self.camera_combo.count()
         self.find_cam_btn.setText(f"✅  Found ({n})")
         self.find_cam_btn.setEnabled(True)
 
-        # _populate_camera_combo blocks signals so _on_camera_changed never fires
-        # and _camera_index stays at -1. Sync it from the combo now.
+        # _populate_camera_combo blocks signals so _on_camera_changed never
+        # fires during auto-selection. Sync _camera_index and Test state here.
         idx = self.camera_combo.itemData(self.camera_combo.currentIndex())
         if idx is not None and idx >= 0:
             self._camera_index = idx
             cam_name = next((nm for ix, nm in self._camera_cache if ix == idx), "")
             if cam_name:
                 self._desired_camera_name = cam_name
+            self.test_cam_btn.setEnabled(True)
+        else:
+            self.test_cam_btn.setEnabled(False)
+
+        # Register device-change listener (once; no-op if already registered)
+        self._start_device_change_listener()
 
         # Do NOT enable START unconditionally — respect token status.
         # _refresh_token_status enables START only if tokens remain.
@@ -349,7 +355,7 @@ class CameraMixin:
         lbl.setGeometry(0, 0, 400, 270)
         lbl.setStyleSheet("background:#0a0a0a; color:#555555; font-size:12px;")
 
-        close_lbl = QLabel("Click anywhere to close", dlg)
+        close_lbl = QLabel("Click to close", dlg)
         close_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         close_lbl.setGeometry(0, 270, 400, 30)
         close_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -363,6 +369,8 @@ class CameraMixin:
             sg.x() + (sg.width()  - dlg.width())  // 2,
             sg.y() + (sg.height() - dlg.height()) // 2,
         )
+
+        self._stop_device_change_listener()   # re-registered after preview closes
 
         cap = _cv2.VideoCapture(cam_idx, _cv2.CAP_DSHOW)
 
@@ -389,15 +397,23 @@ class CameraMixin:
         dlg.exec()
         timer.stop()
         cap.release()
+        self._start_device_change_listener()  # re-register after camera fully released
 
     def _on_camera_changed(self, combo_idx: int):
-        """Update camera index and desired name — takes effect on next START."""
+        """Update camera index and desired name — takes effect on next START.
+
+        Also drives the Test button: enabled only when a real camera (idx >= 0)
+        is selected, disabled for any placeholder item.
+        """
         idx = self.camera_combo.itemData(combo_idx)
         if idx is not None and idx >= 0:
             self._camera_index = idx
             name = next((n for ix, n in self._camera_cache if ix == idx), "")
             if name:
                 self._desired_camera_name = name
+            self.test_cam_btn.setEnabled(True)
+        else:
+            self.test_cam_btn.setEnabled(False)
 
     # Guide card
     def _build_guide_card(self) -> QWidget:
@@ -518,6 +534,107 @@ class CameraMixin:
         )
         self.feed_label.setObjectName("feedLabel")
         self.feed_label.setPixmap(_QP.fromImage(scaled))
+
+    # Device-change listener (WM_DEVICECHANGE)
+    def _start_device_change_listener(self):
+        """Register a hidden native window that receives WM_DEVICECHANGE from
+        Windows whenever any device is plugged or unplugged.
+
+        This replaces the old polling idle watcher entirely:
+          - No background threads touching the camera driver
+          - No QTimer firing every 2 s
+          - No _watcher_busy races
+          - No time.sleep() settle hacks
+          - Detection is instant (~50 ms OS message latency)
+
+        The listener stays registered the whole time.  During a live session
+        _on_device_removed() returns immediately — PitchWorker already handles
+        its own disconnection via error_occurred.
+        """
+        if getattr(self, "_devchange_listener", None) is not None:
+            return   # already registered
+
+        try:
+            from PyQt6.QtGui import QWindow
+            import ctypes, ctypes.wintypes as _wt
+
+            page_ref = self   # capture mixin/page reference
+
+            class _DevChangeWindow(QWindow):
+                WM_DEVICECHANGE        = 0x0219
+                DBT_DEVICEREMOVECOMPLETE = 0x8004
+
+                def nativeEvent(self, event_type, message):
+                    import ctypes
+                    msg = ctypes.cast(int(message), ctypes.POINTER(ctypes.c_uint * 7))
+                    if msg and msg[0][1] == self.WM_DEVICECHANGE:
+                        wparam = msg[0][2]
+                        if wparam == self.DBT_DEVICEREMOVECOMPLETE:
+                            QTimer.singleShot(300, page_ref._on_device_removed)
+                    return False, 0
+
+            win = _DevChangeWindow()
+            win.create()   # allocates the native HWND
+            self._devchange_listener = win
+        except Exception:
+            self._devchange_listener = None   # not on Windows or ctypes issue
+
+    def _stop_device_change_listener(self):
+        """Destroy the native listener window (called on page teardown)."""
+        listener = getattr(self, "_devchange_listener", None)
+        if listener is not None:
+            try:
+                listener.destroy()
+            except Exception:
+                pass
+            self._devchange_listener = None
+
+    def _on_device_removed(self):
+        """Called ~300 ms after Windows fires DBT_DEVICEREMOVECOMPLETE.
+
+        The delay gives the OS time to finish unmounting the device before we
+        attempt to open it for verification.  Only acts when:
+          - No session is running (PitchWorker handles its own disconnect)
+          - A camera has been selected (_camera_index >= 0)
+          - The selected camera can no longer be opened
+        """
+        if self._running or self._camera_index < 0:
+            return
+
+        import cv2 as _cv2
+        idx = self._camera_index
+        cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+        still_alive = cap.isOpened()
+        cap.release()
+
+        if still_alive:
+            return   # something else was unplugged — our camera is fine
+
+        # Selected camera is gone — reset UI exactly like a mid-session disconnect
+        lost_name = self._desired_camera_name or f"Camera {idx}"
+
+        self._camera_index        = -1
+        self._desired_camera_name = ""
+        self._active_camera_name  = ""
+        self._camera_cache        = []
+
+        self.camera_combo.blockSignals(True)
+        self.camera_combo.clear()
+        self.camera_combo.addItem("No camera selected", -1)
+        self.camera_combo.blockSignals(False)
+        self.camera_combo.setEnabled(False)
+        self.camera_combo.set_session_live(False)
+        self.test_cam_btn.setEnabled(False)
+        self.start_btn.setEnabled(False)
+
+        self.find_cam_btn.setText("🔍  Find Cameras")
+        self.find_cam_btn.setEnabled(True)
+
+        toast_error(
+            self,
+            f"⚠  \"{lost_name}\" disconnected. "
+            f"Click 'Find Cameras' to reconnect."
+        )
 
     # Disconnection handler (called by StartSessionPage._on_worker_error)
     def _handle_camera_disconnected(self):
