@@ -596,7 +596,7 @@ class StartSessionPage(QWidget):
         self.find_cam_btn.setAutoDefault(False)
         self.find_cam_btn.setDefault(False)
         self.find_cam_btn.setToolTip(
-            "Scan for connected cameras — no LEDs will activate until START"
+            "Scan for connected cameras"
         )
         self.find_cam_btn.clicked.connect(self._handle_find_cameras)
         find_test_row.addWidget(self.find_cam_btn, stretch=1)
@@ -609,7 +609,7 @@ class StartSessionPage(QWidget):
         self.test_cam_btn.setAutoDefault(False)
         self.test_cam_btn.setDefault(False)
         self.test_cam_btn.setEnabled(False)   # enabled only after a camera is selected
-        self.test_cam_btn.setToolTip("Preview selected camera for 3 seconds")
+        self.test_cam_btn.setToolTip("Preview selected camera")
         self.test_cam_btn.clicked.connect(self._handle_test_camera)
         find_test_row.addWidget(self.test_cam_btn)
 
@@ -765,39 +765,43 @@ class StartSessionPage(QWidget):
     # Camera guide toggle
     @staticmethod
     def _get_camera_names() -> list:
-        """Return ordered list of DirectShow/MSMF video device friendly names.
+        """Return ordered list of camera friendly names exactly as DirectShow
+        enumerates them — matching the index order OpenCV uses with CAP_DSHOW.
 
-        Runs a single PowerShell process that executes all three queries and
-        returns a JSON array — one process launch instead of three, which cuts
-        the typical wall-clock time from ~3-9 s down to ~1-2 s.
+        Root cause of the OBS problem
+        ──────────────────────────────
+        OBS Virtual Camera is a pure DirectShow virtual device. It does NOT
+        appear in Get-PnpDevice, Win32_PnPEntity, or any other WMI/PnP query.
+        It registers itself under the DirectShow video-input device category:
 
-        Query coverage:
-          1. Get-PnpDevice -Class Camera   — physical webcams (Win10/11)
-          2. Get-PnpDevice -Class Image    — some USB cameras
-          3. Win32_PnPEntity name filter   — catches OBS Virtual Camera, which
-             registers as a KsProxy device outside the Camera/Image PnP class.
-             The 'obs' keyword in the filter ensures it is never missed.
+          HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\
+          {65e8773d-8f56-11d0-a3b9-00a0c9223196}   ← KSCATEGORY_VIDEO_CAMERA
+
+        Reading FriendlyName values directly from that registry path gives us
+        exactly the same device list OpenCV sees with CAP_DSHOW, in the same
+        order — so index 0 here = index 0 in OpenCV, including OBS.
 
         Falls back to an empty list if PowerShell is unavailable or times out.
         """
         import subprocess, json as _json
 
-        # Single PS script: run all three queries, merge, deduplicate, emit JSON.
         ps_script = (
-            "$seen = @{}; $names = @(); "
-            # 1. Physical webcams
-            "Get-PnpDevice -Class Camera -Status OK -ErrorAction SilentlyContinue | "
-            "Select-Object -ExpandProperty FriendlyName | ForEach-Object { "
-            "  $k = $_.Trim().ToLower(); if ($k -and -not $seen[$k]) { $seen[$k]=1; $names += $_.Trim() } }; "
-            # 2. Image class (some USB cams)
-            "Get-PnpDevice -Class Image -Status OK -ErrorAction SilentlyContinue | "
-            "Select-Object -ExpandProperty FriendlyName | ForEach-Object { "
-            "  $k = $_.Trim().ToLower(); if ($k -and -not $seen[$k]) { $seen[$k]=1; $names += $_.Trim() } }; "
-            # 3. WMI broad filter — catches OBS Virtual Camera and other KsProxy devices
-            "Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue | "
-            "Where-Object { $_.Name -match 'camera|webcam|video|obs' } | "
-            "Select-Object -ExpandProperty Name | ForEach-Object { "
-            "  $k = $_.Trim().ToLower(); if ($k -and -not $seen[$k]) { $seen[$k]=1; $names += $_.Trim() } }; "
+            "$guid = '{65e8773d-8f56-11d0-a3b9-00a0c9223196}'; "
+            "$base = \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\$guid\"; "
+            "$names = @(); "
+            "if (Test-Path $base) { "
+            "  Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object { "
+            "    $fn = $null; "
+            "    $hash = Join-Path $_.PSPath '#'; "
+            "    if (Test-Path $hash) { "
+            "      $fn = (Get-ItemProperty $hash -Name FriendlyName "
+            "             -ErrorAction SilentlyContinue).FriendlyName } "
+            "    if (-not $fn) { "
+            "      $fn = (Get-ItemProperty $_.PSPath -Name FriendlyName "
+            "             -ErrorAction SilentlyContinue).FriendlyName } "
+            "    if ($fn) { $names += $fn.Trim() } "
+            "  } "
+            "}; "
             "$names | ConvertTo-Json -Compress"
         )
 
@@ -883,18 +887,17 @@ class StartSessionPage(QWidget):
         self._refresh_camera_cache()
 
     def _handle_test_camera(self):
-        """Open a 3-second preview popup for the selected camera.
+        """Open a live preview popup for the selected camera.
 
-        Uses CAP_DSHOW for the actual frame grab (MSMF can be slow to
-        produce the first frame on some drivers). The popup auto-closes
-        after 3 s, or immediately if the user clicks it.
+        Stays open until the user clicks anywhere — no auto-close timer.
+        Uses CAP_DSHOW for the actual frame grab (MSMF is slow to produce
+        the first frame on some drivers, and won't stream OBS at all).
         """
         if self._camera_index < 0 or self._running:
             return
 
         import cv2 as _cv2
 
-        # Build a small modal dialog with a feed label
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         dlg.setWindowModality(Qt.WindowModality.ApplicationModal)
@@ -909,11 +912,11 @@ class StartSessionPage(QWidget):
         close_lbl = QLabel("Click to close", dlg)
         close_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         close_lbl.setGeometry(0, 270, 400, 30)
+        close_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
         close_lbl.setStyleSheet("background:#111111; color:#444444; font-size:10px;")
 
         dlg.mousePressEvent = lambda _e: dlg.accept()
 
-        # Center dialog on screen
         from PyQt6.QtWidgets import QApplication as _QApp
         sg = _QApp.primaryScreen().availableGeometry()
         dlg.move(
@@ -930,7 +933,6 @@ class StartSessionPage(QWidget):
             ret, frame = cap.read()
             if not ret:
                 return
-            import numpy as _np
             from PyQt6.QtGui import QImage as _QI, QPixmap as _QP
             rgb = _cv2.cvtColor(frame, _cv2.COLOR_BGR2RGB)
             h, w, ch = rgb.shape
@@ -942,31 +944,26 @@ class StartSessionPage(QWidget):
 
         timer = QTimer(dlg)
         timer.timeout.connect(_tick)
-        timer.start(33)   # ~30 fps preview
-
-        # Auto-close after 3 seconds
-        QTimer.singleShot(3000, dlg.accept)
+        timer.start(33)
 
         dlg.exec()
         timer.stop()
         cap.release()
 
     def _refresh_camera_cache(self):
-        """Probe cameras with MSMF (no LED activation) in a daemon thread.
+        """Probe cameras in a daemon thread; posts _on_camera_probe_done when done.
 
-        Called exclusively by _handle_find_cameras — never on page load,
-        never on combo click. Updates _camera_cache then posts
-        _on_camera_probe_done to the main thread.
+        Called exclusively by _handle_find_cameras. Uses a hybrid strategy:
 
-        Speed strategy: PowerShell name queries and MSMF device enumeration
-        run in parallel sub-threads so neither blocks the other.
-        Previously they ran sequentially (up to 15 s total for 3 PS queries
-        x 5 s timeout each). Now wall-clock time is max(ps_time, msmf_time),
-        almost always under 2 s on a healthy system.
+        - MSMF (CAP_MSMF): enumerates physical cameras without activating LEDs.
+        - DirectShow (CAP_DSHOW, isOpened() only, no read): catches virtual
+          cameras such as OBS Virtual Camera that MSMF cannot see at all.
+          Virtual devices have no physical LED, so CAP_DSHOW is safe here.
 
-        OBS Virtual Camera registers as a KsProxy device (not Camera/Image
-        class) so it is caught by the third Win32_PnPEntity WMI query whose
-        filter includes 'obs'.
+        Name list comes from _get_camera_names(), which reads the DirectShow
+        device registry (KSCATEGORY_VIDEO_CAMERA) — the same source OpenCV
+        uses internally, giving correct names and order for all devices including
+        OBS. Both sub-tasks run in parallel to keep wall-clock time short.
         """
         import threading as _t, cv2 as _cv2
 
@@ -979,11 +976,30 @@ class StartSessionPage(QWidget):
                 device_names.extend(self._get_camera_names())
 
             def _enum_msmf():
+                # Pass 1 — MSMF: enumerates physical cameras without activating LEDs.
+                msmf_found = set()
                 for idx in range(8):
                     cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
                     if cap.isOpened():
-                        found.append(idx)
-                    cap.release()   # always release — never read here
+                        msmf_found.add(idx)
+                    cap.release()
+
+                # Pass 2 — DirectShow: catches virtual cameras (OBS, etc.) that
+                # MSMF cannot see. We only call isOpened(), never cap.read(), so
+                # no physical camera LED activates. Virtual devices have no LED.
+                dshow_found = set()
+                for idx in range(8):
+                    cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+                    if cap.isOpened():
+                        dshow_found.add(idx)
+                    cap.release()
+
+                # Merge: physical cameras come first (MSMF order), then any
+                # virtual-only indices that DirectShow added.
+                for idx in sorted(msmf_found):
+                    found.append(idx)
+                for idx in sorted(dshow_found - msmf_found):
+                    found.append(idx)
 
             t_names = _t.Thread(target=_fetch_names, daemon=True)
             t_msmf  = _t.Thread(target=_enum_msmf,  daemon=True)
@@ -1031,7 +1047,7 @@ class StartSessionPage(QWidget):
         self.camera_combo.setEnabled(True)
         self.test_cam_btn.setEnabled(True)
 
-        n = len(cache)
+        n = self.camera_combo.count()   # derive from combo — always matches what the user sees
         self.find_cam_btn.setText(f"✅  Found ({n})")
         self.find_cam_btn.setEnabled(True)
 
@@ -1369,6 +1385,7 @@ class StartSessionPage(QWidget):
  
         self.start_btn.setEnabled(True)
         if hasattr(self, "camera_combo"):
+            self.camera_combo.set_session_live(False)   # unlock dropdown BEFORE re-enabling
             self.camera_combo.setEnabled(True)
         if hasattr(self, "find_cam_btn"):
             self.find_cam_btn.setEnabled(True)
