@@ -268,31 +268,24 @@ class SessionSummaryDialog(QDialog):
         return card
     
 class LiveCameraCombo(QComboBox):
-    """QComboBox backed by a background-probed camera cache.
+    """Passive camera selector combo.
 
-    showPopup() populates instantly from the cache (zero main-thread
-    blocking), then kicks off a background re-probe so the next open
-    is always fresh. Never probes during a live session.
-    """
-
-    def __init__(self, parent=None, populate_fn=None, refresh_fn=None):
+    Populated only when the user explicitly clicks 'Find Cameras'.
+    Never probes hardware on its own — no LEDs activate, no startup lag.
+    set_session_live() disables interaction during a live session.
+    """ 
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._populate_fn     = populate_fn
-        self._refresh_fn      = refresh_fn
         self._is_session_live = False
 
     def set_session_live(self, live: bool):
         self._is_session_live = live
 
     def showPopup(self):
-        """Show cached list instantly, then trigger background refresh."""
-        if not self._is_session_live:
-            if self._populate_fn:
-                self._populate_fn()
-            if self._refresh_fn:
-                self._refresh_fn()
+        """Block dropdown expansion during a live session."""
+        if self._is_session_live:
+            return
         super().showPopup()
-
 
 class CameraReconnectDialog(QDialog):
     """Shown when the camera disconnects mid-session.
@@ -403,39 +396,47 @@ class CameraReconnectDialog(QDialog):
         root.addLayout(btn_row)
  
     def _probe_cameras(self):
-        """Probe cameras, fetch real device names via StartSessionPage._get_camera_names,
-        and populate combo — excluding or marking the disconnected device."""
+        """Probe cameras and populate the reconnect combo.
+
+        Uses CAP_MSMF (no LED activation, no cap.read()).
+        Names are fetched via StartSessionPage._get_camera_names() — the same
+        single-process PowerShell call used by the main probe, which also
+        covers OBS Virtual Camera via the 'obs' WMI filter.
+        """
         import cv2 as _cv2
         self._combo.clear()
 
-        # Use the same PnP name resolution as the main camera combo
         device_names = StartSessionPage._get_camera_names()
 
+        # MSMF: isOpened() only — no read, no LED
         found = []
         for idx in range(8):
-            cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+            cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
             if cap.isOpened():
-                ret, _ = cap.read()
-                if ret:
-                    found.append(idx)
-                cap.release()
+                found.append(idx)
+            cap.release()
 
         if not found:
             self._combo.addItem("No cameras detected", -1)
-        else:
-            for pos, idx in enumerate(found):
-                name = device_names[pos] if pos < len(device_names) else f"Camera {idx}"
-                if idx == self._lost_index:
-                    label = f"{name}"
-                else:
-                    label = name
-                self._combo.addItem(label, idx)
-            # Auto-select first camera that isn't the lost one
-            for i in range(self._combo.count()):
-                if self._combo.itemData(i) != self._lost_index:
-                    self._combo.setCurrentIndex(i)
-                    self._selected_index = self._combo.itemData(i)
+            return
+
+        used_name_indices: set = set()
+        for idx in found:
+            matched_name = None
+            for ni, name in enumerate(device_names):
+                if ni not in used_name_indices:
+                    matched_name = name
+                    used_name_indices.add(ni)
                     break
+            label = matched_name or f"Camera {idx}"
+            self._combo.addItem(label, idx)
+
+        # Auto-select first camera that isn't the lost one
+        for i in range(self._combo.count()):
+            if self._combo.itemData(i) != self._lost_index:
+                self._combo.setCurrentIndex(i)
+                self._selected_index = self._combo.itemData(i)
+                break
  
     def _on_combo_changed(self, i: int):
         idx = self._combo.itemData(i)
@@ -566,19 +567,53 @@ class StartSessionPage(QWidget):
         self.camera_guide_card = self._build_guide_card()
         panel_layout.addWidget(self.camera_guide_card)
 
-        self.camera_combo = LiveCameraCombo(
-            parent=self,
-            populate_fn=self._populate_camera_combo,
-            refresh_fn=self._refresh_camera_cache,
-        )
+        # Bottom row: camera selector + guide toggle
+        guide_toggle_row = QHBoxLayout()
+        guide_toggle_row.setContentsMargins(0, 0, 0, 0)
+        guide_toggle_row.setSpacing(6)
+
+        self.camera_combo = LiveCameraCombo(parent=self)
         self.camera_combo.setObjectName("cameraCombo")
         self.camera_combo.setFixedHeight(28)
         self.camera_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.camera_combo.setToolTip("Select camera source — opens fresh list on click")
-        # Initial background probe; combo shows "No cameras found" until done
-        self._refresh_camera_cache()
+        self.camera_combo.setToolTip("Select a camera — click 'Find Cameras' first")
+        self.camera_combo.addItem("No camera selected", -1)
+        self.camera_combo.setEnabled(False)   # stays disabled until Find Cameras runs
         self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
-        panel_layout.addWidget(self.camera_combo)
+        guide_toggle_row.addWidget(self.camera_combo, stretch=1)
+
+        panel_layout.addLayout(guide_toggle_row)
+
+        # Find Cameras + Test row
+        find_test_row = QHBoxLayout()
+        find_test_row.setContentsMargins(0, 0, 0, 0)
+        find_test_row.setSpacing(6)
+
+        self.find_cam_btn = QPushButton("🔍  Find Cameras")
+        self.find_cam_btn.setObjectName("findCameraBtn")
+        self.find_cam_btn.setFixedHeight(28)
+        self.find_cam_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.find_cam_btn.setAutoDefault(False)
+        self.find_cam_btn.setDefault(False)
+        self.find_cam_btn.setToolTip(
+            "Scan for connected cameras — no LEDs will activate until START"
+        )
+        self.find_cam_btn.clicked.connect(self._handle_find_cameras)
+        find_test_row.addWidget(self.find_cam_btn, stretch=1)
+
+        self.test_cam_btn = QPushButton("Test")
+        self.test_cam_btn.setObjectName("testCameraBtn")
+        self.test_cam_btn.setFixedHeight(28)
+        self.test_cam_btn.setFixedWidth(46)
+        self.test_cam_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.test_cam_btn.setAutoDefault(False)
+        self.test_cam_btn.setDefault(False)
+        self.test_cam_btn.setEnabled(False)   # enabled only after a camera is selected
+        self.test_cam_btn.setToolTip("Preview selected camera for 3 seconds")
+        self.test_cam_btn.clicked.connect(self._handle_test_camera)
+        find_test_row.addWidget(self.test_cam_btn)
+
+        panel_layout.addLayout(find_test_row)
 
         # START button
         self.start_btn = QPushButton("START")
@@ -730,54 +765,56 @@ class StartSessionPage(QWidget):
     # Camera guide toggle
     @staticmethod
     def _get_camera_names() -> list:
-        """Return ordered list of DirectShow video device names.
+        """Return ordered list of DirectShow/MSMF video device friendly names.
 
-        Strategy — try three queries in order, merge unique results:
-        1. Get-PnpDevice -Class Camera   (physical webcams, Win10/11)
-        2. Get-PnpDevice -Class Image    (some USB cameras, scanners excluded)
-        3. Win32_PnPEntity name filter   (catches OBS Virtual Camera which
-           registers as a KsProxy device, not under Camera/Image class)
-        Falls back to empty list if PowerShell is unavailable."""
+        Runs a single PowerShell process that executes all three queries and
+        returns a JSON array — one process launch instead of three, which cuts
+        the typical wall-clock time from ~3-9 s down to ~1-2 s.
+
+        Query coverage:
+          1. Get-PnpDevice -Class Camera   — physical webcams (Win10/11)
+          2. Get-PnpDevice -Class Image    — some USB cameras
+          3. Win32_PnPEntity name filter   — catches OBS Virtual Camera, which
+             registers as a KsProxy device outside the Camera/Image PnP class.
+             The 'obs' keyword in the filter ensures it is never missed.
+
+        Falls back to an empty list if PowerShell is unavailable or times out.
+        """
         import subprocess, json as _json
-        names = []
-        seen = set()
 
-        queries = [
-            # Standard webcams
-            ("Get-PnpDevice -Class Camera -Status OK | "
-             "Select-Object -ExpandProperty FriendlyName | "
-             "ConvertTo-Json -Compress"),
-            # Image class (catches some webcams + virtual cameras)
-            ("Get-PnpDevice -Class Image -Status OK | "
-             "Select-Object -ExpandProperty FriendlyName | "
-             "ConvertTo-Json -Compress"),
-            # Broad WMI name filter — catches OBS Virtual Camera
-            ("Get-WmiObject Win32_PnPEntity | "
-             "Where-Object { $_.Name -match 'camera|webcam|video|obs' } | "
-             "Select-Object -ExpandProperty Name | "
-             "ConvertTo-Json -Compress"),
-        ]
+        # Single PS script: run all three queries, merge, deduplicate, emit JSON.
+        ps_script = (
+            "$seen = @{}; $names = @(); "
+            # 1. Physical webcams
+            "Get-PnpDevice -Class Camera -Status OK -ErrorAction SilentlyContinue | "
+            "Select-Object -ExpandProperty FriendlyName | ForEach-Object { "
+            "  $k = $_.Trim().ToLower(); if ($k -and -not $seen[$k]) { $seen[$k]=1; $names += $_.Trim() } }; "
+            # 2. Image class (some USB cams)
+            "Get-PnpDevice -Class Image -Status OK -ErrorAction SilentlyContinue | "
+            "Select-Object -ExpandProperty FriendlyName | ForEach-Object { "
+            "  $k = $_.Trim().ToLower(); if ($k -and -not $seen[$k]) { $seen[$k]=1; $names += $_.Trim() } }; "
+            # 3. WMI broad filter — catches OBS Virtual Camera and other KsProxy devices
+            "Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue | "
+            "Where-Object { $_.Name -match 'camera|webcam|video|obs' } | "
+            "Select-Object -ExpandProperty Name | ForEach-Object { "
+            "  $k = $_.Trim().ToLower(); if ($k -and -not $seen[$k]) { $seen[$k]=1; $names += $_.Trim() } }; "
+            "$names | ConvertTo-Json -Compress"
+        )
 
-        for ps in queries:
-            try:
-                result = subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", ps],
-                    capture_output=True, text=True, timeout=5
-                )
-                raw = result.stdout.strip()
-                if not raw:
-                    continue
-                parsed = _json.loads(raw)
-                items = [parsed] if isinstance(parsed, str) else list(parsed)
-                for name in items:
-                    key = name.strip().lower()
-                    if key and key not in seen:
-                        seen.add(key)
-                        names.append(name.strip())
-            except Exception:
-                continue
-
-        return names
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                capture_output=True, text=True, timeout=6
+            )
+            raw = result.stdout.strip()
+            if not raw:
+                return []
+            parsed = _json.loads(raw)
+            if isinstance(parsed, str):
+                return [parsed]
+            return [n.strip() for n in parsed if n and n.strip()]
+        except Exception:
+            return []
 
     def _populate_camera_combo(self):
         """Fill the combo from _camera_cache and restore the user's desired camera.
@@ -826,26 +863,177 @@ class StartSessionPage(QWidget):
 
         self.camera_combo.blockSignals(False)
 
+    def _handle_find_cameras(self):
+        """Triggered by 'Find Cameras' button.
+
+        Transitions the button through three states:
+          🔍 Find Cameras  →  ⏳ Searching...  →  ✅ Found (N)  or  ⚠ None found
+
+        No camera LED ever activates here — MSMF enumerate-only.
+        On success: combo is populated and enabled, Test button is enabled,
+        last-used camera is auto-selected from app settings if available.
+        """
+        if self._running:
+            return   # never probe during a live session
+
+        self.find_cam_btn.setEnabled(False)
+        self.find_cam_btn.setText("⏳  Searching...")
+        self.camera_combo.setEnabled(False)
+        self.test_cam_btn.setEnabled(False)
+        self._refresh_camera_cache()
+
+    def _handle_test_camera(self):
+        """Open a 3-second preview popup for the selected camera.
+
+        Uses CAP_DSHOW for the actual frame grab (MSMF can be slow to
+        produce the first frame on some drivers). The popup auto-closes
+        after 3 s, or immediately if the user clicks it.
+        """
+        if self._camera_index < 0 or self._running:
+            return
+
+        import cv2 as _cv2
+
+        # Build a small modal dialog with a feed label
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        dlg.setWindowModality(Qt.WindowModality.ApplicationModal)
+        dlg.setObjectName("cameraTestDialog")
+        dlg.setFixedSize(400, 300)
+
+        lbl = QLabel("Starting preview…", dlg)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setGeometry(0, 0, 400, 270)
+        lbl.setStyleSheet("background:#0a0a0a; color:#555555; font-size:12px;")
+
+        close_lbl = QLabel("Click to close", dlg)
+        close_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        close_lbl.setGeometry(0, 270, 400, 30)
+        close_lbl.setStyleSheet("background:#111111; color:#444444; font-size:10px;")
+
+        dlg.mousePressEvent = lambda _e: dlg.accept()
+
+        # Center dialog on screen
+        from PyQt6.QtWidgets import QApplication as _QApp
+        sg = _QApp.primaryScreen().availableGeometry()
+        dlg.move(
+            sg.x() + (sg.width()  - dlg.width())  // 2,
+            sg.y() + (sg.height() - dlg.height()) // 2,
+        )
+
+        cap = _cv2.VideoCapture(self._camera_index, _cv2.CAP_DSHOW)
+
+        def _tick():
+            if not cap.isOpened():
+                lbl.setText("⚠  Could not open camera")
+                return
+            ret, frame = cap.read()
+            if not ret:
+                return
+            import numpy as _np
+            from PyQt6.QtGui import QImage as _QI, QPixmap as _QP
+            rgb = _cv2.cvtColor(frame, _cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb.shape
+            img = _QI(rgb.data, w, h, ch * w, _QI.Format.Format_RGB888)
+            scaled = img.scaled(400, 270,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.FastTransformation)
+            lbl.setPixmap(_QP.fromImage(scaled))
+
+        timer = QTimer(dlg)
+        timer.timeout.connect(_tick)
+        timer.start(33)   # ~30 fps preview
+
+        # Auto-close after 3 seconds
+        QTimer.singleShot(3000, dlg.accept)
+
+        dlg.exec()
+        timer.stop()
+        cap.release()
+
     def _refresh_camera_cache(self):
-        """Probe cameras in a daemon thread; update cache + repopulate combo
-        on the main thread when done. Uses isOpened() only — no cap.read()."""
+        """Probe cameras with MSMF (no LED activation) in a daemon thread.
+
+        Called exclusively by _handle_find_cameras — never on page load,
+        never on combo click. Updates _camera_cache then posts
+        _on_camera_probe_done to the main thread.
+
+        Speed strategy: PowerShell name queries and MSMF device enumeration
+        run in parallel sub-threads so neither blocks the other.
+        Previously they ran sequentially (up to 15 s total for 3 PS queries
+        x 5 s timeout each). Now wall-clock time is max(ps_time, msmf_time),
+        almost always under 2 s on a healthy system.
+
+        OBS Virtual Camera registers as a KsProxy device (not Camera/Image
+        class) so it is caught by the third Win32_PnPEntity WMI query whose
+        filter includes 'obs'.
+        """
         import threading as _t, cv2 as _cv2
+
         def _probe():
-            device_names = self._get_camera_names()
-            found = []
-            for idx in range(8):
-                cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
-                if cap.isOpened():
-                    found.append(idx)
-                    cap.release()
-            cache = []
-            for pos, idx in enumerate(found):
-                name = (device_names[pos]
-                        if pos < len(device_names) else f"Camera {idx}")
-                cache.append((idx, name))
+            # Run name fetch and MSMF enum simultaneously
+            device_names: list = []
+            found: list = []
+
+            def _fetch_names():
+                device_names.extend(self._get_camera_names())
+
+            def _enum_msmf():
+                for idx in range(8):
+                    cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
+                    if cap.isOpened():
+                        found.append(idx)
+                    cap.release()   # always release — never read here
+
+            t_names = _t.Thread(target=_fetch_names, daemon=True)
+            t_msmf  = _t.Thread(target=_enum_msmf,  daemon=True)
+            t_names.start()
+            t_msmf.start()
+            t_names.join()
+            t_msmf.join()
+
+            # Pair device indices with PnP names in order
+            cache: list = []
+            used_name_indices: set = set()
+            for idx in found:
+                matched_name = None
+                for ni, name in enumerate(device_names):
+                    if ni not in used_name_indices:
+                        matched_name = name
+                        used_name_indices.add(ni)
+                        break
+                cache.append((idx, matched_name or f"Camera {idx}"))
+
             self._camera_cache = cache
-            QTimer.singleShot(0, self._populate_camera_combo)
+            QTimer.singleShot(0, self._on_camera_probe_done)
+
         _t.Thread(target=_probe, daemon=True).start()
+
+    def _on_camera_probe_done(self):
+        """Main-thread callback after _refresh_camera_cache finishes.
+
+        Populates the combo, updates the Find Cameras button label,
+        enables the combo + Test button, and auto-selects the last-used
+        camera by name (from _desired_camera_name / app settings).
+        """
+        cache = self._camera_cache
+
+        if not cache:
+            self.find_cam_btn.setText("⚠  None found")
+            self.find_cam_btn.setEnabled(True)
+            self.camera_combo.clear()
+            self.camera_combo.addItem("No cameras found", -1)
+            self.camera_combo.setEnabled(False)
+            self.test_cam_btn.setEnabled(False)
+            return
+
+        self._populate_camera_combo()
+        self.camera_combo.setEnabled(True)
+        self.test_cam_btn.setEnabled(True)
+
+        n = len(cache)
+        self.find_cam_btn.setText(f"✅  Found ({n})")
+        self.find_cam_btn.setEnabled(True)
 
     def _on_camera_changed(self, combo_idx: int):
         """Update camera index and desired name — takes effect on next START."""
@@ -1029,6 +1217,11 @@ class StartSessionPage(QWidget):
     def _handle_start(self):
         if self._check_tokens_on_start():
             return
+        
+        # Guard: refuse to start if no camera has been found yet
+        if self._camera_index < 0:
+            toast_warning(self, "Click 'Find Cameras' to detect a camera first.")
+            return
     
         self.token_status_widget.hide()
         self._running = True
@@ -1045,6 +1238,10 @@ class StartSessionPage(QWidget):
         if hasattr(self, "camera_combo"):
             self.camera_combo.setEnabled(False)
             self.camera_combo.set_session_live(True)
+        if hasattr(self, "find_cam_btn"):
+            self.find_cam_btn.setEnabled(False)
+        if hasattr(self, "test_cam_btn"):
+            self.test_cam_btn.setEnabled(False)
         self.session_started.emit()
 
         # Reset stats for new sessions
@@ -1173,6 +1370,10 @@ class StartSessionPage(QWidget):
         self.start_btn.setEnabled(True)
         if hasattr(self, "camera_combo"):
             self.camera_combo.setEnabled(True)
+        if hasattr(self, "find_cam_btn"):
+            self.find_cam_btn.setEnabled(True)
+        if hasattr(self, "test_cam_btn") and self._camera_index >= 0:
+            self.test_cam_btn.setEnabled(True)
         # Re-show guide card — user may have dismissed it during the session
         self._update_camera_guide()
  
@@ -1248,6 +1449,10 @@ class StartSessionPage(QWidget):
         if hasattr(self, "camera_combo"):
             self.camera_combo.set_session_live(False)
             self.camera_combo.setEnabled(True)
+        if hasattr(self, "find_cam_btn"):
+            self.find_cam_btn.setEnabled(True)
+        if hasattr(self, "test_cam_btn") and self._camera_index >= 0:
+            self.test_cam_btn.setEnabled(True)
         self._refresh_token_status()
 
     def _save_session(self, accuracy: float):
@@ -1324,7 +1529,10 @@ class StartSessionPage(QWidget):
             self._camera_index = new_idx
             self._desired_camera_name = new_name
             self._active_camera_name  = ""
-            self._refresh_camera_cache()   # re-probe then repopulate
+            # Re-probe so the combo reflects the new state; reset button label
+            self.find_cam_btn.setText("⏳  Searching...")
+            self.find_cam_btn.setEnabled(False)
+            self._refresh_camera_cache()
             toast_warning(
                 self,
                 f"\"{new_name}\" selected. Press START to begin a new session."

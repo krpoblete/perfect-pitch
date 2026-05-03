@@ -151,22 +151,6 @@
     color: #333333;
 }
 
-/* Guide toggle button (always visible above guide card) */
-#guideToggleBtn {
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    padding: 0;
-}
-
-#guideToggleBtn:hover {
-    background-color: #1e1e1e;
-}
-
-#guideToggleBtn:pressed {
-    background-color: #2a2a2a;
-}
-
 /* Token status widget */
 #tokenStatusWidget {
     background-color: #1a1a1a;
@@ -281,6 +265,12 @@
     color: #aaaaaa;
 }
 
+#cameraCombo:disabled {
+    background-color: #111111;
+    border-color: #1e1e1e;
+    color: #333333;
+}
+
 #cameraCombo::drop-down {
     border: none;
     width: 18px;
@@ -292,4 +282,63 @@
     color: #aaaaaa;
     selection-background-color: #222222;
     font-size: 11px;
+}
+
+/* Find Cameras button — three visual states via text prefix */
+#findCameraBtn {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #888888;
+    font-size: 11px;
+    padding: 0 8px;
+    text-align: left;
+}
+
+#findCameraBtn:hover {
+    background-color: #1c1c1c;
+    border-color: #3a3a3a;
+    color: #aaaaaa;
+}
+
+#findCameraBtn:pressed {
+    background-color: #131313;
+}
+
+#findCameraBtn:disabled {
+    background-color: #111111;
+    border-color: #1e1e1e;
+    color: #444444;
+}
+
+/* Test Camera button */
+#testCameraBtn {
+    background-color: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #666666;
+    font-size: 11px;
+}
+
+#testCameraBtn:hover {
+    background-color: #1c1c1c;
+    border-color: #3a3a3a;
+    color: #aaaaaa;
+}
+
+#testCameraBtn:pressed {
+    background-color: #131313;
+}
+
+#testCameraBtn:disabled {
+    background-color: #111111;
+    border-color: #1e1e1e;
+    color: #2e2e2e;
+}
+
+/* Camera Test preview dialog */
+#cameraTestDialog {
+    background-color: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
 }
