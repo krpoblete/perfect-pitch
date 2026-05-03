@@ -365,7 +365,7 @@ def get_pitch_token_status(user_id: int) -> dict:
         threshold       — user's current daily threshold (their token pool)
         recommended_cap — USA Baseball age-based cap (max they can ever set)
         used_today      — pitches already thrown today
-        remaining       — tokens left (threshold - used_today), min 0
+        remaining       — pitches left under user's threshold today (threshold - used_today) 
         headroom        — extra pitches available up to recommended_cap
                           (recommended_cap - threshold), shown when exhausted
         locked          — True when remaining == 0
@@ -386,7 +386,7 @@ def get_pitch_token_status(user_id: int) -> dict:
 
     used_today = get_pitches_used_today(user_id)
     remaining = max(0, threshold - used_today)
-    headroom = max(0, recommended_cap - threshold)
+    headroom = max(0, recommended_cap - used_today)
 
     return {
         "threshold": threshold,
@@ -394,7 +394,7 @@ def get_pitch_token_status(user_id: int) -> dict:
         "used_today": used_today,
         "remaining": remaining,
         "headroom": headroom,
-        "locked": remaining == 0,
+        "locked": used_today >= threshold,
     }
 
 # Dashboard helpers

@@ -485,23 +485,41 @@ class AccountSettingsPage(QWidget):
         cap = get_pitch_max(self._dob)
         user_today = get_pitches_used_today(self.user_id)
 
-        # threshold = user's total daily budget stored in DB
+        # true_remaining = pitches physically left today under the hard cap.
+        true_remaining = max(0, cap - user_today)
+
+        # spinbox value = threshold - used_today (user's remaining budget).
+        # spinbox max  = cap - used_today (hard ceiling, shrinks as you pitch).
         saved = user["pitch_threshold"] or recommended
-        threshold = min(saved, cap)
-        self._original_threshold = threshold
+        spin_value = max(0, saved - user_today)
+        self._original_threshold = spin_value 
 
-        # remaining = pitches left under the threshold today
-        remaining = max(0, threshold - user_today)
+        # remaining label = cap - used_today (hard cap truth, independent of threshold).
+        remaining = true_remaining
 
-        # Spinbox range: 1 → cap always — user sets a daily budget freely.
-        # They can set any value; remaining = threshold - used_today updates live.
-        # Only lock when the full cap is consumed (nothing left to budget).
+        # Spinbox range and state depends on exhaustion:
+        # - cap exhausted: fully locked, range 0→0, disabled.
+        # - threshold exhausted (spin_value == 0): show 0, range 0→true_remaining,
+        #   keep ENABLED so user can increment to raise their threshold.
+        #   _original_threshold = 0 so any increment triggers Save Changes.
+        # - normal: range 1→true_remaining, value = spin_value.
         cap_exhausted = user_today >= cap
+        thresh_exhausted = spin_value == 0 and not cap_exhausted
         self.threshold_input.blockSignals(True)
-        self.threshold_input.setRange(1, cap)
-        self.threshold_input.setValue(threshold)
+        if cap_exhausted:
+            self.threshold_input.setRange(0, 0)
+            self.threshold_input.setValue(0)
+        elif thresh_exhausted:
+            self.threshold_input.setRange(0, true_remaining)
+            self.threshold_input.setValue(0)
+            self._original_threshold = 0
+        else:
+            self.threshold_input.setRange(1, true_remaining if true_remaining > 0 else 1)
+            self.threshold_input.setValue(spin_value)
         self.threshold_input.blockSignals(False)
- 
+
+        # Disable only when hard cap is exhausted or user is Coach.
+        # When threshold-only exhausted, keep enabled so user can increment.
         self.threshold_input.setEnabled(not cap_exhausted and self._role != "Coach")
         if cap_exhausted:
             self.threshold_input.setToolTip(
@@ -515,14 +533,14 @@ class AccountSettingsPage(QWidget):
         # Recommended cap indicator
         self.rec_cap_lbl.setText(f"Recommended: {cap} pitches/day")
 
-        # Remaining today = threshold - used_today, matches Start Session exactly
+        # Remaining today = cap - used_today.
         self.remaining_lbl.setText(f"Remaining today: {remaining}")
         self.remaining_lbl.setStyleSheet(
             "color: #4ecb71; background: transparent;"
             if remaining > 0 else
             "color: #e05555; background: transparent;"
         )
-        
+
         # Throwing hand — block signals to avoid triggering change detection
         self.rhp_btn.blockSignals(True)
         self.lhp_btn.blockSignals(True)
@@ -627,8 +645,9 @@ class AccountSettingsPage(QWidget):
         from src.db import get_pitches_used_today
         used_today = get_pitches_used_today(self.user_id)
         cap = get_pitch_max(self._dob)
-        # Clamp to cap only — spinbox range is already 1→cap, so this is just a safety guard
-        threshold = min(self.threshold_input.value(), cap)
+        # The spinner already shows threshold - used_today.
+        # To save back the correct absolute threshold, add used_today back.
+        threshold = min(self.threshold_input.value() + used_today, cap) 
         hand = "RHP" if self.rhp_btn.isChecked() else "LHP" 
 
         ok, msg = validate_name(first_name, "First Name")
@@ -656,8 +675,8 @@ class AccountSettingsPage(QWidget):
 
         self._set_save_enabled(False)
 
-        # Update remaining label immediately so it reflects the newly saved threshold
-        remaining = max(0, threshold - used_today)
+        # Remaining label = cap - used_today. 
+        remaining = max(0, cap - used_today)
         self.remaining_lbl.setText(f"Remaining today: {remaining}")
         self.remaining_lbl.setStyleSheet(
             "color: #4ecb71; background: transparent;"

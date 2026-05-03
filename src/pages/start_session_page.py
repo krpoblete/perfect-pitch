@@ -467,7 +467,7 @@ class StartSessionPage(QWidget):
         self._threshold = None         # user's current token pool
         self._recommended_cap = None   # USA Baseball age-based cap
         self._used_today = 0           # pitches thrown today
-        self._tokens_remaining = 0     # threshold - used_today 
+        self._tokens_remaining = 0     # cap - used_today 
         self._throwing_hand = "RHP"   
         self._worker = None
         self._summary_dlg = None       # ref to open dialog for skeleton injection
@@ -929,16 +929,15 @@ class StartSessionPage(QWidget):
         So if the user pitched 60 of their 120 cap, they have 60 left
         regardless of what their saved threshold is. 
         """
-        from src.db import get_pitch_token_status, get_pitches_used_today
+        from src.db import get_pitch_token_status
         status = get_pitch_token_status(self.user_id)
 
         cap = status["recommended_cap"]
         used_today = status["used_today"]
         threshold = status["threshold"]
 
-        # remaining = pitches left under the user's threshold today
-        # mirrors account_settings: remaining = max(0, threshold - used_today)
-        effective_max = max(0, cap - used_today)
+        # remaining = threshold - used_today (user's budget countdown).
+        # Mirrors the spinbox value in account_settings. 
         remaining = max(0, threshold - used_today)
 
         self._threshold = threshold
@@ -954,7 +953,7 @@ class StartSessionPage(QWidget):
             "threshold": threshold,
             "recommended_cap": cap,
             "used_today": used_today,
-            "headroom": max(0, effective_max - threshold),
+            "headroom": status["headroom"],
             "locked": self._tokens_remaining <= 0,
         } 
 
@@ -969,25 +968,20 @@ class StartSessionPage(QWidget):
     def _apply_token_locked(self, status: dict):
         """Block START and show appropriate message when tokens are exhausted.
 
-        Inherits effective_max deduction logic from account_settings_page:
-            effective_max = recommended_cap - used_today
-            headroom      = effective_max - threshold (extra pitches still available)  
-        """
+        headroom = cap - used_today (pitches left before the hard daily cap).
+        threshold is irrelevant here — headroom answers "how many pitches
+        are physically left today regardless of the user's soft budget".
+        """ 
         self.start_btn.setEnabled(False)
 
         cap = status["recommended_cap"]
-        threshold = status["threshold"]
-        used_today = status.get("used_today", self._used_today)
-
-        # Recompute headroom using effect_max — mirrors account_settings logic
-        effective_max = max(0, cap - used_today)
-        headroom = max(0, effective_max - threshold)
+        headroom = status.get("headroom", 0) 
 
         if headroom > 0:
             msg = (
-                f"You've used all {threshold} of your pitching tokens today. "
-                f"You can still pitch {headroom} more and your recommended "
-                f"daily limit is {cap}. Increase your threshold in Account Settings."
+                f"You still have {headroom} pitch{'es' if headroom != 1 else ''} left "
+                f"before your daily cap of {cap}. "
+                f"Go to Account Settings and raise your threshold."
             )
             icon_color = "#f0a500"
         else:
@@ -1019,17 +1013,9 @@ class StartSessionPage(QWidget):
 
         self._stop_capture()
 
-        effective_max = max(0, (self._recommended_cap or 0) - (self._used_today or 0))
-        headroom = max(0, effective_max - (self._threshold or 0))
-        status = {
-            "threshold": self._threshold,
-            "recommended_cap": self._recommended_cap,
-            "used_today": self._used_today,
-            "headroom": headroom,
-        }
-        self._apply_token_locked(status)
-
-        # Show 0 immediately on the panel without touching the DB
+        # Show 0 immediately on the panel without touching the DB.
+        # _apply_token_locked is deferred until after _save_session in
+        # _on_worker_finished so headroom reflects the true post-save used_today.
         self.token_val.setText("0")
         # Launch the same async summary flow as _handle_end
         self._launch_summary_waiter()
@@ -1215,6 +1201,20 @@ class StartSessionPage(QWidget):
         self._summary_dlg = dlg
         if dlg.exec():
             self._save_session(accuracy)
+            # Re-fetch headroom immediately after save so the locked message
+            # reflects the true post-save used_today, not the pre-save snapshot.
+            from src.db import get_pitch_token_status
+            fresh = get_pitch_token_status(self.user_id)
+            fresh_headroom = max(0, fresh["recommended_cap"] - fresh["used_today"])
+            if self._tokens_remaining <= 0:
+                locked_status = {
+                    "threshold": fresh["threshold"],
+                    "recommended_cap": fresh["recommended_cap"],
+                    "used_today": fresh["used_today"],
+                    "headroom": fresh_headroom,
+                    "locked": True,
+                }
+                self._apply_token_locked(locked_status)
         self._summary_dlg = None
         self._ending_worker = None
         # Refresh AFTER dialog closes so the panel never jumps during summary 
