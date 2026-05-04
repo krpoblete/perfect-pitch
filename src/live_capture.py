@@ -122,8 +122,8 @@ ALERT_RISK_RATIO = 1.5
 
 COOLDOWN = 10
 
-from src.config import ROOT_DIR
-LOG_DIR = ROOT_DIR / "output" 
+from src.config import EXE_DIR
+LOG_DIR = EXE_DIR / "output"
 
 SHORT_NAMES = [
     "L.Elbow",    "R.Elbow",

@@ -254,10 +254,10 @@ class PitchWorker(QThread):
         # Session log — each session gets its own subfolder under output/artifacts/
         # Named session_<timestamp>_uid<user_id> to prevent collisions between
         # two pitchers whose sessions happen to start at the same second.
-        from src.config import ROOT_DIR
+        from src.config import EXE_DIR
         session_start = datetime.now()
         session_slug = f"session_{session_start.strftime('%Y%m%d_%H%M%S')}_uid{self.user_id}"
-        session_dir = ROOT_DIR / "output" / "artifacts" / session_slug
+        session_dir = EXE_DIR / "output" / "artifacts" / session_slug
         session_dir.mkdir(parents=True, exist_ok=True)
         log_path = session_dir / f"{session_slug}.json"
         session_log = []
