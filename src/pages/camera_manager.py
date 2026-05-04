@@ -45,106 +45,162 @@ class CameraMixin:
     # Static hardware query
     @staticmethod
     def _get_camera_names() -> tuple:
-        """Return (physical_names, virtual_names) for the camera pairing step.
+        """Return (physical_names, virtual_names) in DSHOW index order.
 
-        Primary path — PyGrabber (pygrabber):
-        ───────────────────────────────────────
-        PyGrabber wraps the Windows DirectShow ICreateDevEnum COM interface —
-        the exact same enumeration OpenCV uses with CAP_DSHOW. It returns
-        FriendlyName values in the same order as OpenCV device indices, so
-        index 0 here == index 0 in CAP_DSHOW, including OBS Virtual Camera.
+        Uses raw ctypes to call CoCreateInstance(CLSID_SystemDeviceEnum) and
+        enumerate CLSID_VideoInputDeviceCategory monikers — the exact same
+        path OpenCV takes internally for CAP_DSHOW. Names and indices are
+        guaranteed to match OpenCV's assignment, including Windows Virtual
+        Camera (OBS 28+).
 
-        We split the flat list into physical vs virtual by cross-checking
-        with MSMF-visible indices: devices MSMF can open are physical
-        hardware (no LED activated — isOpened() only); the rest are virtual.
+        IMoniker vtable on Windows 11:
+          [0-2] IUnknown, [3] GetClassID, [4-7] IPersistStream,
+          [8] BindToObject, [9] BindToStorage  ← slot 9, not 8
 
-        Fallback path — PowerShell + registry:
-        ───────────────────────────────────────
-        Used when pygrabber is not installed. Queries WMI for physical camera
-        names and reads KSCATEGORY_VIDEO_CAMERA registry for virtual cameras.
-        Less reliable for OBS because OBS's FriendlyName registry subkey
-        structure varies between OBS versions and Windows builds.
-
-        Install pygrabber once to make OBS detection permanent:
-            pip install pygrabber
+        Falls back to empty lists on any error so cameras still appear as
+        "Camera N" rather than crashing.
         """
-        # Primary: PyGrabber
-        try:
-            from pygrabber.dshow_graph import FilterGraph as _FG
-            import cv2 as _cv2
+        import ctypes, uuid, cv2 as _cv2
 
-            all_names: list[str] = _FG().get_input_devices()   # DirectShow order
-
-            # Classify physical vs virtual via MSMF (no LED — isOpened only)
-            msmf_set: set[int] = set()
-            for idx in range(len(all_names)):
-                cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
-                if cap.isOpened():
-                    msmf_set.add(idx)
-                cap.release()
-
-            physical_names = [n for i, n in enumerate(all_names) if i in msmf_set]
-            virtual_names  = [n for i, n in enumerate(all_names) if i not in msmf_set]
-            return (physical_names, virtual_names)
-
-        except ImportError:
-            pass   # pygrabber not installed — fall through to PowerShell
-        except Exception:
-            pass   # COM error, driver issue, etc. — fall through
-
-        # Fallback: PowerShell + registry
-        import subprocess, json as _json
-
-        ps_script = (
-            # Physical cameras from WMI PnP, sorted by PNPDeviceID to match
-            # the MSMF enumeration order OpenCV uses internally.
-            "$phys = Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue "
-            "| Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' } "
-            "| Sort-Object PNPDeviceID "
-            "| Select-Object -ExpandProperty Name; "
-
-            # Virtual cameras from KSCATEGORY_VIDEO registry.
-            # Windows Virtual Camera registers under this GUID.
-            # KSCATEGORY_VIDEO_CAMERA (65e8773d) is for physical UVC devices
-            # and is NOT where Windows Virtual Camera appears.
-            "$guid = '{e5323777-f976-4f5b-9b55-b94699c46e44}'; "
-            "$base = \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\$guid\"; "
-            "$virt = @(); "
-            "if (Test-Path $base) { "
-            "  Get-ChildItem $base -ErrorAction SilentlyContinue "
-            "  | Sort-Object Name "
-            "  | ForEach-Object { "
-            "    $fn = $null; "
-            "    $hash = Join-Path $_.PSPath '#'; "
-            "    if (Test-Path $hash) { "
-            "      $fn = (Get-ItemProperty $hash -Name FriendlyName "
-            "             -ErrorAction SilentlyContinue).FriendlyName } "
-            "    if (-not $fn) { "
-            "      $fn = (Get-ItemProperty $_.PSPath -Name FriendlyName "
-            "             -ErrorAction SilentlyContinue).FriendlyName } "
-            "    if ($fn) { $virt += $fn.Trim() } "
-            "  } "
-            "}; "
-            # Deduplicate: drop any virtual name that already appears in phys
-            "$physLower = $phys | ForEach-Object { $_.ToLower() }; "
-            "$virtOnly = $virt | Where-Object { $physLower -notcontains $_.ToLower() }; "
-            "@{ phys = @($phys); virt = @($virtOnly) } | ConvertTo-Json -Compress"
-        )
+        all_names: list[str] = []
 
         try:
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
-                capture_output=True, text=True, timeout=8
+            ole32    = ctypes.windll.ole32
+            oleaut32 = ctypes.windll.oleaut32
+            ole32.CoInitializeEx(None, 0)
+
+            def _guid(s):
+                return (ctypes.c_byte * 16)(*uuid.UUID(s).bytes_le)
+
+            CLSID_SystemDeviceEnum         = _guid("62BE5D10-60EB-11D0-BD3B-00A0C911CE86")
+            IID_ICreateDevEnum             = _guid("29840822-5B84-11D0-BD3B-00A0C911CE86")
+            CLSID_VideoInputDeviceCategory = _guid("860BB310-5D01-11D0-BD3B-00A0C911CE86")
+            IID_IPropertyBag               = _guid("55272A00-42CB-11CE-8135-00AA004BB851")
+
+            # CoCreateInstance → ICreateDevEnum
+            dev_enum = ctypes.c_void_p()
+            hr = ole32.CoCreateInstance(
+                CLSID_SystemDeviceEnum, None, 1,
+                IID_ICreateDevEnum, ctypes.byref(dev_enum)
             )
-            raw = result.stdout.strip()
-            if not raw:
-                return ([], [])
-            parsed = _json.loads(raw)
-            phys = [n.strip() for n in (parsed.get("phys") or []) if n and n.strip()]
-            virt = [n.strip() for n in (parsed.get("virt") or []) if n and n.strip()]
-            return (phys, virt)
+            if hr != 0 or not dev_enum:
+                raise OSError(f"CoCreateInstance hr={hr:#010x}")
+
+            vt = ctypes.cast(
+                ctypes.cast(dev_enum, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p)
+            )
+            CreateClassEnumerator = ctypes.WINFUNCTYPE(
+                ctypes.HRESULT,
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_byte * 16),
+                ctypes.POINTER(ctypes.c_void_p),
+                ctypes.c_ulong
+            )(vt[3])
+
+            enum_ptr = ctypes.c_void_p()
+            hr = CreateClassEnumerator(
+                dev_enum,
+                ctypes.byref(CLSID_VideoInputDeviceCategory),
+                ctypes.byref(enum_ptr),
+                0
+            )
+            if hr != 0 or not enum_ptr:
+                raise OSError(f"CreateClassEnumerator hr={hr:#010x}")
+
+            vt2 = ctypes.cast(
+                ctypes.cast(enum_ptr, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p)
+            )
+            Next = ctypes.WINFUNCTYPE(
+                ctypes.HRESULT,
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.POINTER(ctypes.c_void_p),
+                ctypes.POINTER(ctypes.c_ulong)
+            )(vt2[3])
+
+            class VARIANT(ctypes.Structure):
+                _fields_ = [
+                    ("vt",  ctypes.c_ushort),
+                    ("pad", ctypes.c_byte * 6),
+                    ("val", ctypes.c_void_p),
+                ]
+
+            while True:
+                moniker = ctypes.c_void_p()
+                fetched = ctypes.c_ulong(0)
+                hr = Next(enum_ptr, 1, ctypes.byref(moniker), ctypes.byref(fetched))
+                if hr != 0 or fetched.value == 0 or not moniker:
+                    break
+
+                try:
+                    vt3 = ctypes.cast(
+                        ctypes.cast(moniker, ctypes.POINTER(ctypes.c_void_p))[0],
+                        ctypes.POINTER(ctypes.c_void_p)
+                    )
+                    # Slot 9 = BindToStorage on Windows 11
+                    BindToStorage = ctypes.WINFUNCTYPE(
+                        ctypes.HRESULT,
+                        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                        ctypes.POINTER(ctypes.c_byte * 16),
+                        ctypes.POINTER(ctypes.c_void_p)
+                    )(vt3[9])
+
+                    prop_bag = ctypes.c_void_p()
+                    hr = BindToStorage(
+                        moniker, None, None,
+                        ctypes.byref(IID_IPropertyBag),
+                        ctypes.byref(prop_bag)
+                    )
+                    if hr != 0 or not prop_bag:
+                        all_names.append("")
+                        continue
+
+                    vt4 = ctypes.cast(
+                        ctypes.cast(prop_bag, ctypes.POINTER(ctypes.c_void_p))[0],
+                        ctypes.POINTER(ctypes.c_void_p)
+                    )
+                    Read = ctypes.WINFUNCTYPE(
+                        ctypes.HRESULT,
+                        ctypes.c_void_p,
+                        ctypes.c_wchar_p,
+                        ctypes.POINTER(VARIANT),
+                        ctypes.c_void_p
+                    )(vt4[3])
+
+                    var = VARIANT()
+                    hr  = Read(prop_bag, "FriendlyName", ctypes.byref(var), None)
+                    if hr == 0 and var.vt == 8 and var.val:  # VT_BSTR = 8
+                        name = ctypes.cast(var.val, ctypes.c_wchar_p).value or ""
+                        all_names.append(name.strip())
+                        oleaut32.SysFreeString(var.val)
+                    else:
+                        all_names.append("")
+
+                except Exception:
+                    all_names.append("")
+
         except Exception:
+            pass
+
+        if not all_names:
             return ([], [])
+
+        # Classify physical vs virtual: MSMF opens physical cameras, not virtual ones.
+        # Preserve the real DSHOW index for each device so callers can build an
+        # accurate index→name map without re-enumerating sequentially.
+        msmf_set: set[int] = set()
+        for i in range(len(all_names)):
+            cap = _cv2.VideoCapture(i, _cv2.CAP_MSMF)
+            if cap.isOpened():
+                msmf_set.add(i)
+            cap.release()
+
+        # Return (real_dshow_index, name) pairs — NOT stripped name lists.
+        physical_pairs = [(i, n) for i, n in enumerate(all_names) if i in msmf_set]
+        virtual_pairs  = [(i, n) for i, n in enumerate(all_names) if i not in msmf_set]
+        return (physical_pairs, virtual_pairs)
 
     # Combo population
     def _populate_camera_combo(self):
@@ -199,68 +255,47 @@ class CameraMixin:
     def _refresh_camera_cache(self):
         """Probe cameras in a daemon thread; posts _on_camera_probe_done when done.
 
-        Uses a hybrid strategy:
-        - MSMF (CAP_MSMF): enumerates physical cameras without activating LEDs.
-        - DirectShow (CAP_DSHOW, isOpened() only, no read): catches virtual
-          cameras such as OBS Virtual Camera that MSMF cannot see at all.
+        Names and indices are resolved in a single pass so they are guaranteed
+        to be in the same order. _get_camera_names() enumerates via the DirectShow
+        COM enumerator (same source as OpenCV CAP_DSHOW) and classifies each device
+        as physical (MSMF-visible) or virtual (DSHOW-only). The resulting flat list
+        is already in DSHOW index order — index 0 = first COM moniker, etc.
 
-        Both sub-tasks (name fetch + enumerate) run in parallel to keep
-        wall-clock time short.
+        Capped at 3 cameras maximum (1 physical + 1 virtual is the typical setup;
+        3 covers the Integrated + USB + OBS case).
         """
         import threading as _t, cv2 as _cv2
 
+        MAX_CAMERAS = 3
+
         def _probe():
-            physical_names: list = []
-            virtual_names:  list = []
+            phys_pairs, virt_pairs = CameraMixin._get_camera_names()
 
-            def _fetch_names():
-                result = CameraMixin._get_camera_names()
-                physical_names.extend(result[0])
-                virtual_names.extend(result[1])
+            # Build a flat list of (real_dshow_index, name, is_virtual) in
+            # ascending index order, preserving the actual OS-assigned indices.
+            # Physical cameras come from MSMF enumeration; virtual (OBS etc.)
+            # are DSHOW-only.  Both lists already carry the real index.
+            all_pairs = sorted(
+                [(i, n, False) for i, n in phys_pairs] +
+                [(i, n, True)  for i, n in virt_pairs],
+                key=lambda t: t[0]
+            )
 
-            def _enum_cameras(out_phys: list, out_virt: list):
-                # DSHOW is the source of truth for indices — PitchWorker opens
-                # cameras via CAP_DSHOW, so we must use the same index space.
-                # MSMF is only used to classify physical vs virtual: cameras
-                # visible to MSMF are physical hardware; DSHOW-only are virtual.
-                msmf_set = set()
-                for idx in range(8):
-                    cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
-                    if cap.isOpened():
-                        msmf_set.add(idx)
-                    cap.release()
-
-                for idx in range(8):
-                    cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
-                    if cap.isOpened():
-                        if idx in msmf_set:
-                            out_phys.append(idx)
-                        else:
-                            out_virt.append(idx)
-                    cap.release()
-
-            phys_indices: list = []
-            virt_indices: list = []
-
-            t_names = _t.Thread(target=_fetch_names, daemon=True)
-            t_enum  = _t.Thread(target=_enum_cameras, args=(phys_indices, virt_indices), daemon=True)
-            t_names.start()
-            t_enum.start()
-            t_names.join()
-            t_enum.join()
-
+            # Confirm each index is openable via DSHOW, cap at MAX_CAMERAS.
             cache: list = []
-            for i, idx in enumerate(phys_indices):
-                name = physical_names[i] if i < len(physical_names) else f"Camera {idx}"
-                cache.append((idx, name))
-            for i, idx in enumerate(virt_indices):
-                name = virtual_names[i] if i < len(virtual_names) else f"Camera {idx}"
-                cache.append((idx, name))
+            virt_set: set = set()
+
+            for i, name, is_virt in all_pairs[:MAX_CAMERAS]:
+                cap = _cv2.VideoCapture(i, _cv2.CAP_DSHOW)
+                if cap.isOpened():
+                    label = name if name else f"Camera {i}"
+                    cache.append((i, label))
+                    if is_virt:
+                        virt_set.add(i)
+                cap.release()
 
             self._camera_cache = cache
-            # Store virtual indices separately so _handle_start can skip
-            # the MSMF resolution peek for DSHOW-only (virtual) cameras.
-            self._virt_indices = set(virt_indices)
+            self._virt_indices  = virt_set
             QTimer.singleShot(0, self._on_camera_probe_done)
 
         _t.Thread(target=_probe, daemon=True).start()
@@ -332,20 +367,28 @@ class CameraMixin:
         """Open a live preview popup for the selected camera.
 
         Stays open until the user clicks anywhere — no auto-close timer.
-        Uses CAP_DSHOW for the actual frame grab (MSMF is slow to produce
-        the first frame on some drivers, and won't stream OBS at all).
+
+        Backend selection:
+          - Physical cameras → CAP_DSHOW  (reliable, low latency)
+          - Virtual cameras (OBS, etc.) → CAP_MSMF
+            OBS Virtual Camera v27+ uses the Windows MF Platform sink.
+            It appears in the DirectShow device list (so Find Cameras detects
+            it correctly) but outputs black frames when opened via CAP_DSHOW.
+            CAP_MSMF is the correct backend to actually receive its frames.
         """
         if self._running:
             return
 
-        # Read directly from the combo — _camera_index may be stale if signals
-        # were blocked during _populate_camera_combo (which they are).
         cam_idx = self.camera_combo.itemData(self.camera_combo.currentIndex())
         if cam_idx is None or cam_idx < 0:
             return
         self._camera_index = cam_idx
 
         import cv2 as _cv2
+
+        # Pick the right backend for this device
+        is_virtual = cam_idx in getattr(self, "_virt_indices", set())
+        backend = _cv2.CAP_MSMF if is_virtual else _cv2.CAP_DSHOW
 
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
@@ -358,7 +401,7 @@ class CameraMixin:
         lbl.setGeometry(0, 0, 400, 270)
         lbl.setStyleSheet("background:#0a0a0a; color:#555555; font-size:12px;")
 
-        close_lbl = QLabel("Click to close", dlg)
+        close_lbl = QLabel("Click anywhere to close", dlg)
         close_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         close_lbl.setGeometry(0, 270, 400, 30)
         close_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -375,7 +418,7 @@ class CameraMixin:
 
         self._stop_device_change_listener()   # re-registered after preview closes
 
-        cap = _cv2.VideoCapture(cam_idx, _cv2.CAP_DSHOW)
+        cap = _cv2.VideoCapture(cam_idx, backend)
 
         def _tick():
             if not cap.isOpened():
@@ -528,7 +571,8 @@ class CameraMixin:
         from PyQt6.QtGui import QImage, QPixmap as _QP
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
-        img = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
+        # Use bytes() copy so QImage doesn't hold a reference to the numpy buffer
+        img = QImage(rgb.tobytes(), w, h, ch * w, QImage.Format.Format_RGB888)
         scaled = img.scaled(
             self.feed_label.width(),
             self.feed_label.height(),
@@ -600,13 +644,18 @@ class CameraMixin:
           - No session is running (PitchWorker handles its own disconnect)
           - A camera has been selected (_camera_index >= 0)
           - The selected camera can no longer be opened
+
+        Uses MSMF for physical cameras (no LED activation) and DSHOW for
+        virtual cameras such as OBS (MSMF cannot see them at all).
         """
         if self._running or self._camera_index < 0:
             return
 
         import cv2 as _cv2
         idx = self._camera_index
-        cap = _cv2.VideoCapture(idx, _cv2.CAP_DSHOW)
+        is_virtual = idx in getattr(self, "_virt_indices", set())
+        backend = _cv2.CAP_DSHOW if is_virtual else _cv2.CAP_MSMF
+        cap = _cv2.VideoCapture(idx, backend)
         still_alive = cap.isOpened()
         cap.release()
 
