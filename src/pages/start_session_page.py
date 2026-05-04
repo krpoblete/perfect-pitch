@@ -198,10 +198,6 @@ class StartSessionPage(QWidget, CameraMixin):
 
         root.addWidget(panel)
 
-        # Install the OS device-change listener immediately so disconnections
-        # are caught even before the user clicks 'Find Cameras'.
-        self._start_device_change_listener()
-
     # Stat card builder (panel-local; SessionSummaryDialog has its own)
     def _stat_card(self, title: str, icon_name: str, color: str) -> QWidget:
         card = QWidget()
@@ -399,16 +395,11 @@ class StartSessionPage(QWidget, CameraMixin):
 
         is_external = self._camera_index != 0
 
-        # Virtual cameras (OBS v27+) must be opened with CAP_MSMF, not CAP_DSHOW.
-        # OBS Virtual Camera appears in the DirectShow device list so Find Cameras
-        # detects it correctly, but outputs black frames when streamed via CAP_DSHOW.
-        # Physical external cameras use CAP_DSHOW (lower latency, more reliable).
-        is_virtual = self._camera_index in self._virt_indices
-
         # Only peek resolution for physical external cameras.
-        # Skip virtual cameras — opening them via MSMF here and then again in
-        # PitchWorker can cause the device to stall on some drivers.
-        is_physical_external = is_external and not is_virtual
+        # Virtual cameras (OBS, etc.) are DSHOW-only — opening them via
+        # CAP_MSMF can hold the device long enough to make PitchWorker's
+        # subsequent CAP_DSHOW open fail or return no frames.
+        is_physical_external = is_external and self._camera_index not in self._virt_indices
 
         if is_physical_external:
             try:
@@ -425,13 +416,12 @@ class StartSessionPage(QWidget, CameraMixin):
 
         self._worker = PitchWorker(
             camera_id=self._camera_index,
-            camera_name=self._active_camera_name,
             width=feed_w,
             height=feed_h,
             throwing_hand=self._throwing_hand,
             ml_bundle=self._ml_bundle,
             user_id=self.user_id,
-            is_virtual=self._camera_index in self._virt_indices,
+            reference_resolution=self._reference_resolution if not is_external else None,
             parent=self,
         )
         self._worker.frame_ready.connect(self.update_frame)
@@ -575,10 +565,6 @@ class StartSessionPage(QWidget, CameraMixin):
         if hasattr(self, "test_cam_btn") and self._camera_index >= 0:
             self.test_cam_btn.setEnabled(True)
         self._refresh_token_status()
-        # Unlock any parent-level UI (e.g. sidebar nav) that session_started locked.
-        # _on_worker_finished does this on the normal END path; _stop_capture handles
-        # the error / token-exhausted path where _on_worker_finished is never reached.
-        self.session_finished.emit()
 
     def _save_session(self, accuracy: float):
         toast_success(self, "Session saved successfully.")

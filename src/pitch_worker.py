@@ -42,21 +42,17 @@ class PitchWorker(QThread):
     error_occurred = pyqtSignal(str)      # fatal error message
     session_ended = pyqtSignal(str)       # log_path when thread finishes
 
-    def __init__(self, camera_id: int = 0, camera_name: str = "",
-                 width: int = 1920,
+    def __init__(self, camera_id: int = 0, width: int = 1920,
                  height: int = 1080, throwing_hand: str = "RHP",
-                 ml_bundle=None, user_id: int = 0,
-                 is_virtual: bool = False,
-                 reference_resolution: tuple | None = None, parent=None):
+                 ml_bundle=None, user_id: int = 0, 
+                 reference_resolution: tuple | None = None, parent = None):
         super().__init__(parent)
         self.camera_id = camera_id
-        self.camera_name = camera_name or f"Camera {camera_id}"
         self.width = width
         self.height = height
         self.throwing_hand = throwing_hand
         self._ml_bundle = ml_bundle                        # pre-loaded (model, scaler, threshold, thresholds)
         self.user_id = user_id                             # used for artifact folder naming (collision-safe)
-        self._is_virtual = is_virtual                      # skip resolution forcing for virtual cameras
         self._reference_resolution = reference_resolution  # (w, h) of external cam, or None
         self._stop_event = threading.Event()
         self.skeleton_path = ""                            # written by worker thread, read by main after wait()
@@ -175,27 +171,18 @@ class PitchWorker(QThread):
             with open(MODEL_DIR / "scaler.pkl", "rb") as f:
                 scaler = pickle.load(f)
 
-        # Backend selection:
-        #   Virtual cameras (OBS v27+) must use CAP_MSMF — they appear in the
-        #   DirectShow device list so Find Cameras detects them, but they output
-        #   black/corrupt frames when opened via CAP_DSHOW.  CAP_MSMF is the
-        #   correct sink for OBS Virtual Camera's Windows MF Platform output.
-        #   Physical cameras use CAP_DSHOW (lower latency, more reliable).
+        # Camera — CAP_DSHOW for Windows DirectShow (works with OBS Virtual Camera).
         # Do NOT force a FOURCC — let the driver negotiate its native format.
-        # OpenCV automatically converts YUY2/NV12 to BGR on read().
-        # For virtual cameras skip resolution forcing — they output at a fixed
-        # resolution and forcing a different size causes black frames.
-        _backend = cv2.CAP_MSMF if self._is_virtual else cv2.CAP_DSHOW
-        cap = cv2.VideoCapture(self.camera_id, _backend)
-        if not self._is_virtual:
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        # OpenCV automatically converts YUY2/NV12 from OBS to BGR on read().
+        # Only set resolution softly; if OBS ignores it we use whatever it gives.
+        cap = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         cap.set(cv2.CAP_PROP_FPS, 30)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not cap.isOpened():
             self.error_occurred.emit(
-                f"Could not open \"{self.camera_name}\". "
-                f"Make sure it is connected and not in use by another application."
+                f"Could not open camera {self.camera_id}."
             )
             return
 
