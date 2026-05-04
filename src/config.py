@@ -21,11 +21,11 @@ load_dotenv(ROOT_DIR / ".env")
 
 # Asset paths
 ASSETS_DIR = str(ROOT_DIR / "assets")
-ICONS_DIR  = str(ROOT_DIR / "assets" / "icons")
+ICONS_DIR = str(ROOT_DIR / "assets" / "icons")
 STYLES_DIR = str(ROOT_DIR / "src" / "styles")
 
 # Model paths
-MODELS_DIR      = str(ROOT_DIR / "models")
+MODELS_DIR = str(ROOT_DIR / "models")
 POSE_MODEL_PATH = str(ROOT_DIR / "pose_landmarker_heavy.task")
 
 # Database
@@ -33,5 +33,5 @@ DB_NAME = os.getenv("DB_NAME", "perfect_pitch.db")
 DB_PATH = str(ROOT_DIR / DB_NAME)
 
 # App info
-APP_NAME    = os.getenv("APP_NAME", "Perfect Pitch")
+APP_NAME = os.getenv("APP_NAME", "Perfect Pitch")
 APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
