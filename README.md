@@ -101,7 +101,27 @@ perfect-pitch/
 
 ---
 
-## Setup
+## Installation (End Users)
+
+If you just want to run Perfect Pitch without setting up a development environment, use the pre-built release from Google Drive.
+
+### 1. Download the latest release
+
+Go to the [**PerfectPitch - Download**](https://drive.google.com/drive/folders/1BJ7cG4cKgKWUxfNPDsFahZPtDnHK8tWS?usp=sharing) folder on Google Drive and download `PerfectPitch.zip`. This archive is the full app with the ML files (`models/` and `pose_landmarker_heavy.task`) are already bundled inside, so no extra steps are needed.
+
+### 2. Extract the zip
+
+Extract the zip anywhere on your machine (e.g. `C:\Program Files\PerfectPitch\`). Keep all files together since the `.exe` depends on the folders alongside it.
+
+### 3. Launch the app
+
+Double-click `PerfectPitch.exe`. On first launch the database is created automatically and seeded with a default Admin account. See [Default Admin Account](#default-admin-account) below.
+
+> **Windows SmartScreen** may warn about an unrecognized app. Click **More info → Run anyway** to proceed.
+
+---
+
+## Setup (Developers)
 
 ### 1. Clone the repository
 
@@ -123,7 +143,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-> **PyTorch (CUDA 12.1)** must be installed separately — it is not in `requirements.txt` because the index URL differs from PyPI:
+> **PyTorch (CUDA 12.1)** must be installed separately since it is not in `requirements.txt` because the index URL differs from PyPI:
 > ```powershell
 > pip install torch==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
 > ```
@@ -139,16 +159,17 @@ APP_NAME=Perfect Pitch
 APP_VERSION=1.0.0
 ```
 
-> This is optional for local development — all three values have hardcoded fallback defaults in `config.py`. It is included as a convenience for future developers who may want to swap the database name or app metadata without touching source code.
+> This is optional for local development because all three values have hardcoded fallback defaults in `config.py`. It is included as a convenience for future developers who may want to swap the database name or app metadata without touching source code.
 
 ### 5. Add ML model files
 
-Place the following in the project root (excluded from version control):
+The heavy and sensitive files are stored in the [**PerfectPitch - Dev Files**](https://drive.google.com/drive/folders/15rqmS4fGAuyg3RTfMKbMtbCnNChKaRiD?usp=sharing) folder on Google Drive (private). Download them individually and place each in the project root where they are excluded from version control.
 
 | File | Purpose |
 |------|---------|
 | `pose_landmarker_heavy.task` | MediaPipe Pose Landmarker model |
 | `models/` | Trained LSTM autoencoder, scaler, and threshold files |
+| `.env` | Environment variables (see step 4) |
 
 ### 6. Run the app
 
