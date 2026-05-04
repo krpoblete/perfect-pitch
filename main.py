@@ -9,7 +9,7 @@ if sys.platform == "win32":
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
-from src.config import ASSETS_DIR, ROOT_DIR
+from src.config import ASSETS_DIR, STYLES_DIR
 from src.db import init_db
 from src.windows.auth_window import AuthWindow
 
@@ -22,7 +22,7 @@ def main():
 
     # Load stylesheets
     # ROOT_DIR is frozen-safe (resolved in config.py)
-    styles_dir = os.path.join(str(ROOT_DIR), 'src', 'styles')
+    styles_dir = STYLES_DIR 
     styles_files = [
         'base.qss',
         'window_buttons.qss',
