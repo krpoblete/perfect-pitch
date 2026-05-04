@@ -420,7 +420,7 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
         acc     = n_correct / n_pitches * 100
         acc_col = (50, 205, 50) if acc >= 70 else (0, 215, 255) if acc >= 50 else (0, 80, 220)
         acc_bw  = int((acc / 100.0) * (pw - 20))
-        lbl     = f"{n_correct} / {n_pitches} correct  —  {acc:.0f}%"
+        lbl     = f"{n_correct} / {n_pitches} correct  -  {acc:.0f}%"
         put_text(panel, lbl, (10, y), FS_SMALL, acc_col)
         y += 16
         cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
