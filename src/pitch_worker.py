@@ -25,9 +25,9 @@ from PyQt6.QtCore import QThread, pyqtSignal
 warnings.filterwarnings("ignore")
 
 # Alert sound — played on every Incorrect Form verdict
-from src.config import ROOT_DIR as _ROOT
-_ALERT_PATH  = _ROOT / "assets" / "sounds" / "alert.mp3"
-_SETGO_PATH  = _ROOT / "assets" / "sounds" / "setgo.mp3"
+from src.config import ASSETS_DIR as _ASSETS
+_ALERT_PATH  = _Path(_ASSETS) / "sounds" / "alert.mp3"
+_SETGO_PATH  = _Path(_ASSETS) / "sounds" / "setgo.mp3"
 _alert_data, _alert_sr = (None, None)
 _setgo_data, _setgo_sr = (None, None)
 
@@ -543,8 +543,8 @@ class PitchWorker(QThread):
             self.skeleton_path = ""
             try:
                 from src.pitch_summary import compute_summary, build_combined_skeleton
-                from src.config import ROOT_DIR
-                images_folder = ROOT_DIR / "assets" / "skeletons"
+                from src.config import ASSETS_DIR
+                images_folder = _Path(ASSETS_DIR) / "skeletons"
                 stats = compute_summary(session_log)
                 out_png = session_dir / f"{session_slug}_combined_skeleton.png"
                 build_combined_skeleton(stats, images_folder, out_png)
