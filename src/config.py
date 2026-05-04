@@ -12,25 +12,29 @@ from dotenv import load_dotenv
 #   - sys.executable is the path to the .exe itself
 # ---------------------------------------------------------------------------
 if getattr(sys, "frozen", False):
-    ROOT_DIR = Path(sys.executable).resolve().parent
+    # Folder containing the .exe — for external runtime files (models, DB, .task)
+    EXE_DIR = Path(sys.executable).resolve().parent
+    # PyInstaller's temp extraction folder — for files embedded inside the .exe
+    BUNDLE_DIR = Path(sys._MEIPASS)
 else:
-    ROOT_DIR = Path(__file__).resolve().parent.parent
+    EXE_DIR = Path(__file__).resolve().parent.parent
+    BUNDLE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env from project root (optional — safe to omit, all values have defaults)
-load_dotenv(ROOT_DIR / ".env")
+# Load .env from the .exe folder (optional — safe to omit, all values have defaults)
+load_dotenv(EXE_DIR / ".env")
 
-# Asset paths
-ASSETS_DIR = str(ROOT_DIR / "assets")
-ICONS_DIR = str(ROOT_DIR / "assets" / "icons")
-STYLES_DIR = str(ROOT_DIR / "src" / "styles")
+# Asset paths (embedded inside the .exe → use BUNDLE_DIR)
+ASSETS_DIR = str(BUNDLE_DIR / "assets")
+ICONS_DIR = str(BUNDLE_DIR / "assets" / "icons")
+STYLES_DIR = str(BUNDLE_DIR / "src" / "styles")
 
-# Model paths
-MODELS_DIR = str(ROOT_DIR / "models")
-POSE_MODEL_PATH = str(ROOT_DIR / "pose_landmarker_heavy.task")
+# Model paths (external alongside the .exe → use EXE_DIR)
+MODELS_DIR = str(EXE_DIR / "models")
+POSE_MODEL_PATH = str(EXE_DIR / "pose_landmarker_heavy.task")
 
-# Database
+# Database (external alongside the .exe → use EXE_DIR)
 DB_NAME = os.getenv("DB_NAME", "perfect_pitch.db")
-DB_PATH = str(ROOT_DIR / DB_NAME)
+DB_PATH = str(EXE_DIR / DB_NAME)
 
 # App info
 APP_NAME = os.getenv("APP_NAME", "Perfect Pitch")
