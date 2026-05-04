@@ -94,8 +94,8 @@ def _build_tour_steps_pitcher(
     switch and Qt repaint have both happened (called from _apply_spotlight via
     a 160 ms QTimer delay).
     """
-    dashboard    = pages["dashboard"]
-    start_page   = pages["start_session"]
+    dashboard = pages["dashboard"]
+    start_page = pages["start_session"]
 
     # Lazy rect helpers
     PAD = 10   # spotlight padding around widget edges
@@ -110,7 +110,7 @@ def _build_tour_steps_pitcher(
         # Fallback: top ~46 % of the content stack height
         cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
-        h   = int(cs.height() * 0.46)
+        h = int(cs.height() * 0.46)
         return QRect(pos.x(), pos.y(), cs.width(), h).adjusted(-PAD, -PAD, PAD, PAD)
 
     def _history_rect() -> QRect:
@@ -120,9 +120,9 @@ def _build_tour_steps_pitcher(
             tl = w.mapTo(overlay_parent, QPoint(0, 0))
             return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
         # Fallback: bottom ~54 % of the content stack height
-        cs       = content_stack
-        pos      = cs.mapTo(overlay_parent, QPoint(0, 0))
-        top_off  = int(cs.height() * 0.46)
+        cs = content_stack
+        pos = cs.mapTo(overlay_parent, QPoint(0, 0))
+        top_off = int(cs.height() * 0.46)
         return QRect(
             pos.x(),
             pos.y() + top_off,
@@ -140,7 +140,7 @@ def _build_tour_steps_pitcher(
                 tl = w.mapTo(overlay_parent, QPoint(0, 0))
                 return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
         # Fallback: left ~45 % of the content stack – covers a typical left panel
-        cs  = content_stack
+        cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
         return QRect(
             pos.x(),
@@ -153,9 +153,9 @@ def _build_tour_steps_pitcher(
     steps = [
         # 1: Stats (top half)
         {
-            "target":       _stats_rect,
-            "title":        "Your Statistics Overview",
-            "body":         (
+            "target": _stats_rect,
+            "title": "Your Statistics Overview",
+            "body": (
                 "These cards show your overall pitching performance. "
                 "Total pitches thrown, Total mistakes, Total sessions completed, "
                 "and your average pitch, mistake, and accuracy. "
@@ -169,9 +169,9 @@ def _build_tour_steps_pitcher(
         },
         # 2: History (bottom half)
         {
-            "target":       _history_rect,
-            "title":        "Session History",
-            "body":         (
+            "target": _history_rect,
+            "title": "Session History",
+            "body": (
                 "Every session you complete is logged here with its date, "
                 "pitch count, mistake count, and accuracy percentage. "
                 "Use the pagination arrows at the bottom-right to browse "
@@ -185,9 +185,9 @@ def _build_tour_steps_pitcher(
         },
         # 3: Start Session page – spotlight left panel
         {
-            "target":       _start_panel_rect,
-            "title":        "Starting a Session",
-            "body":         (
+            "target": _start_panel_rect,
+            "title": "Starting a Session",
+            "body": (
                 "This is the Start Session panel. "
                 "This panel on the right shows you the summary of the session, "
                 "showing the total pitches thrown, mistakes, accuracy, and pitches left "
@@ -201,9 +201,9 @@ def _build_tour_steps_pitcher(
         },
         # 4: Account Settings
         {
-            "target":       None,   # centred card over the settings page
-            "title":        "Account Settings",
-            "body":         (
+            "target": None,   # centred card over the settings page
+            "title": "Account Settings",
+            "body": (
                 "Here you can personalize your pitching profile:\n"
                 "-RHP / LHP lets you set whether you pitch right handed or "
                 "left handed.\n"
@@ -217,9 +217,9 @@ def _build_tour_steps_pitcher(
         },
         # 5: Finish
         {
-            "target":       None,
-            "title":        "You're All Set!",
-            "body":         (
+            "target": None,
+            "title": "You're All Set!",
+            "body": (
                 "That covers everything you need to get started with "
                 "Perfect Pitch. You can replay this tour at any time by "
                 "clicking the Guide button in the sidebar. Good luck!"
@@ -249,9 +249,9 @@ def _build_tour_steps_coach(
         if w and w.isVisible():
             tl = w.mapTo(overlay_parent, QPoint(0, 0))
             return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
-        cs  = content_stack
+        cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
-        h   = int(cs.height() * 0.46)
+        h = int(cs.height() * 0.46)
         return QRect(pos.x(), pos.y(), cs.width(), h).adjusted(-PAD, -PAD, PAD, PAD)
 
     def _history_rect() -> QRect:
@@ -259,8 +259,8 @@ def _build_tour_steps_coach(
         if w and w.isVisible():
             tl = w.mapTo(overlay_parent, QPoint(0, 0))
             return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
-        cs      = content_stack
-        pos     = cs.mapTo(overlay_parent, QPoint(0, 0))
+        cs = content_stack
+        pos = cs.mapTo(overlay_parent, QPoint(0, 0))
         top_off = int(cs.height() * 0.46)
         return QRect(
             pos.x(), pos.y() + top_off,
@@ -275,7 +275,7 @@ def _build_tour_steps_coach(
         if page and page.isVisible():
             tl = page.mapTo(overlay_parent, QPoint(0, 0))
             return QRect(tl, page.size()).adjusted(-PAD, -PAD, PAD, PAD)
-        cs  = content_stack
+        cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
         return QRect(pos.x(), pos.y(), cs.width(), cs.height()).adjusted(
             -PAD, -PAD, PAD, PAD
@@ -284,9 +284,9 @@ def _build_tour_steps_coach(
     steps = [
         # 1: Stats (top half)
         {
-            "target":       _stats_rect,
-            "title":        "All Players Statistics Overview",
-            "body":         (
+            "target": _stats_rect,
+            "title": "All Players Statistics Overview",
+            "body": (
                 "These cards give you a summary of all "
                 "pitching activities of your players, total pitches, "
                 "mistakes, sessions, and averages across all your pitchers."
@@ -299,9 +299,9 @@ def _build_tour_steps_coach(
         },
         # 2: History (bottom half)
         {
-            "target":       _history_rect,
-            "title":        "Session History",
-            "body":         (
+            "target": _history_rect,
+            "title": "Session History",
+            "body": (
                 "A log of every recorded session across all pitchers. "
                 "You can review each pitcher's session date, pitch count, mistake "
                 "rate, accuracy percentage, and the 2D skeleton model showing the "
@@ -316,9 +316,9 @@ def _build_tour_steps_coach(
         },
         # 3: Users page
         {
-            "target":       _users_rect,
-            "title":        "Manage Users",
-            "body":         (
+            "target": _users_rect,
+            "title": "Manage Pitchers",
+            "body": (
                 "This page lists all pitchers registered to the system. "
                 "From here you can view each pitcher's individual stats, "
                 "check their profile details, or remove them from your "
@@ -326,13 +326,13 @@ def _build_tour_steps_coach(
                 "pitcher by name located on the top right of the screen."
             ),
             "callout_side": "bottom",
-            "on_enter": lambda: switch_page("users"),
+            "on_enter": lambda: switch_page("pitchers"),
         },
         # 4: Finish
         {
-            "target":       None,
-            "title":        "You're All Set!",
-            "body":         (
+            "target": None,
+            "title": "You're All Set!",
+            "body": (
                 "That's a quick overview of your Coach dashboard. "
                 "Click Guide in the sidebar whenever you want to see "
                 "this tour again."

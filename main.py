@@ -9,7 +9,7 @@ if sys.platform == "win32":
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
-from src.config import ASSETS_DIR
+from src.config import ASSETS_DIR, ROOT_DIR
 from src.db import init_db
 from src.windows.auth_window import AuthWindow
 
@@ -21,7 +21,8 @@ def main():
     app.setWindowIcon(QIcon(os.path.join(ASSETS_DIR, "app_icon.ico")))
 
     # Load stylesheets
-    styles_dir = os.path.join(os.path.dirname(__file__), 'src', 'styles')
+    # ROOT_DIR is frozen-safe (resolved in config.py)
+    styles_dir = os.path.join(str(ROOT_DIR), 'src', 'styles')
     styles_files = [
         'base.qss',
         'window_buttons.qss',
@@ -38,7 +39,7 @@ def main():
     ]
     combined = ""
     for styles_file in styles_files:
-        path =  os.path.join(styles_dir, styles_file)
+        path = os.path.join(styles_dir, styles_file)
         with open(path, 'r', encoding='utf-8') as f:
             combined += f.read() + "\n"
     app.setStyleSheet(combined)
