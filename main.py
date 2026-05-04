@@ -28,6 +28,7 @@ def main():
         'dialogs.qss',
         'auth.qss',
         'main.qss',
+        'tour.qss',
         'dashboard.qss',
         'users.qss',
         'pitchers.qss',

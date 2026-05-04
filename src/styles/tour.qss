@@ -1,0 +1,155 @@
+/* Guide / Help sidebar button */
+#guideBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 7px;
+    color: #555555;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+#guideBtn:hover {
+    background-color: #1a1a1a;
+    color: #bbbbbb;
+}
+
+#guideBtnActive {
+    background-color: #1a2e4a;
+    border: none;
+    border-radius: 7px;
+    color: #4a9eff;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 0 20px;
+    margin: 1px 12px;
+}
+
+#guideBtnActive:hover {
+    background-color: #1e3860;
+}
+
+/* Tour overlay callout card */
+#tourCallout {
+    background-color: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+}
+
+/* Step counter  e.g. "STEP 1 / 4" */
+#tourStepLabel {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    color: #4a9eff;
+    background: transparent;
+}
+
+/* Close  ✕  button */
+#tourCloseBtn {
+    background: transparent;
+    border: none;
+    color: #444444;
+    font-size: 13px;
+    border-radius: 4px;
+    padding: 0;
+}
+
+#tourCloseBtn:hover {
+    color: #888888;
+    background-color: #222222;
+}
+
+/* Step title */
+#tourTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f0f0f0;
+    background: transparent;
+}
+
+/* Step body text */
+#tourBody {
+    font-size: 12px;
+    color: #888888;
+    background: transparent;
+    line-height: 1.6;
+}
+
+/* Progress dots */
+#tourDot {
+    background-color: #2e2e2e;
+    border-radius: 4px;
+}
+
+#tourDotActive {
+    background-color: #4a9eff;
+    border-radius: 4px;
+}
+
+/* Skip tour link-style button */
+#tourSkipBtn {
+    background: transparent;
+    border: none;
+    color: #3a3a3a;
+    font-size: 12px;
+    padding: 6px 0;
+    text-align: left;
+}
+
+#tourSkipBtn:hover {
+    color: #666666;
+}
+
+/* Back / secondary nav button */
+#tourNavBtn {
+    background-color: #202020;
+    border: 1px solid #2e2e2e;
+    border-radius: 7px;
+    color: #888888;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 16px;
+    min-width: 72px;
+}
+
+#tourNavBtn:hover {
+    background-color: #282828;
+    color: #cccccc;
+    border-color: #383838;
+}
+
+/* Next → primary button */
+#tourNavBtnPrimary {
+    background-color: #1a4a8a;
+    border: none;
+    border-radius: 7px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 18px;
+    min-width: 80px;
+}
+
+#tourNavBtnPrimary:hover {
+    background-color: #1f5aa6;
+}
+
+/* Done ✓ final-step button */
+#tourNavBtnDone {
+    background-color: #1a6640;
+    border: none;
+    border-radius: 7px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 18px;
+    min-width: 80px;
+}
+
+#tourNavBtnDone:hover {
+    background-color: #1f7a4c;
+}
