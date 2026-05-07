@@ -1,13 +1,15 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QDateEdit 
+    QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QDateEdit 
 )
 from PyQt6.QtCore import Qt, QDate
-from src.utils.icons import get_icon
+
 from src.utils.toast import toast_error, toast_success
 from src.widgets.password_input import PasswordInput
+from src.widgets.hand_selector import HandSelector
+from src.pages.auth.auth_base import AuthBasePage
 
-class SignupPage(QWidget):
+class SignupPage(AuthBasePage):
     def __init__(self, auth_window):
         super().__init__()
         self.auth = auth_window
@@ -19,21 +21,7 @@ class SignupPage(QWidget):
         layout.setContentsMargins(80, 55, 80, 55)
         layout.setSpacing(0)
 
-        # Logo
-        logo_row = QHBoxLayout()
-        logo_row.setSpacing(2)
-        logo_icon = QLabel()
-        logo_icon.setObjectName("logoIcon")
-        logo_icon.setFixedSize(22, 22)
-        logo_icon.setPixmap(get_icon("ball-baseball", color="#ffffff", size=22).pixmap(22, 22))
-        logo_text = QLabel("<u>PERFECT PITCH</u>.")
-        logo_text.setObjectName("logoText")
-        logo_text.setTextFormat(Qt.TextFormat.RichText)
-        logo_row.addWidget(logo_icon)
-        logo_row.addWidget(logo_text)
-        logo_row.addStretch()
-        layout.addLayout(logo_row)
-
+        layout.addLayout(self._logo_row())
         layout.addStretch() 
 
         # Title
@@ -46,7 +34,7 @@ class SignupPage(QWidget):
         layout.addWidget(subtitle)
         layout.addSpacing(28)
 
-        # First Name | Last Name
+        # First | Last Name
         name_row = QHBoxLayout()
         name_row.setSpacing(16)
         fn_col = QVBoxLayout()
@@ -83,24 +71,8 @@ class SignupPage(QWidget):
         hand_col = QVBoxLayout()
         hand_col.setSpacing(7) 
         hand_col.addWidget(self._label("Throwing Hand"))
-        hand_btn_row = QHBoxLayout()
-        hand_btn_row.setSpacing(10)
-        self.rhp_btn = QPushButton("RHP")
-        self.rhp_btn.setObjectName("handBtnActive")
-        self.rhp_btn.setFixedHeight(42)
-        self.rhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.rhp_btn.setCheckable(True)
-        self.rhp_btn.setChecked(True)
-        self.rhp_btn.clicked.connect(lambda: self._select_hand("RHP"))
-        self.lhp_btn = QPushButton("LHP")
-        self.lhp_btn.setObjectName("handBtn")
-        self.lhp_btn.setFixedHeight(42)
-        self.lhp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.lhp_btn.setCheckable(True)
-        self.lhp_btn.clicked.connect(lambda: self._select_hand("LHP"))
-        hand_btn_row.addWidget(self.rhp_btn)
-        hand_btn_row.addWidget(self.lhp_btn)
-        hand_col.addLayout(hand_btn_row)
+        self.hand_selector = HandSelector()
+        hand_col.addWidget(self.hand_selector)
 
         dob_hand_row.addLayout(dob_col)
         dob_hand_row.addLayout(hand_col)
@@ -160,30 +132,10 @@ class SignupPage(QWidget):
         self.first_name_input.returnPressed.connect(self.last_name_input.setFocus)
         self.last_name_input.returnPressed.connect(self.email_input.setFocus)
         self.email_input.returnPressed.connect(self.pw_input.line_edit.setFocus)
-        self.pw_input.line_edit.returnPressed.connect(self.confirm_pw_input.line_edit.setFocus)
+        self.pw_input.line_edit.returnPressed.connect(
+            self.confirm_pw_input.line_edit.setFocus
+        )
         self.confirm_pw_input.line_edit.returnPressed.connect(self._handle_signup)
-
-    def _select_hand(self, hand: str):
-        self.rhp_btn.setChecked(hand == "RHP")
-        self.lhp_btn.setChecked(hand == "LHP")
-        self.rhp_btn.setObjectName("handBtnActive" if hand == "RHP" else "handBtn")
-        self.lhp_btn.setObjectName("handBtnActive" if hand == "LHP" else "handBtn")
-        self.rhp_btn.style().unpolish(self.rhp_btn)
-        self.rhp_btn.style().polish(self.rhp_btn)
-        self.lhp_btn.style().unpolish(self.lhp_btn)
-        self.lhp_btn.style().polish(self.lhp_btn)
-
-    def _label(self, text):
-        lbl = QLabel(text)
-        lbl.setObjectName("fieldLabel")
-        return lbl
-    
-    def _input(self, placeholder):
-        inp = QLineEdit()
-        inp.setObjectName("authInput")
-        inp.setPlaceholderText(placeholder)
-        inp.setFixedHeight(48)
-        return inp
     
     def clear(self):
         self.first_name_input.clear()
@@ -192,16 +144,11 @@ class SignupPage(QWidget):
         self.pw_input.clear()
         self.confirm_pw_input.clear()
         self.dob_input.setDate(QDate(2000, 1, 1))
-        self._select_hand("RHP")
+        self.hand_selector.set_hand("RHP")
 
-    ALLOWED_DOMAINS = {"cvsu.edu.ph", "gmail.com", "yahoo.com", "outlook.com"}
-
-    def _is_valid_email(self, email):
-        from src.utils.validators import validate_email
-        return validate_email(email)
-    
     def _handle_signup(self):
         from src.db import create_user
+        from src.utils.validators import validate_name, validate_password, validate_email
 
         first_name = self.first_name_input.text().strip()
         last_name = self.last_name_input.text().strip()
@@ -209,42 +156,42 @@ class SignupPage(QWidget):
         email = self.email_input.text().strip()
         password = self.pw_input.text()
         confirm_pw = self.confirm_pw_input.text()
-        throwing_hand = "RHP" if self.rhp_btn.isChecked() else "LHP"
+        throwing_hand = self.hand_selector.hand() 
 
         if not all([first_name, last_name, email, password, confirm_pw]):
             toast_error(self, "Please fill in all fields.")
             return
-        from src.utils.validators import validate_name, validate_password
-        ok, msg = validate_name(first_name, "First Name")
-        if not ok:
-            toast_error(self, msg)
-            return
-        ok, msg = validate_name(last_name, "Last Name")
-        if not ok:
-            toast_error(self, msg)
-            return
-        valid_email, email_msg = self._is_valid_email(email)
+
+        for value, field in [(first_name, "First Name"), (last_name, "Last Name")]:
+            ok, msg = validate_name(value, field)
+            if not ok:
+                toast_error(self, msg)
+                return 
+
+        valid_email, email_msg = validate_email(email)
         if not valid_email:
             toast_error(self, email_msg)
             return
+
         valid_pw, pw_msg = validate_password(password)
         if not valid_pw:
             toast_error(self, pw_msg)
-            return 
+            return
+
         if password != confirm_pw:
             toast_error(self, "Passwords do not match. Please try again.")
             return
+
         age = self.dob_input.date().daysTo(QDate.currentDate()) // 365
         if age < 13:
             toast_error(self, "You must be at least 13 years old to register.")
             return
         
-        ok, msg = create_user(first_name, last_name, dob, email, password, throwing_hand)
+        ok, msg = create_user(
+            first_name, last_name, dob, email, password, throwing_hand
+        )
         if ok:
-            if msg == "restored":
-                toast_success(self, f"Welcome back, {first_name}! Your account has been restored.")
-            else:
-                toast_success(self, f"Welcome, {first_name}! Your account has been created.")
+            toast_success(self,f"Welcome, {first_name}! Your account has been created.")
             self.clear()
             self.auth.show_page("login")
         else:

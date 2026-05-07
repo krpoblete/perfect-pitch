@@ -1,17 +1,18 @@
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QDateEdit, QStackedWidget
+    QLabel, QPushButton, QDateEdit, QStackedWidget
 )
 from PyQt6.QtCore import Qt, QDate, QTimer
-from src.utils.icons import get_icon
+
 from src.utils.toast import toast_error, toast_success, toast_info
 from src.widgets.password_input import PasswordInput
+from src.pages.auth.auth_base import AuthBasePage
 
 MAX_ATTEMPTS = 3
 LOCKOUT_MINUTES = 15 
 
-class ForgotPasswordPage(QWidget):
+class ForgotPasswordPage(AuthBasePage):
     def __init__(self, auth_window):
         super().__init__()
         self.auth = auth_window
@@ -32,10 +33,8 @@ class ForgotPasswordPage(QWidget):
 
         self.stack = QStackedWidget()
         self.stack.setObjectName("authStack")
-
         self.stack.addWidget(self._build_verify_page())
         self.stack.addWidget(self._build_reset_page())
-
         layout.addWidget(self.stack)
 
     # Page 1: Verify email + DOB
@@ -121,7 +120,6 @@ class ForgotPasswordPage(QWidget):
 
         # Enter key navigation
         self.verify_email_input.returnPressed.connect(self._handle_verify)
-
         return page
     
     # Page 2: Set new password
@@ -189,9 +187,10 @@ class ForgotPasswordPage(QWidget):
         layout.addStretch()
 
         # Enter key navigation
-        self.new_pw_input.line_edit.returnPressed.connect(self.confirm_pw_input.line_edit.setFocus)
+        self.new_pw_input.line_edit.returnPressed.connect(
+            self.confirm_pw_input.line_edit.setFocus
+        )
         self.confirm_pw_input.line_edit.returnPressed.connect(self._handle_reset)
-
         return page
     
     # Handlers
@@ -217,19 +216,23 @@ class ForgotPasswordPage(QWidget):
             return
 
         user = get_user_by_email(email)
-
         if user is None or user["date_of_birth"] != dob:
             self._attempts += 1
             remaining = MAX_ATTEMPTS - self._attempts
-
             if self._attempts >= MAX_ATTEMPTS:
-                self._locked_until = datetime.now() + timedelta(minutes=LOCKOUT_MINUTES)
+                self._locked_until = datetime.now() + timedelta(
+                    minutes=LOCKOUT_MINUTES
+                )
                 self.verify_btn.setEnabled(False)
                 self.lockout_label.show()
                 self._lockout_timer.start(1000)
                 self._update_lockout()
             else:
-                toast_error(self, f"Email or date of birth is incorrect. {remaining} attempt{'s' if remaining != 1 else ''} remaining.")
+                toast_error(
+                    self,
+                    f"Email or date of birth is incorrect. "
+                    f"{remaining} attempt{'s' if remaining != 1 else ''} remaining.",
+                )
             return
         
         # Match — store user id and proceed to reset page
@@ -239,8 +242,8 @@ class ForgotPasswordPage(QWidget):
         self.stack.setCurrentIndex(1)
 
     def _handle_reset(self):
-        import bcrypt
-        from src.db import get_connection, get_user_by_id
+        from src.db import get_user_by_id, verify_password, update_user_password
+        from src.utils.validators import validate_password
 
         password = self.new_pw_input.text()
         confirm = self.confirm_pw_input.text()
@@ -249,29 +252,25 @@ class ForgotPasswordPage(QWidget):
             toast_error(self, "Please fill in all fields.")
             return
 
-        from src.utils.validators import validate_password
         valid_pw, pw_msg = validate_password(password)
         if not valid_pw:
             toast_error(self, pw_msg)
             return
+
         if password != confirm:
             toast_error(self, "Passwords do not match. Please try again.")
             return
 
         # Check new password is different from current
         user = get_user_by_id(self._verified_user_id)
-        if user and bcrypt.checkpw(password.encode("utf-8"), user["password"].encode("utf-8")):
-            toast_info(self, "New password must be different from your current password.")
+        if user and verify_password(password, user["password"]):
+            toast_info(
+                self,
+                "New password must be different from your current password."
+            )
             return 
 
-        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
-        conn = get_connection()
-        conn.execute(
-            "UPDATE users SET password = ? WHERE id = ?",
-            (hashed.decode("utf-8"), self._verified_user_id),
-        )
-        conn.commit()
-        conn.close()
+        update_user_password(self._verified_user_id, password)
 
         toast_success(self, "Password reset successfully. Please log in.")
         self._reset_state()
@@ -311,35 +310,5 @@ class ForgotPasswordPage(QWidget):
         self.stack.setCurrentIndex(0)
         self._verified_user_id = None
 
-    # Helpers
-    def _logo_row(self):
-        logo_row = QHBoxLayout()
-        logo_row.setSpacing(2)
-        logo_icon = QLabel()
-        logo_icon.setObjectName("logoIcon")
-        logo_icon.setFixedSize(22, 22)
-        logo_icon.setPixmap(get_icon("ball-baseball", color="#ffffff", size=22).pixmap(22, 22))
-        logo_text = QLabel("<u>PERFECT PITCH</u>.")
-        logo_text.setObjectName("logoText")
-        logo_text.setTextFormat(Qt.TextFormat.RichText)
-        logo_row.addWidget(logo_icon)
-        logo_row.addWidget(logo_text)
-        logo_row.addStretch()
-        return logo_row
-    
-    def _label(self, text):
-        lbl = QLabel(text)
-        lbl.setObjectName("fieldLabel")
-        return lbl
-    
-    def _input(self, placeholder, password=False):
-        inp = QLineEdit()
-        inp.setObjectName("authInput")
-        inp.setPlaceholderText(placeholder)
-        inp.setFixedHeight(48)
-        if password:
-            inp.setEchoMode(QLineEdit.EchoMode.Password)
-        return inp
-    
     def refresh(self):
         pass

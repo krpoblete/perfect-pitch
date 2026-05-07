@@ -1,13 +1,14 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton
+    QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton
 )
 from PyQt6.QtCore import Qt
-from src.utils.icons import get_icon
+
 from src.utils.toast import toast_error
 from src.widgets.password_input import PasswordInput
+from src.pages.auth.auth_base import AuthBasePage
 
-class LoginPage(QWidget):
+class LoginPage(AuthBasePage):
     def __init__(self, auth_window):
         super().__init__()
         self.auth = auth_window
@@ -19,21 +20,7 @@ class LoginPage(QWidget):
         layout.setContentsMargins(80, 55, 80, 55)
         layout.setSpacing(0)
 
-        # Logo
-        logo_row = QHBoxLayout()
-        logo_row.setSpacing(2)
-        logo_icon = QLabel()
-        logo_icon.setObjectName("logoIcon")
-        logo_icon.setFixedSize(22, 22)
-        logo_icon.setPixmap(get_icon("ball-baseball", color="#ffffff", size=22).pixmap(22, 22))
-        logo_text = QLabel("<u>PERFECT PITCH</u>.")
-        logo_text.setObjectName("logoText")
-        logo_text.setTextFormat(Qt.TextFormat.RichText)
-        logo_row.addWidget(logo_icon)
-        logo_row.addWidget(logo_text)
-        logo_row.addStretch()
-        layout.addLayout(logo_row)
-
+        layout.addLayout(self._logo_row())
         layout.addStretch()
 
         # Title
@@ -57,16 +44,14 @@ class LoginPage(QWidget):
 
         layout.addSpacing(18)
 
-        # Password
+        # Password row with forgot link
         pw_row = QHBoxLayout()
-        pw_label = QLabel("Password")
-        pw_label.setObjectName("fieldLabel")
+        pw_row.addWidget(self._label("Password"))
+        pw_row.addStretch()
         forgot = QPushButton("Forgot your password?")
         forgot.setObjectName("linkBtn")
         forgot.setCursor(Qt.CursorShape.PointingHandCursor)
         forgot.clicked.connect(lambda: self.auth.show_page("forgot"))
-        pw_row.addWidget(pw_label)
-        pw_row.addStretch()
         pw_row.addWidget(forgot)
         layout.addLayout(pw_row)
         layout.addSpacing(8)
@@ -89,13 +74,11 @@ class LoginPage(QWidget):
         # Sign up link
         signup_row = QHBoxLayout()
         signup_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        no_acc = QLabel("Don't have an account?")
-        no_acc.setObjectName("loginSubtitle")
+        signup_row.addWidget(self._label_plain("Don't have an account?"))
         signup_link = QPushButton("Sign up")
         signup_link.setObjectName("linkBtn")
         signup_link.setCursor(Qt.CursorShape.PointingHandCursor)
         signup_link.clicked.connect(lambda: self.auth.show_page("signup"))
-        signup_row.addWidget(no_acc)
         signup_row.addWidget(signup_link)
         layout.addLayout(signup_row)
 
@@ -105,17 +88,11 @@ class LoginPage(QWidget):
         self.email_input.returnPressed.connect(self.pw_input.line_edit.setFocus)
         self.pw_input.line_edit.returnPressed.connect(self._handle_login)
 
-    def _label(self, text):
+    def _label_plain(self, text: str) -> QLabel:
+        """Subtitle-styled label (not a field heading)."""
         lbl = QLabel(text)
-        lbl.setObjectName("fieldLabel")
+        lbl.setObjectName("loginSubtitle")
         return lbl
-    
-    def _input(self, placeholder):
-        inp = QLineEdit()
-        inp.setObjectName("authInput")
-        inp.setPlaceholderText(placeholder)
-        inp.setFixedHeight(48)
-        return inp
 
     def clear(self):
         self.email_input.clear()
