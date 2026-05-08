@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QDateEdit, QStackedWidget
 )
-from PyQt6.QtCore import Qt, QDate, QTimer
+from PyQt6.QtCore import Qt, QDate
 
 from src.utils.toast import toast_error, toast_success, toast_info
 from src.widgets.password_input import PasswordInput
@@ -18,11 +18,7 @@ class ForgotPasswordPage(AuthBasePage):
         self.auth = auth_window
         self.setObjectName("loginLeft")
         
-        self._attempts = 0
-        self._locked_until = None
         self._verified_user_id = None
-        self._lockout_timer = QTimer(self)
-        self._lockout_timer.timeout.connect(self._update_lockout) 
         
         self._build_ui()
 
@@ -196,7 +192,7 @@ class ForgotPasswordPage(AuthBasePage):
     # Handlers
     def _handle_verify(self):
         # Check lockout
-        if self._locked_until and datetime.now() < self._locked_until:
+        if self.auth._fp_locked_until and datetime.now() < self.auth._fp_locked_until:
             return
         
         from src.db import get_user_by_email
@@ -217,15 +213,15 @@ class ForgotPasswordPage(AuthBasePage):
 
         user = get_user_by_email(email)
         if user is None or user["date_of_birth"] != dob:
-            self._attempts += 1
-            remaining = MAX_ATTEMPTS - self._attempts
-            if self._attempts >= MAX_ATTEMPTS:
-                self._locked_until = datetime.now() + timedelta(
+            self.auth._fp_attempts += 1
+            remaining = MAX_ATTEMPTS - self.auth._fp_attempts
+            if self.auth._fp_attempts >= MAX_ATTEMPTS:
+                self.auth._fp_locked_until = datetime.now() + timedelta(
                     minutes=LOCKOUT_MINUTES
                 )
                 self.verify_btn.setEnabled(False)
                 self.lockout_label.show()
-                self._lockout_timer.start(1000)
+                self.auth._fp_lockout_timer.start(1000)
                 self._update_lockout()
             else:
                 toast_error(
@@ -277,13 +273,13 @@ class ForgotPasswordPage(AuthBasePage):
         self.auth.show_page("login")
 
     def _update_lockout(self):
-        if not self._locked_until:
+        if not self.auth._fp_locked_until:
             return
-        remaining = self._locked_until - datetime.now()
+        remaining = self.auth._fp_locked_until - datetime.now()
         if remaining.total_seconds() <= 0:
-            self._lockout_timer.stop()
-            self._locked_until = None
-            self._attempts = 0
+            self.auth._fp_lockout_timer.stop()
+            self.auth._fp_locked_until = None
+            self.auth._fp_attempts = 0
             self.verify_btn.setEnabled(True)
             self.lockout_label.hide()
             self.lockout_label.setText("")
@@ -295,20 +291,29 @@ class ForgotPasswordPage(AuthBasePage):
             )
 
     def _go_back(self):
-        self._reset_state()
         self.auth.show_page("login")
 
     def clear(self):
-        """Reset to defaults — called by auth_window on every page switch."""
-        self._reset_state()
-
-    def _reset_state(self):
+        """Reset form fields only — lockout state is intentionally preserved
+        on AuthWindow so the countdown survives navigating away and back."""
         self.verify_email_input.clear()
         self.verify_dob_input.setDate(QDate(2000, 1, 1))
         self.new_pw_input.clear()
         self.confirm_pw_input.clear()
         self.stack.setCurrentIndex(0)
         self._verified_user_id = None
+
+    def _reset_state(self):
+        """Full reset including lockout — called only after a successful
+        password reset, when the lockout is no longer relevant."""
+        self.clear()
+        self.auth._fp_attempts = 0
+        self.auth._fp_locked_until = None
+        if self.auth._fp_lockout_timer and self.auth._fp_lockout_timer.isActive():
+            self.auth._fp_lockout_timer.stop()
+        self.verify_btn.setEnabled(True)
+        self.lockout_label.hide()
+        self.lockout_label.setText("")        
 
     def refresh(self):
         pass

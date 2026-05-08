@@ -25,6 +25,13 @@ class AuthWindow(FramelessMainWindow):
         self.titleBar.hide()
         self.setResizeEnabled(False)
         self._suppress_close_dialog = False
+
+        # Lockout state lives here — not inside ForgotPasswordPage — so it
+        # survives navigating away to login and back within the same session.
+        self._fp_attempts = 0
+        self._fp_locked_until = None
+        self._fp_lockout_timer = None   # initialised in _build_ui after QTimer is safe to create
+
         self._center_on_screen()
         self._build_ui()
         fade_in(self)
@@ -113,11 +120,40 @@ class AuthWindow(FramelessMainWindow):
         self.win_btns.move(WIN_W - bw - 10, 10)
         self.win_btns.raise_()
 
+        # Lockout countdown timer — owned by AuthWindow so it never gets
+        # destroyed when the user navigates between auth pages.
+        from PyQt6.QtCore import QTimer
+        self._fp_lockout_timer = QTimer(self)
+        self._fp_lockout_timer.setInterval(1000)
+        self._fp_lockout_timer.timeout.connect(self.forgot_page._update_lockout)
+
     def show_page(self, page: str):
-        """Switch to a named page and reset all forms to defaults."""
-        # Clear every auth page before switching
-        for p in [self.login_page, self.signup_page, self.forgot_page]:
-            if hasattr(p, "clear"):
-                p.clear()
+        """Switch to a named page."""
+        # Resolve the page object currently visible so we only clear that one.
+        _page_objects = {
+            "login": self.login_page,
+            "signup": self.signup_page,
+            "forgot": self.forgot_page,
+        }
+        current_key = next(
+            (k for k, idx in self._pages.items()
+             if idx == self.stack.currentIndex()),
+            None,
+        )
+        if current_key and current_key != page:
+            leaving = _page_objects.get(current_key)
+            if leaving and hasattr(leaving, "clear"):
+                leaving.clear()
+
         target = self._pages.get(page, 0)
         self.stack.setCurrentIndex(target)
+
+        # Re-apply lockout UI if the user returns to forgot while still locked.
+        if page == "forgot" and self._fp_locked_until:
+            from datetime import datetime
+            if datetime.now() < self._fp_locked_until:
+                self.forgot_page.verify_btn.setEnabled(False)
+                self.forgot_page.lockout_label.show()
+                self.forgot_page._update_lockout()
+                if not self._fp_lockout_timer.isActive():
+                    self._fp_lockout_timer.start()
