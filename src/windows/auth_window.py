@@ -26,11 +26,9 @@ class AuthWindow(FramelessMainWindow):
         self.setResizeEnabled(False)
         self._suppress_close_dialog = False
 
-        # Lockout state lives here — not inside ForgotPasswordPage — so it
-        # survives navigating away to login and back within the same session.
         self._fp_attempts = 0
         self._fp_locked_until = None
-        self._fp_lockout_timer = None   # initialised in _build_ui after QTimer is safe to create
+        self._fp_lockout_timer = None 
 
         self._center_on_screen()
         self._build_ui()
