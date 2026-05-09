@@ -603,6 +603,7 @@ class StartSessionPage(QWidget, CameraMixin):
     def _on_worker_error(self, message: str):
         """Called when PitchWorker hits a fatal error."""
         self._stop_capture()
+        self.session_finished.emit()
         if message == "__camera_disconnected__":
             self._handle_camera_disconnected()
         else:
