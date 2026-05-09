@@ -8,7 +8,7 @@ A desktop application for analyzing and managing baseball pitching sessions, bui
 
 - **Role-based access** — Admin, Coach, and Pitcher roles with tailored navigation and permissions
 - **Authentication** — Secure login and signup with bcrypt password hashing
-- **Password recovery** — Email and date of birth verification with a 3-attempt, 15-minute lockout
+- **Password recovery** — Email and date of birth verification with a 3-attempt, 15-minute lockout that persists across auth page navigation within the same session
 - **Show/hide password** — Toggle visibility on all password fields across the auth window
 - **ML-powered pose analysis** — MediaPipe Pose + LSTM autoencoder evaluates pitching form per pitch
 - **Joint risk scoring** — 9 joints tracked (elbows, shoulders, hips, knees, pelvis) with 5 severity levels: Normal, Elevated, Moderate, High, Critical
@@ -42,6 +42,7 @@ perfect-pitch/
 ├── src/
 │   ├── pages/
 │   │   ├── auth/
+│   │   │   ├── auth_base.py            # Shared base class for all auth pages (logo, field helpers)
 │   │   │   ├── login_page.py
 │   │   │   ├── signup_page.py
 │   │   │   └── forgot_password_page.py
@@ -68,10 +69,12 @@ perfect-pitch/
 │   ├── utils/
 │   │   ├── animations.py               # fade_in / fade_out helpers
 │   │   ├── icons.py                    # SVG recolor → QIcon
+│   │   ├── pitch_rules.py              # Source for USA Baseball pitch limits
 │   │   ├── toast.py                    # Wrapper around pyqt-toast-notification
 │   │   └── validators.py               # Name, email, and password validation
 │   ├── widgets/
 │   │   ├── confirm_dialog.py           # Frameless modal Yes/No dialog
+│   │   ├── hand_selector.py            # Reusable RHP / LHP toggle widget
 │   │   ├── password_input.py           # Password field with show/hide toggle
 │   │   ├── tour_overlay.py             # Guided-tour overlay with animated spotlight
 │   │   └── window_buttons.py           # Minimize + close buttons for frameless windows
@@ -186,7 +189,7 @@ On first launch, a default Admin account is seeded automatically:
 | Field    | Value       |
 |----------|-------------|
 | Email    | `admin`     |
-| Password | `admin1234` |
+| Password | `Admin1234` |
 
 > **Change the default password after first login.**
 
@@ -208,16 +211,16 @@ The model bundle `(model, scaler, threshold, joint_thresholds)` is loaded once a
 
 ## Pitch Count Limits
 
-Age-gated pitch thresholds follow USA Baseball guidelines:
+Age-gated pitch thresholds follow USA Baseball guidelines and are enforced via `src/utils/pitch_rules.py` — the source for all pitch limit logic across the app.
 
-| Age Range | Daily Limit |
-|-----------|-------------|
-| 13 – 16   | 95          |
-| 17 – 18   | 105         |
-| 19 – 22   | 120         |
+| Age Range    | Daily Limit |
+|--------------|-------------|
+| 13 – 16      | 95          |
+| 17 – 18      | 105         |
+| 19 – 22      | 120         |
 | < 13 or > 22 | 95 / 120 (floor / ceiling) |
 
-Coaches and Admins can override a pitcher's threshold in Account Settings.
+Pitchers' thresholds are set automatically on signup based on their date of birth. Coaches and Admins can override a pitcher's threshold in Account Settings, up to the recommended cap.
 
 ---
 
@@ -242,6 +245,21 @@ Coaches and Admins can override a pitcher's threshold in Account Settings.
 | Pitcher | —               |
 
 All roles share: Dashboard, Start Session, and Account Settings. New accounts default to **Pitcher**. An Admin must assign Coach roles manually.
+
+---
+
+## Name Validation Rules
+
+Names entered during signup and profile updates follow these rules:
+
+- Letters (including accented characters), spaces, hyphens, and apostrophes only
+- Each word must be at least 2 characters — single-letter words (e.g. `"B Smith"`) are rejected
+- Each word must start with a capital letter
+- No consecutive spaces, hyphens, or apostrophes
+- No leading or trailing hyphens or apostrophes
+- Recognised suffixes are allowed at the end: `Jr.`, `Sr.`, `II`, `III`, `IV`, `V`, `VI`, `VII`, `VIII`
+- Suffixes must use the formal form — `Jr.` and `Sr.` require the trailing period; bare `Jr` or `Sr` without a period are rejected
+- Any other use of a period (e.g. `Dr.`, `John.Doe`) is rejected
 
 ---
 
