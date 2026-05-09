@@ -69,10 +69,19 @@ def validate_name(value: str, field: str = "Name") -> tuple:
             f"{field} cannot start or end with a hyphen or apostrophe."
         )
 
-    # Each word (split by space or hyphen) must start with a capital letter
-    words = re.split(r"[\s\-]+", v)
+    # Each word (split by space or hyphen) must:
+    #   - be at least 2 characters
+    #   - start with a capital letter
+    words = re.split(r"[\s\-]+", base)
     for word in words:
-        if word and not word[0].isupper():
+        if not word:
+            continue
+        if len(word) < 2:
+            return False, (
+                f"{field} — each part of the name must be at least 2 characters "
+                f"(e.g., 'De La Cruz', not 'D La Cruz')."
+            )
+        if not word[0].isupper():
             return False, (
                 f"{field} — each word must start with a capital letter "
                 f"(e.g., 'John Mark')."
