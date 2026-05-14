@@ -35,7 +35,7 @@ class PitchWorker(QThread):
     # Signals
     frame_ready = pyqtSignal(object)      # numpy BGR frame → feed_label
     pitch_done = pyqtSignal(dict)         # full pitch result dict
-    stats_updated = pyqtSignal(int, int)  # (pitch_count, mistakes)
+    stats_updated = pyqtSignal(int, int, int)  # (pitch_count, mistakes, tokens_used)
     state_changed = pyqtSignal(str)       # WAITING | COUNTDOWN | COLLECTING | ANALYZING | POST_PITCH
     model_loaded = pyqtSignal()           # camera + model ready
     skeleton_ready = pyqtSignal(str)      # path to combined skeleton PNG
@@ -281,6 +281,7 @@ class PitchWorker(QThread):
         n_pitches = 0
         n_correct = 0
         n_mistakes = 0
+        n_tokens_used = 0  # weighted: correct=1, incorrect=2
 
         def reset():
             nonlocal state, cd_start, post_start, world_pts, image_pts
@@ -440,8 +441,10 @@ class PitchWorker(QThread):
                 n_pitches += 1
                 if verdict == "Correct Form":
                     n_correct += 1
+                    n_tokens_used += 1
                 else:
-                    n_mistakes +=1
+                    n_mistakes += 1
+                    n_tokens_used += 2  # incorrect form strains the arm more
 
                 # Emit pitch result to UI
                 pitch_result = {
@@ -461,7 +464,7 @@ class PitchWorker(QThread):
                     "n_frames": len(world_frames),
                 }
                 self.pitch_done.emit(pitch_result)
-                self.stats_updated.emit(n_pitches, n_mistakes)
+                self.stats_updated.emit(n_pitches, n_mistakes, n_tokens_used)
 
                 # Session JSON log
                 session_log.append({

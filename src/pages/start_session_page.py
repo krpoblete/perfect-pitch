@@ -235,7 +235,7 @@ class StartSessionPage(QWidget, CameraMixin):
         return card
 
     # Stats update (called by PitchWorker)
-    def update_stats(self, pitch_count: int, mistakes: int):
+    def update_stats(self, pitch_count: int, mistakes: int, tokens_used: int):
         """Update counters. Called from live_capture after each pitch."""
         self._pitch_count = pitch_count
         self._mistakes = mistakes
@@ -248,7 +248,7 @@ class StartSessionPage(QWidget, CameraMixin):
         self.accuracy_val.setText(f"{accuracy:.2f}%")
 
         if self._running:
-            pitches_live = max(0, self._tokens_remaining - pitch_count)
+            pitches_live = max(0, self._tokens_remaining - tokens_used)
             self.token_val.setText(str(pitches_live))
             if pitches_live <= 0:
                 self._handle_token_exhausted_mid_session()
@@ -570,12 +570,15 @@ class StartSessionPage(QWidget, CameraMixin):
         toast_success(self, "Session saved successfully.")
         skeleton_path = getattr(self._ending_worker, "skeleton_path", "") or None
         from src.db import get_connection, _manila_now
+        # Weighted token cost: correct pitches cost 1, incorrect cost 2.
+        # total_pitch is what get_pitches_used_today() sums for the token pool.
+        tokens_used = self._pitch_count + self._mistakes
         conn = get_connection()
         conn.execute(
             """INSERT INTO sessions (user_id, date, total_pitch, mistakes, accuracy, path)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (self.user_id, _manila_now(),
-             self._pitch_count, self._mistakes, round(accuracy, 2),
+             tokens_used, self._mistakes, round(accuracy, 2),
              skeleton_path),
         )
         conn.commit()
