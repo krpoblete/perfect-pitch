@@ -23,10 +23,10 @@ FRAMES = 60
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 KEY_JOINTS = [
-    (11, 13, 15), (12, 14, 16),  # L/R elbow
-    (13, 11, 23), (14, 12, 24),  # L/R shoulder
-    (11, 23, 25), (12, 24, 26),  # L/R hip
-    (23, 25, 27), (24, 26, 28),  # L/R knee
+    (11, 13, 15), (12, 14, 16),  # L|R elbow
+    (13, 11, 23), (14, 12, 24),  # L|R shoulder
+    (11, 23, 25), (12, 24, 26),  # L|R hip
+    (23, 25, 27), (24, 26, 28),  # L|R knee
     (23, 24, 26),                # pelvis
 ]
 
@@ -40,63 +40,63 @@ JOINT_NAMES = [
 ]
 
 FEEDBACK = [
-    {#Left Elbow
+    {   #Left Elbow
         "Normal": "Left Elbow - position is good",
         "Elevated": "Left Elbow - position is slightly off",
         "Moderate": "Left Elbow - adjust position",
         "High": "Left Elbow - position is off",
         "Critical": "Left Elbow - fix position immediately",
     },
-    {#Right Elbow
+    {   #Right Elbow
         "Normal": "Right Elbow - position is good",
         "Elevated": "Right Elbow - position is slightly off",
         "Moderate": "Right Elbow - adjust position",
         "High": "Right Elbow - position is off",
         "Critical": "Right Elbow - fix position immediately",
     },
-    {#Left Shoulder
+    {   #Left Shoulder
         "Normal": "Left Shoulder - alignment is good",
         "Elevated": "Left Shoulder - slight misalignment",
         "Moderate": "Left Shoulder - adjust alignment",
         "High": "Left Shoulder - alignment is off",
         "Critical": "Left Shoulder - fix alignment immediately",
     },
-    {#Right Shoulder
+    {   #Right Shoulder
         "Normal": "Right Shoulder - alignment is good",
         "Elevated": "Right Shoulder - slight misalignment",
         "Moderate": "Right Shoulder - adjust alignment",
         "High": "Right Shoulder - alignment is off",
         "Critical": "Right Shoulder - fix alignment immediately",
     },
-    {#Left Hip
+    {   #Left Hip
         "Normal": "Left Hip - position is stable",
         "Elevated": "Left Hip - slight imbalance",
         "Moderate": "Left Hip - adjust posture",
         "High": "Left Hip - posture is off ",
         "Critical": "Left Hip - fix posture and balance immediately",
     },
-    {#Right Hip
+    {   #Right Hip
         "Normal": "Right Hip - position is stable",
         "Elevated": "Right Hip - slight imbalance",
         "Moderate": "Right Hip - adjust posture",
         "High": "Right Hip - posture is off ",
         "Critical": "Right Hip - fix posture and balance immediately",
     },
-    {#Left Knee
+    {   #Left Knee
         "Normal": "Left Knee - movement is stable",
         "Elevated": "Left Knee - slight instability",
         "Moderate": "Left Knee - improve stability",
         "High": "Left Knee - stability is off",
         "Critical": "Left Knee - stabilize movement immediately",
     },
-    {#Right Knee
+    {   #Right Knee
         "Normal": "Right Knee - movement is stable",
         "Elevated": "Right Knee - slight instability",
         "Moderate": "Right Knee - improve stability",
         "High": "Right Knee - stability is off",
         "Critical": "Right Knee - stabilize movement immediately",
     },
-    {#Pelvis
+    {   #Pelvis
         "Normal": "Pelvis - hip movement is good",
         "Elevated": "Pelvis - slight hip tilt",
         "Moderate": "Pelvis - keep hips more level",
@@ -112,19 +112,16 @@ KEYPOINT_LINES = [
     (28, 32), (15, 17), (15, 19), (16, 18), (16, 20),
 ]
 
-CRITICAL_LIMIT  = 1
-HIGH_LIMIT      = 2
-MODERATE_LIMIT  = 3
-
+CRITICAL_LIMIT = 1
+HIGH_LIMIT = 2
+MODERATE_LIMIT = 3
 
 LANDMARK_JOINTS = {i: [] for i in range(33)}
 for feat_idx, triple in enumerate(KEY_JOINTS):
     for lm_idx in triple:
         LANDMARK_JOINTS[lm_idx].append(feat_idx)
 
-
-# ─── Model ───────────────────────────────────────────────────────────────────
-
+# Model
 class LSTMEncoder(nn.Module):
     def __init__(self, input_size, hidden_size, latent_dim, num_layers):
         super().__init__()
@@ -140,10 +137,10 @@ class LSTMDecoder(nn.Module):
     def __init__(self, latent_dim, hidden_size, output_size, seq_len, num_layers):
         super().__init__()
         self.seq_len = seq_len
-        self.fc   = nn.Linear(latent_dim, hidden_size)
+        self.fc = nn.Linear(latent_dim, hidden_size)
         self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers, batch_first=True,
                             dropout=0.2 if num_layers > 1 else 0.0)
-        self.out  = nn.Linear(hidden_size, output_size)
+        self.out = nn.Linear(hidden_size, output_size)
 
     def forward(self, z):
         h = self.fc(z).unsqueeze(1).expand(-1, self.seq_len, -1)
@@ -159,9 +156,7 @@ class LSTMAutoencoder(nn.Module):
     def forward(self, x):
         return self.decoder(self.encoder(x))
 
-
-# ─── Pose Extraction ─────────────────────────────────────────────────────────
-
+# Pose Extraction
 def joint_angle(a, b, c):
     ba = a - b
     bc = c - b
@@ -173,8 +168,8 @@ def resample(arr, target_len=FRAMES):
         return arr.astype(np.float32)
     old_idx = np.arange(len(arr), dtype=np.float32)
     new_idx = np.linspace(0, len(arr) - 1, target_len, dtype=np.float32)
-    flat    = arr.reshape(len(arr), -1)
-    result  = np.stack([np.interp(new_idx, old_idx, flat[:, i]) for i in range(flat.shape[1])], axis=1)
+    flat = arr.reshape(len(arr), -1)
+    result = np.stack([np.interp(new_idx, old_idx, flat[:, i]) for i in range(flat.shape[1])], axis=1)
     return result.reshape(target_len, *arr.shape[1:]).astype(np.float32)
 
 def smooth(arr):
@@ -209,26 +204,26 @@ def extract_pose(video_path):
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open video: {video_path}")
 
-    fps    = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     total_frames = 0
-    world_lms    = []
-    image_lms    = []
+    world_lms = []
+    image_lms = []
 
     with mp_settings() as detector:
         while True:
             ok, frame = cap.read()
             if not ok:
                 break
-            rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            ts_ms  = int(total_frames * 1000 / fps)
+            ts_ms = int(total_frames * 1000 / fps)
             result = detector.detect_for_video(mp_img, ts_ms)
             if result.pose_world_landmarks and result.pose_landmarks:
                 world_lms.append(np.array([[p.x, p.y, p.z] for p in result.pose_world_landmarks[0]], dtype=np.float32))
-                image_lms.append(np.array([[p.x, p.y]      for p in result.pose_landmarks[0]],       dtype=np.float32))
+                image_lms.append(np.array([[p.x, p.y] for p in result.pose_landmarks[0]], dtype=np.float32))
             total_frames += 1
 
     cap.release()
@@ -241,9 +236,7 @@ def extract_pose(video_path):
     return {"world": world, "image": image, "fps": fps,
             "size": (width, height), "n_frames": total_frames, "n_valid": len(world_lms)}
 
-
-# ─── Scoring ─────────────────────────────────────────────────────────────────
-
+# Scoring
 def compute_scores(features, model):
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
@@ -256,31 +249,41 @@ def compute_scores(features, model):
     return per_joint_frame, joint_risks, mse
 
 def get_severity(risk, threshold):
-    if   risk < threshold:            return "Normal"
-    elif risk < 1.25 * threshold:      return "Elevated"
-    elif risk < 1.5 * threshold:      return "Moderate"
-    elif risk < 2.0 * threshold:      return "High"
-    else:                             return "Critical"
+    if risk < threshold:
+        return "Normal"
+    elif risk < 1.25 * threshold:    
+        return "Elevated"
+    elif risk < 1.5 * threshold:
+        return "Moderate"
+    elif risk < 2.0 * threshold:
+        return "High"
+    else:
+        return "Critical"
 
 def risk_color(risk, threshold):
-    if   risk < threshold:            return (50, 205, 50)    # green        - Normal
-    elif risk < 1.25 * threshold:      return (0, 215, 255)    # yellow       - Elevated
-    elif risk < 1.5 * threshold:      return (0, 165, 255)    # light orange - Moderate
-    elif risk < 2.0 * threshold:      return (0, 100, 255)    # orange       - High
-    else:                             return (0, 0, 220)      # red          - Critical
+    if risk < threshold:
+        return (50, 205, 50)       # green        - Normal
+    elif risk < 1.25 * threshold:
+        return (0, 215, 255)       # yellow       - Elevated
+    elif risk < 1.5 * threshold:
+        return (0, 165, 255)       # light orange - Moderate
+    elif risk < 2.0 * threshold:
+        return (0, 100, 255)       # orange       - High
+    else:
+        return (0, 0, 220)         # red          - Critical
 
 def count_severity(joint_risks, joint_thresholds):
     n_critical = int(np.sum(joint_risks >= 2.0 * joint_thresholds))
-    n_high     = int(np.sum((joint_risks >= 1.5 * joint_thresholds) & (joint_risks < 2.0 * joint_thresholds)))
+    n_high = int(np.sum((joint_risks >= 1.5 * joint_thresholds) & (joint_risks < 2.0 * joint_thresholds)))
     n_moderate = int(np.sum((joint_risks >= 1.25 * joint_thresholds) & (joint_risks < 1.5 * joint_thresholds)))
-    n_elevated = int(np.sum((joint_risks >= joint_thresholds)        & (joint_risks < 1.25 * joint_thresholds)))
+    n_elevated = int(np.sum((joint_risks >= joint_thresholds) & (joint_risks < 1.25 * joint_thresholds)))
     return n_critical, n_high, n_moderate, n_elevated
 
 def risk_rank(joint_risks, joint_thresholds):
     SEVERITY_RANK = {"Critical": 4, "High": 3, "Moderate": 2, "Elevated": 1, "Normal": 0}
     best_idx, best_tier, best_risk = None, -1, -1.0
     for i in range(NUM_JOINTS):
-        sev  = get_severity(float(joint_risks[i]), float(joint_thresholds[i]))
+        sev = get_severity(float(joint_risks[i]), float(joint_thresholds[i]))
         tier = SEVERITY_RANK[sev]
         if tier == 0:
             continue
@@ -299,7 +302,7 @@ def check_verdict(mse, threshold, joint_risks, joint_thresholds):
 
     # MSE is above threshold - now check joint evidence to confirm
     if (n_critical >= CRITICAL_LIMIT or
-        n_high     >= HIGH_LIMIT     or
+        n_high >= HIGH_LIMIT or
         n_moderate >= MODERATE_LIMIT or
         risk_score >= 3):
         return True, f"High MSE + joint evidence. {label}", n_critical, n_high, n_moderate, n_elevated
@@ -310,22 +313,20 @@ def check_verdict(mse, threshold, joint_risks, joint_thresholds):
 
     return False, f"MSE above threshold but insufficient joint evidence. {label}", n_critical, n_high, n_moderate, n_elevated
 
-
-# ─── Feedback ────────────────────────────────────────────────────────────────
-
+# Feedback
 def build_feedback_table(joint_risks, joint_thresholds):
     rows = []
     for i in range(NUM_JOINTS):
-        risk   = float(joint_risks[i])
+        risk = float(joint_risks[i])
         thresh = float(joint_thresholds[i])
-        sev    = get_severity(risk, thresh)
+        sev = get_severity(risk, thresh)
         rows.append({
-            "Joint":     JOINT_NAMES[i],
-            "Feedback":  FEEDBACK[i].get(sev, ""),
-            "Risk":      round(risk, 6),
+            "Joint": JOINT_NAMES[i],
+            "Feedback": FEEDBACK[i].get(sev, ""),
+            "Risk": round(risk, 6),
             "Threshold": round(thresh, 6),
-            "Flagged":   risk > thresh,
-            "Severity":  sev,
+            "Flagged": risk > thresh,
+            "Severity": sev,
         })
     SEVERITY_RANK = {"Critical": 4, "High": 3, "Moderate": 2, "Elevated": 1, "Normal": 0}
     df = pd.DataFrame(rows)
@@ -348,9 +349,7 @@ def print_summary(verdict, issue, reason, mse, threshold, n_critical, n_high, n_
     print(f"{'=' * 55}\n")
     print(feedback_df.to_string(index=False), "\n")
 
-
-# ─── Draw ─────────────────────────────────────────────────────────────────────
-
+# Draw
 def landmark_colors(frame_risk, joint_thresholds):
     norm_risk = np.zeros(33, dtype=np.float32)
     for lm_idx, feat_indices in LANDMARK_JOINTS.items():
@@ -360,11 +359,16 @@ def landmark_colors(frame_risk, joint_thresholds):
     return norm_risk
 
 def norm_risk_color(norm_risk):
-    if   norm_risk < 1.0:   return (50, 205, 50)    # green        - Normal
-    elif norm_risk < 1.25:   return (0, 215, 255)    # yellow       - Elevated
-    elif norm_risk < 1.5:   return (0, 165, 255)    # light orange - Moderate
-    elif norm_risk < 2.0:   return (0, 100, 255)    # orange       - High
-    else:                   return (0, 0, 220)       # red          - Critical
+    if norm_risk < 1.0:
+        return (50, 205, 50)  # green        - Normal
+    elif norm_risk < 1.25:
+        return (0, 215, 255)  # yellow       - Elevated
+    elif norm_risk < 1.5:
+        return (0, 165, 255)  # light orange - Moderate
+    elif norm_risk < 2.0:
+        return (0, 100, 255)  # orange       - High
+    else:
+        return (0, 0, 220)    # red          - Critical
 
 def draw_skeleton(frame, image_lms, lm_norm_risk):
     out = frame.copy()
@@ -386,7 +390,7 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
                frame_idx, total_frames, pitch_count=0, correct_count=0):
     out = frame.copy()
     fh, fw = out.shape[:2]
-    pw    = 300
+    pw = 300
     panel = np.full((fh, pw, 3), (25, 25, 25), dtype=np.uint8)
 
     # Header
@@ -417,10 +421,10 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
     y = 108
     cv2.putText(panel, "Joint Risk (this frame)", (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
     for i, name in enumerate(JOINT_NAMES):
-        risk   = float(frame_risk[i])
+        risk = float(frame_risk[i])
         thresh = float(joint_thresholds[i])
-        color  = risk_color(risk, thresh)
-        norm  = min(risk / (2.0 * thresh + 1e-10), 1.0)
+        color = risk_color(risk, thresh)
+        norm = min(risk / (2.0 * thresh + 1e-10), 1.0)
         bar_w = int(norm * 110)
         y += 18
         cv2.putText(panel, name, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.33, (160, 160, 160), 1, cv2.LINE_AA)
@@ -435,7 +439,7 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
         y += 17
         color = risk_color(row["Risk"], row["Threshold"])
         cv2.putText(panel, row["Feedback"][:20], (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.32, color, 1, cv2.LINE_AA)
-        cv2.putText(panel, row["Severity"],       (220, y), cv2.FONT_HERSHEY_SIMPLEX, 0.32, color, 1, cv2.LINE_AA)
+        cv2.putText(panel, row["Severity"], (220, y), cv2.FONT_HERSHEY_SIMPLEX, 0.32, color, 1, cv2.LINE_AA)
 
     cv2.putText(panel, f"Frame {frame_idx + 1}/{total_frames}", (8, fh - 8),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 100, 100), 1, cv2.LINE_AA)
@@ -443,13 +447,11 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
     out[:, fw - pw:fw] = cv2.addWeighted(panel, 0.70, out[:, fw - pw:fw], 0.30, 0)
     return out
 
-
-# ─── Main Pipeline ───────────────────────────────────────────────────────────
-
+# Main Pipeline
 def load_model():
     print("Loading model...")
     checkpoint = torch.load(MODEL_DIR / "lstm_autoencoder.pt", map_location=DEVICE, weights_only=False)
-    cfg       = checkpoint["config"]
+    cfg = checkpoint["config"]
     threshold = checkpoint["threshold"]
 
     # Load per-joint thresholds saved during training.
@@ -472,12 +474,11 @@ def load_model():
 
     return model, scaler, threshold, joint_thresholds
 
-
 def write_output_video(video_path, out_path, fps, size, image_lms_full,
                        frame_risks_full, joint_thresholds, verdict, issue, feedback_df):
     print(f"Writing annotated video -> {out_path}")
-    w, h   = size
-    cap    = cv2.VideoCapture(str(video_path))
+    w, h  = size
+    cap = cv2.VideoCapture(str(video_path))
     writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
     for i in range(len(frame_risks_full)):
@@ -493,7 +494,6 @@ def write_output_video(video_path, out_path, fps, size, image_lms_full,
     cap.release()
     writer.release()
     print(f"Done. Open: {out_path}")
-
 
 def analyze(video_path, out_path=None):
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -512,20 +512,20 @@ def analyze(video_path, out_path=None):
     width, height = pose["size"]
     print(f"  {pose['n_valid']}/{pose['n_frames']} valid frames at {fps:.1f}fps ({width}x{height})")
 
-    features        = extract_features(pose["world"])
+    features = extract_features(pose["world"])
     features_scaled = scaler.transform(features)
 
     frame_risks, joint_risks, mse = compute_scores(features_scaled, model)
 
     # Stretch frame-level data back to original video length for annotation
     frame_risks_full = resample(frame_risks, pose["n_frames"])
-    image_lms_full   = resample(pose["image"], pose["n_frames"])
+    image_lms_full = resample(pose["image"], pose["n_frames"])
 
     is_incorrect, reason, n_critical, n_high, n_moderate, n_elevated = check_verdict(mse, threshold, joint_risks, joint_thresholds)
     verdict = "Incorrect Form" if is_incorrect else "Correct Form"
 
     worst_joint = risk_rank(joint_risks, joint_thresholds) if is_incorrect else None
-    main_issue  = JOINT_NAMES[worst_joint] if worst_joint is not None else None
+    main_issue = JOINT_NAMES[worst_joint] if worst_joint is not None else None
 
     feedback_df = build_feedback_table(joint_risks, joint_thresholds)
 
@@ -537,17 +537,16 @@ def analyze(video_path, out_path=None):
                        verdict, main_issue, feedback_df)
 
     return {
-        "verdict":          verdict,
-        "main_issue":       main_issue,
-        "reason":           reason,
-        "mse":              mse,
-        "threshold":        threshold,
-        "joint_risks":      joint_risks,
+        "verdict": verdict,
+        "main_issue": main_issue,
+        "reason": reason,
+        "mse": mse,
+        "threshold": threshold,
+        "joint_risks": joint_risks,
         "joint_thresholds": joint_thresholds,
-        "feedback":         feedback_df,
-        "output_path":      str(out_path),
+        "feedback": feedback_df,
+        "output_path": str(out_path),
     }
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze pitch form in a video.")
@@ -555,4 +554,3 @@ if __name__ == "__main__":
     parser.add_argument("--out", default=None, help="Path for annotated output video")
     args = parser.parse_args()
     analyze(args.video, args.out)
-

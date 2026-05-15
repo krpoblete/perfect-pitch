@@ -1,4 +1,3 @@
-from datetime import date
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
     QLabel, QLineEdit, QPushButton, QScrollArea, QFrame, QSpinBox
@@ -11,13 +10,6 @@ from src.widgets.hand_selector import HandSelector
 from src.utils.pitch_rules import get_pitch_limit
 
 class AccountSettingsPage(QWidget):
-    """Account settings: profile, password, danger zone.
- 
-    SRP responsibilities of this class:
-      - Render and update the settings UI
-      - Detect unsaved changes and gate the Save button
-      - Delegate all logic to db helpers and pitch_rules
-    """ 
     profile_updated = pyqtSignal()
 
     def __init__(self, user_id: int):

@@ -59,21 +59,21 @@ def landmark_colors(joint_risks: np.ndarray, thresholds: np.ndarray) -> np.ndarr
     for j, dot in enumerate(KEYPOINTS):
         out[dot] = float(joint_risks[j]) / (float(thresholds[j]) + 1e-10)
     out[PELVIS] = float(joint_risks[8]) / (float(thresholds[8]) + 1e-10)
-    # Ankles inherit knee severity — visual extension only
+    # Ankles inherit knee severity - visual extension only
     out[27] = float(joint_risks[6]) / (float(thresholds[6]) + 1e-10)  # L.Ankle = L.Knee
     out[28] = float(joint_risks[7]) / (float(thresholds[7]) + 1e-10)  # R.Ankle = R.Knee
     return out
 
 def severity_color(ratio: float) -> tuple:
     if ratio < 1.0:
-        return (50, 205, 50)    # green   (normal)
+        return (50, 205, 50)  # green   (normal)
     if ratio < 1.25:
-        return (0, 215, 255)    # yellow  (elevated)
+        return (0, 215, 255)  # yellow  (elevated)
     if ratio < 1.5:
-        return (0, 165, 255)    # orange  (moderate)
+        return (0, 165, 255)  # orange  (moderate)
     if ratio < 2.0:
-        return (0, 100, 255)    # orange+ (high)
-    return (0, 0, 220)          # red     (critical)
+        return (0, 100, 255)  # orange+ (high)
+    return (0, 0, 220)        # red     (critical)
 
 def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
                    dot_risk: np.ndarray) -> np.ndarray:
@@ -97,7 +97,7 @@ def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
         cv2.line(out, pixel(mp_a), pixel(mp_b),
                  severity_color(ratio), 2, cv2.LINE_AA)
 
-    # landmarks — includes ankles (27, 28) for visual continuity
+    # landmarks - includes ankles (27, 28) for visual continuity
     for dot in [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 32]:
         color = severity_color(dot_risk[dot])
         size = 3 if dot == NOSE else 5
@@ -106,18 +106,16 @@ def draw_keypoints(frame: np.ndarray, screen_pts: np.ndarray,
 
     return out
 
-
-# ── Camera settings ────────────────────────────────────────────────────────────
-
+# Camera settings
 DETECT_WIDTH  = 192
 DETECT_HEIGHT = 108
 
 # pitchflow
-COUNTDOWN_SECS   = 3
+COUNTDOWN_SECS = 3
 MAX_PITCH_FRAMES = 90
 
 # live alert
-INFER_EVERY      = 10
+INFER_EVERY = 10
 ALERT_RISK_RATIO = 1.5
 
 COOLDOWN = 10
@@ -126,31 +124,29 @@ from src.config import EXE_DIR
 LOG_DIR = EXE_DIR / "output"
 
 SHORT_NAMES = [
-    "L.Elbow",    "R.Elbow",
+    "L.Elbow", "R.Elbow",
     "L.Shoulder", "R.Shoulder",
-    "L.Hip",      "R.Hip",
-    "L.Knee",     "R.Knee",
+    "L.Hip", "R.Hip",
+    "L.Knee", "R.Knee",
     "Pelvis",
 ]
 
 # pitching state
-WAITING    = "waiting"
-COUNTDOWN  = "countdown"
+WAITING = "waiting"
+COUNTDOWN = "countdown"
 COLLECTING = "collecting"
-ANALYZING  = "analyzing"
+ANALYZING = "analyzing"
 POST_PITCH = "post_pitch"
 
-
-# ── Camera thread ──────────────────────────────────────────────────────────────
-
+# Camera thread
 class CameraThread(threading.Thread):
 
     def __init__(self, cap: cv2.VideoCapture):
         super().__init__(daemon=True)
-        self._cap  = cap
-        self._q    = queue.Queue(maxsize=2)
+        self._cap = cap
+        self._q = queue.Queue(maxsize=2)
         self._stop = threading.Event()
-        self.ok    = True
+        self.ok = True
 
     def run(self):
         while not self._stop.is_set():
@@ -174,95 +170,69 @@ class CameraThread(threading.Thread):
     def stop(self):
         self._stop.set()
 
-
-
-
-
 def get_text_size(text: str, size: int) -> tuple:
     (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, size / 28.0, max(1, round(size / 18)))
     return w, h
-
 
 def put_text(img: np.ndarray, text: str, pos: tuple,
              size: int, color_bgr: tuple) -> None:
     cv2.putText(img, text, pos, cv2.FONT_HERSHEY_SIMPLEX,
                 size / 28.0, color_bgr, max(1, round(size / 18)), cv2.LINE_AA)
 
+# Font size constants
+FS_TINY = 14    # muted hints, key legend, joint value column
+FS_SMALL = 18   # joint names, progress labels, body values
+FS_BODY = 22    # general status text, feedback lines
+FS_MEDIUM = 28  # panel sub-headers / verdict text
+FS_LARGE = 42   # "Analyzing..." overlay
+FS_HUGE = 84    # countdown number
 
-
-# ── Font size constants ────────────────────────────────────────────────────────
-
-FS_TINY   = 14   # muted hints, key legend, joint value column
-FS_SMALL  = 18   # joint names, progress labels, body values
-FS_BODY   = 22   # general status text, feedback lines
-FS_MEDIUM = 28   # panel sub-headers / verdict text
-FS_LARGE  = 42   # "Analyzing..." overlay
-FS_HUGE   = 84   # countdown number
-
-
-# ── UI constants ───────────────────────────────────────────────────────────────
-
-# PANEL_W is now computed per-frame — use panel_layout() to get all values.
-# The fallback constant is kept so importers of PANEL_W still work.
-PANEL_W       = 420   # fallback — overridden per-draw by panel_layout()
-PANEL_BG      = (18, 18, 18)
-HDR_H         = 72
-CLR_PRIMARY   = (230, 230, 230)
+# UI constants
+PANEL_W = 420                    # fallback — overridden per-draw by panel_layout()
+PANEL_BG = (18, 18, 18)
+HDR_H = 72
+CLR_PRIMARY = (230, 230, 230)
 CLR_SECONDARY = (155, 155, 155)
-CLR_MUTED     = (82, 82, 82)
-CLR_DIVIDER   = (40, 40, 40)
-CLR_BAR_BG    = (48, 48, 48)
-
+CLR_MUTED = (82, 82, 82)
+CLR_DIVIDER = (40, 40, 40)
+CLR_BAR_BG = (48, 48, 48)
 
 def panel_layout(fw: int) -> tuple:
-    """Return (pw, bar_x, bar_w, val_x) where fw is the CAMERA frame width.
-
-    Panel = 40% of camera width, clamped [240, 380] px.
-    This gives roughly a 60/40 camera/panel split at any resolution.
-    Bar columns scale proportionally inside the panel.
-    """
-    pw    = max(240, min(380, int(fw * 0.40)))
+    pw = max(240, min(380, int(fw * 0.40)))
     bar_x = max(72,  int(pw * 0.28))
     bar_w = max(100, int(pw * 0.42))
     val_x = bar_x + bar_w + 5
     return pw, bar_x, bar_w, val_x
 
-
 def _divider(panel: np.ndarray, y: int, pw: int) -> None:
     cv2.line(panel, (10, y), (pw - 10, y), CLR_DIVIDER, 1, cv2.LINE_AA)
-
 
 def _section_label(panel: np.ndarray, text: str, y: int) -> None:
     put_text(panel, text.upper(), (10, y), FS_TINY, CLR_MUTED)
 
-
-# ── Panel helpers ──────────────────────────────────────────────────────────────
-
+# Panel helpers
 def side_panel(fh: int, pw: int) -> np.ndarray:
     p = np.full((fh, pw, 3), PANEL_BG, dtype=np.uint8)
     cv2.line(p, (1, 0), (1, fh), (45, 45, 45), 1)
     return p
 
-
 def blend_panel(frame: np.ndarray, panel: np.ndarray) -> np.ndarray:
-    fw  = frame.shape[1]
-    pw  = panel.shape[1]
+    fw = frame.shape[1]
+    pw = panel.shape[1]
     out = frame.copy()
     roi = out[:, fw - pw:]
     cv2.addWeighted(panel, 0.70, roi, 0.30, 0, roi)
     return out
 
-
-# ── Overlays ───────────────────────────────────────────────────────────────────
-
+# Overlays
 def draw_waiting_overlay(frame: np.ndarray) -> np.ndarray:
     fh, fw = frame.shape[:2]
-    pw, _, _, _ = panel_layout(fw)   # total width = camera + panel
+    pw, _, _, _ = panel_layout(fw)  # total width = camera + panel
     panel  = side_panel(fh, pw)
 
     # Header
     cv2.rectangle(panel, (0, 0), (pw, HDR_H), (52, 52, 52), -1)
-    put_text(panel, "STANDBY",          (10, 28), FS_TINY,   CLR_MUTED)
+    put_text(panel, "STANDBY", (10, 28), FS_TINY, CLR_MUTED)
     put_text(panel, "Awaiting Pitcher", (10, 64), FS_MEDIUM, CLR_PRIMARY)
 
     _divider(panel, HDR_H + 2, pw)
@@ -278,13 +248,12 @@ def draw_waiting_overlay(frame: np.ndarray) -> np.ndarray:
 
     return blend_panel(frame, panel)
 
-
 def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
-                            secs_left: float) -> np.ndarray:
-    out     = draw_keypoints(frame, screen_pts, np.zeros(33))
-    fh, fw  = out.shape[:2]
+                           secs_left: float) -> np.ndarray:
+    out = draw_keypoints(frame, screen_pts, np.zeros(33))
+    fh, fw = out.shape[:2]
     overlay = out.copy()
-    cx, cy  = fw // 2, fh // 2
+    cx, cy = fw // 2, fh // 2
     cv2.circle(overlay, (cx, cy), 96, (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.60, out, 0.40, 0, out)
 
@@ -299,7 +268,7 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     pw, _, _, _ = panel_layout(out.shape[1])
     panel = side_panel(fh, pw)
     cv2.rectangle(panel, (0, 0), (pw, HDR_H), (32, 88, 42), -1)
-    put_text(panel, "DETECTED",      (10, 28), FS_TINY,   (130, 195, 130))
+    put_text(panel, "DETECTED", (10, 28), FS_TINY,   (130, 195, 130))
     put_text(panel, "Pitcher Ready", (10, 64), FS_MEDIUM, CLR_PRIMARY)
 
     _divider(panel, HDR_H + 2, pw)
@@ -307,14 +276,13 @@ def draw_countdown_overlay(frame: np.ndarray, screen_pts: np.ndarray,
     y = HDR_H + 30
     put_text(panel, f"Recording in  {secs_left:.1f}s", (10, y), FS_BODY, (140, 200, 140))
 
-    prog  = max(0.0, 1.0 - secs_left / COUNTDOWN_SECS)
+    prog = max(0.0, 1.0 - secs_left / COUNTDOWN_SECS)
     bar_w = int(prog * (pw - 20))
     y += 18
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
     cv2.rectangle(panel, (10, y), (10 + bar_w, y + 9), (70, 180, 70), -1)
 
     return blend_panel(out, panel)
-
 
 def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float,
                               screen_pts: np.ndarray, thresholds: np.ndarray,
@@ -325,7 +293,7 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
 
     dot_risk = (landmark_colors(early_risk, thresholds)
                if early_risk is not None else np.zeros(33, dtype=np.float32))
-    out    = draw_keypoints(frame, screen_pts, dot_risk)
+    out = draw_keypoints(frame, screen_pts, dot_risk)
     fh, fw = out.shape[:2]
     pw, bar_x, bar_w_max, val_x = panel_layout(fw)
     panel  = side_panel(fh, pw)
@@ -347,11 +315,11 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
     _divider(panel, HDR_H + 2, pw)
 
     # Progress bar
-    y         = HDR_H + 28
-    progress  = n_collected / MAX_PITCH_FRAMES
-    prog_bw   = int(progress * (pw - 20))
+    y = HDR_H + 28
+    progress = n_collected / MAX_PITCH_FRAMES
+    prog_bw = int(progress * (pw - 20))
     frame_lbl = f"{n_collected} / {MAX_PITCH_FRAMES} frames"
-    fps_lbl   = f"{fps_live:.0f} fps"
+    fps_lbl = f"{fps_live:.0f} fps"
     put_text(panel, frame_lbl, (10, y), FS_SMALL, CLR_SECONDARY)
     fw2, _ = get_text_size(fps_lbl, FS_SMALL)
     put_text(panel, fps_lbl, (pw - fw2 - 10, y), FS_SMALL, CLR_MUTED)
@@ -370,20 +338,19 @@ def draw_collecting_overlay(frame: np.ndarray, n_collected: int, fps_live: float
     if early_risk is not None:
         row_h = max(18, (fh - y - 24) // NUM_JOINTS)
         for k in range(NUM_JOINTS):
-            risk   = float(early_risk[k])
+            risk = float(early_risk[k])
             thresh = float(thresholds[k])
-            color  = risk_color(risk, thresh)
-            bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * bar_w_max)
+            color = risk_color(risk, thresh)
+            bw = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * bar_w_max)
             put_text(panel, SHORT_NAMES[k], (10, y), FS_SMALL, CLR_SECONDARY)
             cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bar_w_max, y + 4), CLR_BAR_BG, -1)
-            cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bw,        y + 4), color,       -1)
+            cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bw, y + 4), color, -1)
             put_text(panel, f"{risk:.3f}", (val_x, y), FS_TINY, CLR_MUTED)
             y += row_h
     else:
         put_text(panel, "Warming up...", (10, y), FS_BODY, CLR_MUTED)
 
     return blend_panel(out, panel)
-
 
 def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
                              n_pitches: int, n_correct: int,
@@ -397,13 +364,13 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
 
     fh, fw = out.shape[:2]
     pw, bar_x, bar_w_max, val_x = panel_layout(fw)
-    panel  = side_panel(fh, pw)
+    panel = side_panel(fh, pw)
 
     # Header
     is_correct = result["verdict"] == "Correct Form"
-    hdr_col    = (20, 150, 35) if is_correct else (18, 18, 185)
+    hdr_col = (20, 150, 35) if is_correct else (18, 18, 185)
     cv2.rectangle(panel, (0, 0), (pw, HDR_H), hdr_col, -1)
-    put_text(panel, "RESULT",          (10, 28), FS_TINY,
+    put_text(panel, "RESULT", (10, 28), FS_TINY,
              (130, 220, 140) if is_correct else (130, 130, 230))
     put_text(panel, result["verdict"], (10, 64), FS_MEDIUM, CLR_PRIMARY)
 
@@ -417,10 +384,10 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
 
     # Session accuracy bar
     if n_pitches > 0:
-        acc     = n_correct / n_pitches * 100
+        acc = n_correct / n_pitches * 100
         acc_col = (50, 205, 50) if acc >= 70 else (0, 215, 255) if acc >= 50 else (0, 80, 220)
-        acc_bw  = int((acc / 100.0) * (pw - 20))
-        lbl     = f"{n_correct} / {n_pitches} correct  -  {acc:.0f}%"
+        acc_bw = int((acc / 100.0) * (pw - 20))
+        lbl = f"{n_correct} / {n_pitches} correct  -  {acc:.0f}%"
         put_text(panel, lbl, (10, y), FS_SMALL, acc_col)
         y += 16
         cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
@@ -433,16 +400,16 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
     y += 26
 
     # Dynamic row height so joints + feedback + cooldown always fit
-    joint_budget  = int((fh - y - 120) * 0.50)
-    joint_row_h   = max(16, joint_budget // NUM_JOINTS)
+    joint_budget = int((fh - y - 120) * 0.50)
+    joint_row_h = max(16, joint_budget // NUM_JOINTS)
     for k in range(NUM_JOINTS):
-        risk   = float(result["joint_risks"][k])
+        risk = float(result["joint_risks"][k])
         thresh = float(thresholds[k])
-        color  = risk_color(risk, thresh)
-        bw     = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * bar_w_max)
+        color = risk_color(risk, thresh)
+        bw = int(min(risk / (2.0 * thresh + 1e-10), 1.0) * bar_w_max)
         put_text(panel, SHORT_NAMES[k], (10, y), FS_SMALL, CLR_SECONDARY)
         cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bar_w_max, y + 4), CLR_BAR_BG, -1)
-        cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bw,        y + 4), color,       -1)
+        cv2.rectangle(panel, (bar_x, y - 14), (bar_x + bw, y + 4), color, -1)
         put_text(panel, f"{risk:.3f}", (val_x, y), FS_TINY, CLR_MUTED)
         y += joint_row_h
 
@@ -466,30 +433,28 @@ def draw_post_pitch_overlay(frame: np.ndarray, result: dict, secs_left: float,
 
     # Cooldown countdown
     put_text(panel, f"Next pitch in  {secs_left:.1f}s", (10, y), FS_BODY, CLR_SECONDARY)
-    prog   = max(0.0, 1.0 - secs_left / COOLDOWN)
-    cd_bw  = int(prog * (pw - 20))
+    prog = max(0.0, 1.0 - secs_left / COOLDOWN)
+    cd_bw = int(prog * (pw - 20))
     y += 16
     cv2.rectangle(panel, (10, y), (pw - 10, y + 9), CLR_BAR_BG, -1)
     cv2.rectangle(panel, (10, y), (10 + cd_bw, y + 9), (80, 160, 80), -1)
 
     return blend_panel(out, panel)
 
-
-# ── Landmark smoother ──────────────────────────────────────────────────────────
-
+# Landmark smoother
 class LandmarkSmoother:
     def __init__(self):
-        self.alpha    = 0.7   # pure passthrough, no EMA lag
+        self.alpha = 0.7      # pure passthrough, no EMA lag
         self.vel_gain = 0.2   # no velocity-based prediction
-        self._pts     = None
-        self._vel     = None
+        self._pts = None
+        self._vel = None
 
     def update(self, new_pts: np.ndarray) -> np.ndarray:
         if self._pts is None:
             self._pts = new_pts.copy()
             self._vel = np.zeros_like(new_pts)
         else:
-            delta     = new_pts - self._pts
+            delta = new_pts - self._pts
             self._vel = 0.6 * self._vel + 0.4 * delta
             self._pts = self.alpha * new_pts + (1.0 - self.alpha) * self._pts
         return self._pts.copy()
@@ -508,16 +473,14 @@ class LandmarkSmoother:
     def ready(self) -> bool:
         return self._pts is not None
 
-
-# ── Main ───────────────────────────────────────────────────────────────────────
-
+# Main
 def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_hand: str = "RHP"):
 
     # model
     print("Loading model...")
-    ckpt      = torch.load(MODEL_DIR / "lstm_autoencoder.pt",
+    ckpt = torch.load(MODEL_DIR / "lstm_autoencoder.pt",
                            map_location=DEVICE, weights_only=False)
-    cfg       = ckpt["config"]
+    cfg = ckpt["config"]
     threshold = ckpt["threshold"]
 
     ae = LSTMAutoencoder(
@@ -542,7 +505,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
     print(f"Per-joint : {dict(zip(SHORT_NAMES, thresholds.round(5)))}")
     print(f"Device    : {DEVICE}")
 
-    # camera — CAP_DSHOW works with OBS Virtual Camera on Windows
+    # camera - CAP_DSHOW works with OBS Virtual Camera on Windows
     cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -559,15 +522,15 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
     cam_thread = CameraThread(cap)
     cam_thread.start()
 
-    # ── MediaPipe — LIVE_STREAM ────────────────────────────────────────────────
-    result_list    = [None]
+    # MediaPipe - LIVE_STREAM
+    result_list = [None]
     result_lock = threading.Lock()
     result_ts_list = [0]
 
     def onresult_list(result, output_image, timestamp_ms):
         with result_lock:
             if timestamp_ms >= result_ts_list[0]:
-                result_list[0]    = result
+                result_list[0] = result
                 result_ts_list[0] = timestamp_ms
 
     options = mp_vision.PoseLandmarkerOptions(
@@ -590,30 +553,29 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
     cv2.resizeWindow("Live Pitch Analysis", win_w, win_h)
     t0 = time.perf_counter()
 
-    # ── Session counters ───────────────────────────────────────────────────────
-    n_pitches   = 0
-    n_correct   = 0
+    # Session counters
+    n_pitches = 0
+    n_correct = 0
     frame_count = 0
 
-    # ── Session log ────────────────────────────────────────────────────────────
+    # Session log
     LOG_DIR.mkdir(exist_ok=True)
     session_start = datetime.now()
-    log_path      = LOG_DIR / f"session_{session_start.strftime('%Y%m%d_%H%M%S')}.json"
-    session_log   = []
+    log_path = LOG_DIR / f"session_{session_start.strftime('%Y%m%d_%H%M%S')}.json"
+    session_log = []
 
-    # ── Per-pitch state ────────────────────────────────────────────────────────
-    state          = WAITING
-    cd_start       = None
-    post_start     = None
-    lastresult_list    = None
-    world_pts      = None
-    image_pts      = None
-    smoother       = LandmarkSmoother()
-
-    world_frames        = []
-    screen_frames        = []
+    # Per-pitch state
+    state = WAITING
+    cd_start = None
+    post_start = None
+    lastresult_list = None
+    world_pts = None
+    image_pts = None
+    smoother = LandmarkSmoother()
+    world_frames = []
+    screen_frames = []
     since_infer = 0
-    early_risk  = None
+    early_risk = None
     alert_joint = None
 
     seen_ts = [-1]
@@ -622,16 +584,16 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
         nonlocal state, cd_start, post_start, lastresult_list
         nonlocal world_pts, image_pts
         nonlocal world_frames, screen_frames, since_infer, early_risk, alert_joint
-        state       = WAITING
-        cd_start    = None
-        post_start  = None
+        state = WAITING
+        cd_start = None
+        post_start = None
         lastresult_list = None
-        world_pts   = None
-        image_pts   = None
-        world_frames        = []
-        screen_frames        = []
+        world_pts = None
+        image_pts = None
+        world_frames = []
+        screen_frames = []
         since_infer = 0
-        early_risk  = None
+        early_risk = None
         alert_joint = None
         smoother.reset()
 
@@ -648,9 +610,9 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
         if flip:
             frame = cv2.flip(frame, 1)
         frame_count += 1
-        ts_ms        = int((time.perf_counter() - t0) * 1000)
+        ts_ms = int((time.perf_counter() - t0) * 1000)
 
-        small  = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
+        small = cv2.resize(frame, (DETECT_WIDTH, DETECT_HEIGHT))
         mp_img = mp.Image(image_format=mp.ImageFormat.SRGB,
                           data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
         landmarker.detect_async(mp_img, ts_ms)
@@ -680,7 +642,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
                     world_pts[[a, b]] = world_pts[[b, a]]
                     image_pts[[a, b]] = image_pts[[b, a]]
                 world_pts[:, 0] *= -1
-                image_pts[:, 0]  = 1.0 - image_pts[:, 0]
+                image_pts[:, 0] = 1.0 - image_pts[:, 0]
 
         if person_seen and new_detection:
             display_lm = smoother.update(image_pts)
@@ -691,11 +653,10 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
 
         fps_live = frame_count / max(time.perf_counter() - t0, 1e-6)
 
-        # ── State machine ──────────────────────────────────────────────────────
-
+        # State machine
         if state == WAITING:
             if person_seen:
-                state    = COUNTDOWN
+                state = COUNTDOWN
                 cd_start = time.perf_counter()
 
         elif state == COUNTDOWN:
@@ -703,11 +664,11 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
                 state = WAITING
             else:
                 if time.perf_counter() - cd_start >= COUNTDOWN_SECS:
-                    state       = COLLECTING
+                    state = COLLECTING
                     world_frames  = []
                     screen_frames = []
                     since_infer = 0
-                    early_risk  = None
+                    early_risk = None
                     alert_joint = None
                     print("Recording...")
 
@@ -721,11 +682,11 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
             since_infer += 1
             if n >= FRAMES // 2 and since_infer >= INFER_EVERY:
                 since_infer = 0
-                world_arr   = smooth(resample(np.stack(world_frames), FRAMES))
-                feat        = extract_features(world_arr)
+                world_arr = smooth(resample(np.stack(world_frames), FRAMES))
+                feat = extract_features(world_arr)
                 feat_scaled = scaler.transform(feat)
                 _, early_risk, _ = compute_scores(feat_scaled, ae)
-                worst       = int(np.argmax(early_risk / (thresholds + 1e-10)))
+                worst = int(np.argmax(early_risk / (thresholds + 1e-10)))
                 alert_joint = (SHORT_NAMES[worst]
                                if early_risk[worst] >= ALERT_RISK_RATIO * thresholds[worst]
                                else None)
@@ -734,8 +695,8 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
                 state = ANALYZING
 
         elif state == ANALYZING:
-            world_arr   = smooth(resample(np.stack(world_frames), FRAMES))
-            feat        = extract_features(world_arr)
+            world_arr = smooth(resample(np.stack(world_frames), FRAMES))
+            feat = extract_features(world_arr)
             feat_scaled = scaler.transform(feat)
             _, joint_risks, mse = compute_scores(feat_scaled, ae)
 
@@ -791,7 +752,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
                 }, f, indent=2)
             print(f"Logged to {log_path}")
 
-            state      = POST_PITCH
+            state = POST_PITCH
             post_start = time.perf_counter()
             early_risk = None
             alert_joint = None
@@ -808,7 +769,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
             display = draw_waiting_overlay(frame)
 
         elif state == COUNTDOWN:
-            secs    = max(0.0, COUNTDOWN_SECS - (time.perf_counter() - cd_start))
+            secs = max(0.0, COUNTDOWN_SECS - (time.perf_counter() - cd_start))
             display = (draw_countdown_overlay(frame, lm, secs)
                        if lm is not None else frame.copy())
 
@@ -832,7 +793,7 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
             put_text(display, analyzing_txt, (ax, ay), FS_LARGE, (0, 215, 255))
 
         else:
-            secs    = max(0.0, COOLDOWN - (time.perf_counter() - post_start))
+            secs = max(0.0, COOLDOWN - (time.perf_counter() - post_start))
             display = draw_post_pitch_overlay(frame, lastresult_list, secs,
                                               n_pitches, n_correct, lm)
 
@@ -856,14 +817,12 @@ def run_live(camera_id: int = 0, width: int = 1280, height: int = 720, throwing_
         print(f"Session log saved → {log_path}")
         print(f"Run: python pitch_summary.py {log_path}")
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real-time pitch form analysis.")
-    parser.add_argument("--camera", type=int,  default=0)
-    parser.add_argument("--width",  type=int,  default=1280)
-    parser.add_argument("--height", type=int,  default=720)
-    parser.add_argument("--hand",   type=str,  default="RHP",
+    parser.add_argument("--camera", type=int, default=0)
+    parser.add_argument("--width", type=int, default=1280)
+    parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--hand", type=str, default="RHP",
                         choices=["RHP", "LHP"], help="Pitcher throwing hand")
     args = parser.parse_args()
     run_live(camera_id=args.camera, width=args.width,

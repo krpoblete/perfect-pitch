@@ -1,29 +1,3 @@
-"""
-tour_overlay.py  —  Interactive guided-tour overlay for Perfect Pitch
-=====================================================================
-Drop this file at:  src/widgets/tour_overlay.py
-
-Usage (from MainWindow):
-    from src.widgets.tour_overlay import TourOverlay
-    overlay = TourOverlay(self.centralWidget(), steps)
-    overlay.closed.connect(some_callback)
-
-Each step dict:
-    {
-        "target":        QWidget | str | None,  # widget/objectName to spotlight; None → centred card
-        "title":         str,
-        "body":          str,
-        "callout_side":  "bottom" | "top" | "right" | "left"   (default "bottom")
-        "on_enter":      callable | None        # called before spotlight is applied (page switches etc.)
-    }
-
-NOTE  — add these objectNames to DashboardPage so the spotlight snaps
-        precisely onto the right widgets:
-          • stats container  →  self.stats_section.setObjectName("statsSection")
-          • history frame    →  self.history_frame.setObjectName("historySection")
-        The tour still works without them (falls back to broader targets).
-"""
-
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QFrame,
@@ -36,7 +10,6 @@ from PyQt6.QtGui import QPainter, QColor, QPen
 
 class TourOverlay(QWidget):
     """Full-window guided-tour overlay with animated spotlight highlighting."""
-
     closed = pyqtSignal()
 
     def __init__(self, parent: QWidget, steps: list):
@@ -75,7 +48,6 @@ class TourOverlay(QWidget):
         return super().eventFilter(obj, event)
 
     # callout card
-    # CARD_W is the only value you need to change if you want a wider/narrower card.
     CARD_W = 480
 
     def _build_callout(self):
@@ -112,7 +84,7 @@ class TourOverlay(QWidget):
         self._title_lbl.setObjectName("tourTitle")
         self._title_lbl.setWordWrap(True)
         # Pin width so Qt can compute heightForWidth correctly when adjustSize() runs
-        self._title_lbl.setFixedWidth(self.CARD_W - 48)   # 48 = left(24) + right(24) margins
+        self._title_lbl.setFixedWidth(self.CARD_W - 48)  # 48 = left(24) + right(24) margins
         layout.addWidget(self._title_lbl)
         layout.addSpacing(8)
 
@@ -175,7 +147,7 @@ class TourOverlay(QWidget):
         # Back button
         self._back_btn.setVisible(index > 0)
 
-        # Next / Done
+        # Next | Done
         if index == total - 1:
             self._next_btn.setText("Done")
             self._next_btn.setObjectName("tourNavBtnDone")
@@ -197,14 +169,9 @@ class TourOverlay(QWidget):
             self._dots_row.addWidget(dot)
         self._dots_row.addStretch()
 
-        # Page switch / on_enter
-        # If the step defines a page transition or scroll action, run it first,
-        # then wait 160 ms for Qt to finish rendering before resolving the target.
         on_enter = step.get("on_enter")
         if on_enter:
             on_enter()
-            # Hide the callout so it doesn't linger in the wrong spot
-            # while the page redraws; _apply_spotlight will show it again.
             self.callout.hide()
             self._highlight_rect = QRect()
             self.update()
@@ -230,7 +197,7 @@ class TourOverlay(QWidget):
         self.callout.adjustSize()
         self._position_callout(step.get("callout_side", "bottom"))
         self.callout.raise_()
-        self.callout.show()   # safe to show now that position is final
+        self.callout.show()    # safe to show now that position is final
         self.update()
 
     # target resolution
@@ -238,9 +205,6 @@ class TourOverlay(QWidget):
         if target is None:
             return QRect()
 
-        # callable: step provides its own geometry function 
-        # The callable closes over whatever widgets/pages it needs and returns
-        # a QRect already in overlay-parent coordinates.
         if callable(target):
             try:
                 result = target()
@@ -267,11 +231,11 @@ class TourOverlay(QWidget):
     # callout positioning 
     def _position_callout(self, side: str):
         self.callout.adjustSize()
-        cw  = self.callout.width()
-        ch  = self.callout.height()
-        ow  = self.width()
-        oh  = self.height()
-        h   = self._highlight_rect
+        cw = self.callout.width()
+        ch = self.callout.height()
+        ow = self.width()
+        oh = self.height()
+        h = self._highlight_rect
         gap = 22
 
         if h.isNull() or not h.isValid():
@@ -287,7 +251,7 @@ class TourOverlay(QWidget):
         elif side == "right":
             x = h.right() + gap
             y = h.top() + (h.height() - ch) // 2
-        else:   # left
+        else:  # left
             x = h.left() - cw - gap
             y = h.top() + (h.height() - ch) // 2
 
@@ -321,18 +285,18 @@ class TourOverlay(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        dim   = QColor(0, 0, 0, 192)
-        r     = self.rect()
-        h     = self._highlight_rect
+        dim = QColor(0, 0, 0, 192)
+        r = self.rect()
+        h = self._highlight_rect
 
         if h.isNull() or not h.isValid():
             painter.fillRect(r, dim)
         else:
             # Four dark rectangles surrounding the spotlight window
-            painter.fillRect(QRect(0,         0,          r.width(), h.top()),               dim)
-            painter.fillRect(QRect(0,         h.bottom(), r.width(), r.height()-h.bottom()), dim)
-            painter.fillRect(QRect(0,         h.top(),    h.left(),  h.height()),             dim)
-            painter.fillRect(QRect(h.right(), h.top(),    r.width()-h.right(), h.height()),   dim)
+            painter.fillRect(QRect(0, 0, r.width(), h.top()), dim)
+            painter.fillRect(QRect(0, h.bottom(), r.width(), r.height()-h.bottom()), dim)
+            painter.fillRect(QRect(0, h.top(), h.left(), h.height()), dim)
+            painter.fillRect(QRect(h.right(), h.top(), r.width()-h.right(), h.height()), dim)
 
             # Spotlight glow border
             pen = QPen(QColor(255, 255, 255, 55), 2)
@@ -347,9 +311,5 @@ class TourOverlay(QWidget):
 
         painter.end()
 
-    # navigation is button-only; clicks on the dim overlay are absorbed
     def mousePressEvent(self, event):
-        # Intentionally do nothing – users must use the Next / Back buttons.
-        # We still call super() so Qt can route the event to child buttons
-        # (the callout card) without any side-effects on the overlay itself.
         super().mousePressEvent(event)

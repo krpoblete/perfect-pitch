@@ -8,13 +8,6 @@ from PyQt6.QtGui import QPixmap
 from src.utils.icons import get_icon
 
 class SessionSummaryDialog(QDialog):
-    """
-    Session summary — fills the camera feed area:
-        Left  : joint-severity skeleton PNG, large and readable
-        Right : session stats, worst joint callout, save button
-
-    Sized to match the feed label geometry so it overlays it exactly.
-    """
     # Fallback size used when parent geometry is unavailable
     _W_DEFAULT = 940
     _H_DEFAULT = 620

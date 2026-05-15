@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy,
     QDialog,
 )
-from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
 
 from src.utils.icons import get_icon

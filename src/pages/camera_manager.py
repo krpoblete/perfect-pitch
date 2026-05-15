@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QDialog, QFrame, QComboBox,
+    QLabel, QDialog, QFrame, QComboBox,
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
@@ -29,19 +29,8 @@ class LiveCameraCombo(QComboBox):
             return
         super().showPopup()
 
-
 # CameraMixin
 class CameraMixin:
-    """Camera probe, combo management, preview, and guide card logic.
-
-    Mixed into StartSessionPage. Assumes the page provides these attributes
-    (all created in build_ui / __init__):
-        Widgets : camera_combo, find_cam_btn, test_cam_btn, start_btn,
-                  feed_label, hand_badge, camera_side_lbl, camera_guide_card
-        State   : _camera_index, _desired_camera_name, _camera_cache,
-                  _throwing_hand, _running
-    """
-
     # Static hardware query
     @staticmethod
     def _get_camera_names() -> tuple:
@@ -73,9 +62,9 @@ class CameraMixin:
             from pygrabber.dshow_graph import FilterGraph as _FG
             import cv2 as _cv2
 
-            all_names: list[str] = _FG().get_input_devices()   # DirectShow order
+            all_names: list[str] = _FG().get_input_devices()  # DirectShow order
 
-            # Classify physical vs virtual via MSMF (no LED — isOpened only)
+            # Classify physical vs virtual via MSMF (no LED - isOpened only)
             msmf_set: set[int] = set()
             for idx in range(len(all_names)):
                 cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
@@ -84,13 +73,13 @@ class CameraMixin:
                 cap.release()
 
             physical_names = [n for i, n in enumerate(all_names) if i in msmf_set]
-            virtual_names  = [n for i, n in enumerate(all_names) if i not in msmf_set]
+            virtual_names = [n for i, n in enumerate(all_names) if i not in msmf_set]
             return (physical_names, virtual_names)
 
         except ImportError:
-            pass   # pygrabber not installed — fall through to PowerShell
+            pass  # pygrabber not installed — fall through to PowerShell
         except Exception:
-            pass   # COM error, driver issue, etc. — fall through
+            pass  # COM error, driver issue, etc. — fall through
 
         # Fallback: PowerShell + registry
         import subprocess, json as _json
@@ -170,7 +159,7 @@ class CameraMixin:
             label = f"{name} ({idx})" if is_duplicate else name
             self.camera_combo.addItem(label, idx)
 
-        # 1. Try to match by desired name
+        # Try to match by desired name
         selected = False
         if self._desired_camera_name:
             for i in range(self.camera_combo.count()):
@@ -182,7 +171,7 @@ class CameraMixin:
                     selected = True
                     break
 
-        # 2. Fall back to index match
+        # Fall back to index match
         if not selected:
             for i in range(self.camera_combo.count()):
                 if self.camera_combo.itemData(i) == self._camera_index:
@@ -211,7 +200,7 @@ class CameraMixin:
 
         def _probe():
             physical_names: list = []
-            virtual_names:  list = []
+            virtual_names: list = []
 
             def _fetch_names():
                 result = CameraMixin._get_camera_names()
@@ -219,10 +208,6 @@ class CameraMixin:
                 virtual_names.extend(result[1])
 
             def _enum_cameras(out_phys: list, out_virt: list):
-                # DSHOW is the source of truth for indices — PitchWorker opens
-                # cameras via CAP_DSHOW, so we must use the same index space.
-                # MSMF is only used to classify physical vs virtual: cameras
-                # visible to MSMF are physical hardware; DSHOW-only are virtual.
                 msmf_set = set()
                 for idx in range(8):
                     cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
@@ -258,8 +243,7 @@ class CameraMixin:
                 cache.append((idx, name))
 
             self._camera_cache = cache
-            # Store virtual indices separately so _handle_start can skip
-            # the MSMF resolution peek for DSHOW-only (virtual) cameras.
+
             self._virt_indices = set(virt_indices)
             QTimer.singleShot(0, self._on_camera_probe_done)
 
@@ -290,8 +274,6 @@ class CameraMixin:
         self.find_cam_btn.setText(f"✅  Found ({n})")
         self.find_cam_btn.setEnabled(True)
 
-        # _populate_camera_combo blocks signals so _on_camera_changed never
-        # fires during auto-selection. Sync _camera_index and Test state here.
         idx = self.camera_combo.itemData(self.camera_combo.currentIndex())
         if idx is not None and idx >= 0:
             self._camera_index = idx
@@ -302,11 +284,8 @@ class CameraMixin:
         else:
             self.test_cam_btn.setEnabled(False)
 
-        # Register device-change listener (once; no-op if already registered)
         self._start_device_change_listener()
 
-        # Do NOT enable START unconditionally — respect token status.
-        # _refresh_token_status enables START only if tokens remain.
         self._refresh_token_status()
 
     # Button handlers
@@ -338,8 +317,6 @@ class CameraMixin:
         if self._running:
             return
 
-        # Read directly from the combo — _camera_index may be stale if signals
-        # were blocked during _populate_camera_combo (which they are).
         cam_idx = self.camera_combo.itemData(self.camera_combo.currentIndex())
         if cam_idx is None or cam_idx < 0:
             return
@@ -369,7 +346,7 @@ class CameraMixin:
         from PyQt6.QtWidgets import QApplication as _QApp
         sg = _QApp.primaryScreen().availableGeometry()
         dlg.move(
-            sg.x() + (sg.width()  - dlg.width())  // 2,
+            sg.x() + (sg.width() - dlg.width()) // 2,
             sg.y() + (sg.height() - dlg.height()) // 2,
         )
 
@@ -564,7 +541,7 @@ class CameraMixin:
             page_ref = self   # capture mixin/page reference
 
             class _DevChangeWindow(QWindow):
-                WM_DEVICECHANGE        = 0x0219
+                WM_DEVICECHANGE = 0x0219
                 DBT_DEVICEREMOVECOMPLETE = 0x8004
 
                 def nativeEvent(self, event_type, message):
@@ -577,10 +554,10 @@ class CameraMixin:
                     return False, 0
 
             win = _DevChangeWindow()
-            win.create()   # allocates the native HWND
+            win.create()                     # allocates the native HWND
             self._devchange_listener = win
         except Exception:
-            self._devchange_listener = None   # not on Windows or ctypes issue
+            self._devchange_listener = None  # not on Windows or ctypes issue
 
     def _stop_device_change_listener(self):
         """Destroy the native listener window (called on page teardown)."""
@@ -611,15 +588,15 @@ class CameraMixin:
         cap.release()
 
         if still_alive:
-            return   # something else was unplugged — our camera is fine
+            return   # something else was unplugged - our camera is fine
 
-        # Selected camera is gone — reset UI exactly like a mid-session disconnect
+        # Selected camera is gone - reset UI exactly like a mid-session disconnect
         lost_name = self._desired_camera_name or f"Camera {idx}"
 
-        self._camera_index        = -1
+        self._camera_index = -1
         self._desired_camera_name = ""
-        self._active_camera_name  = ""
-        self._camera_cache        = []
+        self._active_camera_name = ""
+        self._camera_cache = []
 
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
@@ -641,19 +618,9 @@ class CameraMixin:
 
     # Disconnection handler (called by StartSessionPage._on_worker_error)
     def _handle_camera_disconnected(self):
-        """Camera was lost mid-session.
-
-        Discards the session, locks the combo and Test button so the user
-        cannot interact with stale state, resets Find Cameras back to its
-        idle state, and shows a toast telling the user exactly what to do.
-
-        No reconnect dialog — the user simply clicks 'Find Cameras' to run
-        a fresh probe, picks the working camera from the repopulated combo,
-        and hits START. One code path, no modal, no stale indices.
-        """
         # Reset session counters
-        self._pitch_count  = 0
-        self._mistakes     = 0
+        self._pitch_count = 0
+        self._mistakes = 0
         self._worker_state = ""
         self.pitch_val.setText("0")
         self.mistake_val.setText("0")
@@ -664,11 +631,11 @@ class CameraMixin:
 
         lost_name = self._active_camera_name or f"Camera {self._camera_index}"
 
-        # Reset camera selection state — indices are stale after a disconnect
-        self._camera_index        = -1
+        # Reset camera selection state - indices are stale after a disconnect
+        self._camera_index = -1
         self._desired_camera_name = ""
-        self._active_camera_name  = ""
-        self._camera_cache        = []
+        self._active_camera_name = ""
+        self._camera_cache = []
 
         # Lock combo and Test — their contents are stale
         self.camera_combo.blockSignals(True)

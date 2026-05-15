@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QSizePolicy, QGridLayout, QFrame,
+    QLabel, QPushButton, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
 
 from src.utils.icons import get_icon
@@ -20,31 +20,28 @@ class StartSessionPage(QWidget, CameraMixin):
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
-        self._ml_bundle = ml_bundle     # (model, scaler, threshold, joint_thresholds)
+        self._ml_bundle = ml_bundle                     # (model, scaler, threshold, joint_thresholds)
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
-        self._threshold = None          # user's current token pool
-        self._recommended_cap = None    # USA Baseball age-based cap
-        self._used_today = 0            # pitches thrown today
-        self._tokens_remaining = 0      # cap - used_today
+        self._threshold = None                           # user's current token pool
+        self._recommended_cap = None                     # USA Baseball age-based cap
+        self._used_today = 0                             # pitches thrown today
+        self._tokens_remaining = 0                       # cap - used_today
         self._throwing_hand = "RHP"
         self._worker = None
-        self._summary_dlg = None        # ref to open dialog for skeleton injection
-        self._skeleton_path = ""        # path to last generated skeleton PNG
-        self._end_pitch_count = 0       # snapshot at END time for dialog
-        self._end_mistakes = 0          # snapshot at END time for dialog
-        self._ending_worker = None      # strong ref held during async shutdown
-        self._worker_state = ""         # last state emitted by PitchWorker
-        self._summary_open = False      # True while SessionSummaryDialog is open
-        self._camera_index        = -1  # -1 = no camera selected yet
-        self._desired_camera_name = ""  # name user wants — survives index shifts
-        self._active_camera_name  = ""  # name actually in use (set on START)
-        self._camera_cache        = []  # cached (idx, name) pairs from last probe
-        self._virt_indices        = set()  # subset of _camera_cache indices that are virtual
-        # Resolution recorded the first time the external webcam is used.
-        # When the integrated camera is later selected, PitchWorker crops its
-        # feed to this size so both cameras share the same effective FOV.
+        self._summary_dlg = None                         # ref to open dialog for skeleton injection
+        self._skeleton_path = ""                         # path to last generated skeleton PNG
+        self._end_pitch_count = 0                        # snapshot at END time for dialog
+        self._end_mistakes = 0                           # snapshot at END time for dialog
+        self._ending_worker = None                       # strong ref held during async shutdown
+        self._worker_state = ""                          # last state emitted by PitchWorker
+        self._summary_open = False                       # True while SessionSummaryDialog is open
+        self._camera_index = -1                          # -1 = no camera selected yet
+        self._desired_camera_name = ""                   # name user wants — survives index shifts
+        self._active_camera_name = ""                    # name actually in use (set on START)
+        self._camera_cache = []                          # cached (idx, name) pairs from last probe
+        self._virt_indices = set()                       # subset of _camera_cache indices that are virtual
         self._reference_resolution: tuple | None = None  # (width, height) or None
         self._worker_done.connect(lambda: self._on_worker_finished(self._ending_worker))
         self.setObjectName("contentPage")
@@ -72,7 +69,7 @@ class StartSessionPage(QWidget, CameraMixin):
         feed_layout.addWidget(self.feed_label)
         root.addWidget(feed_wrapper, stretch=3)
 
-        # Stats panel — width 13% of screen, clamped 180-240 px
+        # Stats panel
         from PyQt6.QtWidgets import QApplication as _QApp
         _sw = _QApp.primaryScreen().availableGeometry().width()
         _panel_w = max(180, min(240, int(_sw * 0.13)))
@@ -84,12 +81,12 @@ class StartSessionPage(QWidget, CameraMixin):
         panel_layout.setSpacing(8)
 
         # Stats cards
-        self.pitch_card    = self._stat_card("Pitch Count",   "play-handball",  "#4a9eff")
-        self.mistake_card  = self._stat_card("Mistake Count", "x-mark",         "#e05555")
-        self.accuracy_card = self._stat_card("Accuracy",      "target",         "#4ecb71")
+        self.pitch_card    = self._stat_card("Pitch Count", "play-handball", "#4a9eff")
+        self.mistake_card  = self._stat_card("Mistake Count", "x-mark", "#e05555")
+        self.accuracy_card = self._stat_card("Accuracy", "target", "#4ecb71")
 
-        self.pitch_val    = self.pitch_card.findChild(QLabel,    "statValue")
-        self.mistake_val  = self.mistake_card.findChild(QLabel,  "statValue")
+        self.pitch_val    = self.pitch_card.findChild(QLabel, "statValue")
+        self.mistake_val  = self.mistake_card.findChild(QLabel, "statValue")
         self.accuracy_val = self.accuracy_card.findChild(QLabel, "statValue")
 
         panel_layout.addWidget(self.pitch_card)
@@ -266,24 +263,24 @@ class StartSessionPage(QWidget, CameraMixin):
         from src.db import get_pitch_token_status
         status = get_pitch_token_status(self.user_id)
 
-        cap        = status["recommended_cap"]
+        cap = status["recommended_cap"]
         used_today = status["used_today"]
-        threshold  = status["threshold"]
-        remaining  = max(0, threshold - used_today)
+        threshold = status["threshold"]
+        remaining = max(0, threshold - used_today)
 
-        self._threshold        = threshold
-        self._recommended_cap  = cap
-        self._used_today       = used_today
+        self._threshold = threshold
+        self._recommended_cap = cap
+        self._used_today = used_today
         self._tokens_remaining = remaining
 
         self.token_val.setText(str(self._tokens_remaining))
 
         locked_status = {
-            "threshold":       threshold,
+            "threshold": threshold,
             "recommended_cap": cap,
-            "used_today":      used_today,
-            "headroom":        status["headroom"],
-            "locked":          self._tokens_remaining <= 0,
+            "used_today": used_today,
+            "headroom": status["headroom"],
+            "locked": self._tokens_remaining <= 0,
         }
 
         if locked_status["locked"]:
@@ -395,10 +392,6 @@ class StartSessionPage(QWidget, CameraMixin):
 
         is_external = self._camera_index != 0
 
-        # Only peek resolution for physical external cameras.
-        # Virtual cameras (OBS, etc.) are DSHOW-only — opening them via
-        # CAP_MSMF can hold the device long enough to make PitchWorker's
-        # subsequent CAP_DSHOW open fail or return no frames.
         is_physical_external = is_external and self._camera_index not in self._virt_indices
 
         if is_physical_external:
@@ -570,8 +563,7 @@ class StartSessionPage(QWidget, CameraMixin):
         toast_success(self, "Session saved successfully.")
         skeleton_path = getattr(self._ending_worker, "skeleton_path", "") or None
         from src.db import get_connection, _manila_now
-        # Weighted token cost: correct pitches cost 1, incorrect cost 2.
-        # total_pitch is what get_pitches_used_today() sums for the token pool.
+        
         tokens_used = self._pitch_count + self._mistakes
         conn = get_connection()
         conn.execute(

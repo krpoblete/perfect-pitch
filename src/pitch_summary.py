@@ -12,22 +12,26 @@ except ImportError:
 
 SEVERITY_RANK = {"Normal": 0, "Elevated": 1, "Moderate": 2, "High": 3, "Critical": 4}
 SEVERITY_COLORS = {
-    "Normal":   (50, 205, 50),
+    "Normal": (50, 205, 50),
     "Elevated": (0, 215, 255),
     "Moderate": (0, 165, 255),
-    "High":     (0, 100, 255),
+    "High": (0, 100, 255),
     "Critical": (0, 0, 220),
 }
 
 def severity(ratio: float) -> str:
-    if   ratio < 1.0:  return "Normal"
-    elif ratio < 1.25: return "Elevated"
-    elif ratio < 1.5:  return "Moderate"
-    elif ratio < 2.0:  return "High"
-    else:              return "Critical"
+    if   ratio < 1.0:
+        return "Normal"
+    elif ratio < 1.25:
+        return "Elevated"
+    elif ratio < 1.5:
+        return "Moderate"
+    elif ratio < 2.0:
+        return "High"
+    else:
+        return "Critical"
 
-
-#LOAD
+# LOAD
 def load_session(path: Path) -> dict:
     with open(path) as f:
         data = json.load(f)
@@ -47,22 +51,21 @@ def load_all_sessions(folder: Path) -> list[dict]:
             print(f"  [skip] {p.name}: {e}")
     return sessions
 
-
-#COMPUTATION
+# COMPUTATION
 def compute_summary(pitches: list[dict]) -> dict:
-    n        = len(pitches)
+    n = len(pitches)
     joint_names = pitches[0]["joint_names"]
     n_joints = len(joint_names)
 
-    correct  = sum(1 for p in pitches if p["verdict"] == "Correct Form")
+    correct = sum(1 for p in pitches if p["verdict"] == "Correct Form")
     accuracy = correct / n * 100
 
-    mse_val   = [p["mse"] for p in pitches]
+    mse_val = [p["mse"] for p in pitches]
     threshold = pitches[0]["threshold"]
 
-    risks      = np.array([[p["joint_risks"][j]      for j in range(n_joints)] for p in pitches])
+    risks = np.array([[p["joint_risks"][j] for j in range(n_joints)] for p in pitches])
     thresholds = np.array([[p["joint_thresholds"][j] for j in range(n_joints)] for p in pitches])
-    ratio      = risks / (thresholds + 1e-10)
+    ratio = risks / (thresholds + 1e-10)
 
     # avg_ratio: mean of (joint_risk / joint_threshold) per joint across all pitches.
     #   < 1.0 = within threshold | > 1.0 = exceeding threshold.
@@ -73,34 +76,33 @@ def compute_summary(pitches: list[dict]) -> dict:
     #   e.g. 0.75 means the joint was out of range in 75% of pitches.
     flag_rate = (ratio >= 1.0).mean(axis=0)
 
-    avg_sev  = [severity(float(r)) for r in avg_ratio]
+    avg_sev = [severity(float(r)) for r in avg_ratio]
     avg_rank = np.array([SEVERITY_RANK[s] for s in avg_sev], dtype=float)
 
     # worst joint = highest severity, tie-broken by avg_ratio
-    worst_i  = int(np.argmax(avg_rank + avg_ratio * 0.01))
+    worst_i = int(np.argmax(avg_rank + avg_ratio * 0.01))
 
     history = [(p["pitch_number"], p["verdict"], p["main_issue"], p["mse"])
                for p in pitches]
 
     return {
-        "n_pitches":   n,
-        "correct":     correct,
-        "accuracy":    accuracy,
-        "threshold":   threshold,
-        "mse_val":     mse_val,
-        "mse_mean":    float(np.mean(mse_val)),
-        "mse_std":     float(np.std(mse_val)),
+        "n_pitches": n,
+        "correct": correct,
+        "accuracy": accuracy,
+        "threshold": threshold,
+        "mse_val": mse_val,
+        "mse_mean": float(np.mean(mse_val)),
+        "mse_std": float(np.std(mse_val)),
         "joint_names": joint_names,
-        "avg_ratio":   avg_ratio.tolist(),
-        "flag_rate":   flag_rate.tolist(),
-        "avg_sev":     avg_sev,
-        "avg_rank":    avg_rank.tolist(),
-        "worst_i":     worst_i,
-        "history":     history,
+        "avg_ratio": avg_ratio.tolist(),
+        "flag_rate": flag_rate.tolist(),
+        "avg_sev": avg_sev,
+        "avg_rank": avg_rank.tolist(),
+        "worst_i": worst_i,
+        "history": history,
     }
 
-
-#SUMMARY (TEXT ONLY)
+# SUMMARY (TEXT ONLY)
 def print_summary(title: str, stats: dict):
     print(f"\n=== PITCH SESSION SUMMARY: {title} ===")
     print(f"Total pitches: {stats['n_pitches']}")
@@ -109,10 +111,10 @@ def print_summary(title: str, stats: dict):
     print(f"Avg MSE:       {stats['mse_mean']:.5f} +/-{stats['mse_std']:.5f}  (threshold: {stats['threshold']:.5f})")
 
     worst_i = stats["worst_i"]
-    wname   = stats["joint_names"][worst_i]
-    wratio  = stats["avg_ratio"][worst_i]
-    wflag   = stats["flag_rate"][worst_i] * 100
-    wsev    = stats["avg_sev"][worst_i]
+    wname = stats["joint_names"][worst_i]
+    wratio = stats["avg_ratio"][worst_i]
+    wflag = stats["flag_rate"][worst_i] * 100
+    wsev = stats["avg_sev"][worst_i]
     if wsev != "Normal":
         print(f"\n  !! WORST JOINT: {wname}")
         print(f"     Severity:   {wsev}")
@@ -123,29 +125,14 @@ def print_summary(title: str, stats: dict):
 
     print("\nPitch history:")
     for num, verdict, issue, mse in stats["history"]:
-        label     = "Correct" if verdict == "Correct Form" else "Incorrect"
+        label = "Correct" if verdict == "Correct Form" else "Incorrect"
         issue_str = f"  [{issue}]" if issue else ""
         print(f"  #{num:<3}  {label:<9}  MSE={mse:.5f}{issue_str}")
 
     print()
 
-
-#COMBINED SKELETON
+# COMBINED SKELETON
 def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) -> None:
-    """
-    Merge all 9 joint-severity images into a single skeleton PNG.
-
-    Strategy
-    --------
-    Every per-joint image is a full-body render with only that joint coloured;
-    the rest of the body is neutral grey. We:
-      1. Load all 9 images (resize to a common size).
-      2. Build a clean base skeleton by taking the per-channel median across
-         all 9 images — coloured highlights cancel out, leaving the pure grey body.
-      3. For each image, detect highlighted pixels (pixels whose HSV saturation
-         or brightness differs from the base) and copy them onto the canvas.
-      4. Add a legend panel and footer stats alongside the merged skeleton.
-    """
     if not CV2_AVAILABLE:
         print("[warn] opencv-python not installed — skipping combined skeleton.")
         return
@@ -153,9 +140,9 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
     SIZE = 480
 
     joint_names = stats["joint_names"]
-    avg_sev     = stats["avg_sev"]
+    avg_sev = stats["avg_sev"]
 
-    # 1. Load every joint image
+    # Load every joint image
     frames: list = []
     missing = []
     for idx, (name, sev) in enumerate(zip(joint_names, avg_sev)):
@@ -179,17 +166,17 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
         print("[error] No joint images could be loaded — aborting combined skeleton.")
         return
 
-    # 2. Median base = clean grey skeleton (highlights cancel out)
+    # Median base = clean grey skeleton (highlights cancel out)
     stack = np.stack(valid_frames, axis=0).astype(np.float32)
     base  = np.median(stack, axis=0).astype(np.uint8)
 
     base_hsv = cv2.cvtColor(base, cv2.COLOR_BGR2HSV).astype(np.float32)
 
-    # 3. Composite highlighted regions from each joint frame
+    # Composite highlighted regions from each joint frame
     canvas = base.copy()
 
-    SAT_THRESHOLD      = 40
-    SAT_DELTA          = 10
+    SAT_THRESHOLD = 40
+    SAT_DELTA = 10
     VAL_DIFF_THRESHOLD = 30
 
     kernel = np.ones((3, 3), np.uint8)
@@ -214,9 +201,9 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
 
         canvas[highlight_mask] = frame[highlight_mask]
 
-    # 4. Final canvas: dark bg + skeleton + legend + footer
+    # Final canvas: dark bg + skeleton + legend + footer
     LEGEND_W = 190
-    PAD      = 20
+    PAD = 20
     HEADER_H = 46
     FOOTER_H = 36
 
@@ -232,16 +219,16 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
                 (PAD, 32),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.62, (210, 210, 210), 2, cv2.LINE_AA)
 
-    lx       = PAD + SIZE + PAD
+    lx = PAD + SIZE + PAD
     ly_start = HEADER_H + PAD + 10
-    row_h    = max(1, (SIZE - 10) // len(joint_names))
+    row_h = max(1, (SIZE - 10) // len(joint_names))
 
     worst_i = stats["worst_i"]
 
     for idx, (name, sev) in enumerate(zip(joint_names, avg_sev)):
-        color     = SEVERITY_COLORS[sev]
-        ly        = ly_start + idx * row_h
-        is_worst  = (idx == worst_i and sev != "Normal")
+        color = SEVERITY_COLORS[sev]
+        ly = ly_start + idx * row_h
+        is_worst = (idx == worst_i and sev != "Normal")
 
         # Highlight worst joint row with a background band
         if is_worst:
@@ -265,7 +252,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
 
         # flag_rate = fraction of pitches where joint exceeded threshold
         n_flagged = int(round(stats["flag_rate"][idx] * stats["n_pitches"]))
-        flag_str  = f"{stats['flag_rate'][idx] * 100:.0f}% of pitches ({n_flagged}/{stats['n_pitches']})"
+        flag_str = f"{stats['flag_rate'][idx] * 100:.0f}% of pitches ({n_flagged}/{stats['n_pitches']})"
         cv2.putText(final, flag_str,
                     (lx + 24, ly + 35),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.26, (90, 90, 90), 1, cv2.LINE_AA)
@@ -286,14 +273,14 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
                 cv2.FONT_HERSHEY_SIMPLEX, 0.38, (140, 140, 140), 1, cv2.LINE_AA)
 
     # Worst joint callout banner overlaid at the bottom of the skeleton panel
-    worst_i   = stats["worst_i"]
+    worst_i = stats["worst_i"]
     worst_sev = avg_sev[worst_i]
     if worst_sev != "Normal":
-        wname   = joint_names[worst_i]
-        wratio  = stats["avg_ratio"][worst_i]
-        wflag   = stats["flag_rate"][worst_i] * 100
-        wcolor  = SEVERITY_COLORS[worst_sev]
-        banner  = (f"WORST: {wname}  |  {worst_sev}  "
+        wname = joint_names[worst_i]
+        wratio = stats["avg_ratio"][worst_i]
+        wflag = stats["flag_rate"][worst_i] * 100
+        wcolor = SEVERITY_COLORS[worst_sev]
+        banner = (f"WORST: {wname}  |  {worst_sev}  "
                    f"|  {wratio:.2f}x avg  |  flagged {wflag:.0f}% of pitches")
         bx = PAD
         by = sy + SIZE - 6
@@ -306,8 +293,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
     cv2.imwrite(str(out_path), final)
     print(f"Combined skeleton saved → {out_path}")
 
-
-#MAIN
+# MAIN
 def main():
     parser = argparse.ArgumentParser(
         description="Summarise pitch session log(s) produced by live_capture.py"
@@ -326,8 +312,8 @@ def main():
             "When supplied, a combined skeleton PNG is saved alongside each session JSON."
         ),
     )
-    args       = parser.parse_args()
-    target     = Path(args.path)
+    args = parser.parse_args()
+    target = Path(args.path)
     images_dir = Path(args.images) if args.images else None
 
     if images_dir and not images_dir.is_dir():
@@ -343,7 +329,7 @@ def main():
 
     # Single session file
     if target.is_file():
-        data  = load_session(target)
+        data = load_session(target)
         stats = compute_summary(data["pitches"])
         print_summary(target.name, stats)
         save_skeleton_png(stats, target.name, target)
@@ -373,7 +359,6 @@ def main():
     else:
         print(f"Error: '{target}' is not a file or directory.", file=sys.stderr)
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

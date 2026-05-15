@@ -1,9 +1,8 @@
-import os
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QStackedWidget, QScrollArea, QFrame
+    QLabel, QPushButton, QStackedWidget
 )
-from PyQt6.QtCore import Qt, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QSize, QPoint, QRect
 from qframelesswindow import FramelessMainWindow
 
 from src.pages.dashboard_page import DashboardPage
@@ -32,22 +31,6 @@ NAV_ADMIN = [
     ("start_session", "play-handball", "Start Session"),
 ]
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tour steps per role
-# ─────────────────────────────────────────────────────────────────────────────
-# Each step dict:
-#   target        – objectName string   → will be found via findChild(QWidget, name)
-#                   QWidget reference   → used directly
-#                   None                → centred card (no spotlight)
-#   title / body  – text shown in the callout
-#   callout_side  – "bottom" | "top" | "right" | "left"
-#
-# NOTE: Add these objectNames to DashboardPage for precise spotlights:
-#   Stats container  →  widget.setObjectName("statsSection")
-#   History frame    →  widget.setObjectName("historySection")
-# Without them the tour still runs; spotlights just cover a wider area.
-
-# helpers used by on_enter callbacks
 def _scroll_dashboard_to_top(dashboard):
     """Scroll the dashboard's scroll-area back to the very top."""
     from PyQt6.QtWidgets import QScrollArea
@@ -66,10 +49,9 @@ def _scroll_dashboard_to_history(dashboard):
         if vb is None:
             continue
         if history:
-            # Scroll just enough to show the history widget
             viewport_height = sa.viewport().height()
             pos = history.mapTo(sa.widget(), QPoint(0, 0)).y()
-            target_val = max(0, pos - 20)          # 20 px breathing room above
+            target_val = max(0, pos - 20)  # 20 px breathing room above
             vb.setValue(target_val)
         else:
             vb.setValue(vb.maximum())
@@ -82,23 +64,11 @@ def _build_tour_steps_pitcher(
     content_stack: QWidget,
     overlay_parent: QWidget,
 ) -> list:
-    """
-    5-step pitcher tour:
-      1. Dashboard — stats section (top half of content area)
-      2. Dashboard — pitching history (bottom half of content area)
-      3. Start Session page — navigate + spotlight left panel
-      4. Account Settings page — navigate + centred card
-      5. Finish — return to Dashboard
-
-    Each "target" is a lazy callable so geometry is resolved *after* the page
-    switch and Qt repaint have both happened (called from _apply_spotlight via
-    a 160 ms QTimer delay).
-    """
     dashboard = pages["dashboard"]
     start_page = pages["start_session"]
 
     # Lazy rect helpers
-    PAD = 10   # spotlight padding around widget edges
+    PAD = 10  # spotlight padding around widget edges
 
     def _stats_rect() -> QRect:
         """Top portion of the content area — the six stat cards."""
@@ -151,7 +121,7 @@ def _build_tour_steps_pitcher(
 
     # Steps
     steps = [
-        # 1: Stats (top half)
+            # Stats (top half)
         {
             "target": _stats_rect,
             "title": "Your Statistics Overview",
@@ -167,7 +137,7 @@ def _build_tour_steps_pitcher(
                 _scroll_dashboard_to_top(dashboard),
             ),
         },
-        # 2: History (bottom half)
+            # History (bottom half)
         {
             "target": _history_rect,
             "title": "Session History",
@@ -183,7 +153,7 @@ def _build_tour_steps_pitcher(
                 _scroll_dashboard_to_history(dashboard),
             ),
         },
-        # 3: Start Session page – spotlight left panel
+            # Start Session page – spotlight left panel
         {
             "target": _start_panel_rect,
             "title": "Starting a Session",
@@ -199,9 +169,9 @@ def _build_tour_steps_pitcher(
             "callout_side": "right",
             "on_enter": lambda: switch_page("start_session"),
         },
-        # 4: Account Settings
+            # Account Settings
         {
-            "target": None,   # centred card over the settings page
+            "target": None,               # centered card over the settings page
             "title": "Account Settings",
             "body": (
                 "Here you can personalize your pitching profile:\n"
@@ -215,7 +185,7 @@ def _build_tour_steps_pitcher(
             "callout_side": "bottom",
             "on_enter": lambda: switch_page("account_settings"),
         },
-        # 5: Finish
+            # Finish
         {
             "target": None,
             "title": "You're All Set!",
@@ -230,7 +200,6 @@ def _build_tour_steps_pitcher(
     ]
 
     return steps
-
 
 def _build_tour_steps_coach(
     pages: dict,
@@ -282,7 +251,7 @@ def _build_tour_steps_coach(
         )
 
     steps = [
-        # 1: Stats (top half)
+            # Stats (top half)
         {
             "target": _stats_rect,
             "title": "All Players Statistics Overview",
@@ -297,7 +266,7 @@ def _build_tour_steps_coach(
                 _scroll_dashboard_to_top(dashboard),
             ),
         },
-        # 2: History (bottom half)
+            # History (bottom half)
         {
             "target": _history_rect,
             "title": "Session History",
@@ -314,7 +283,7 @@ def _build_tour_steps_coach(
                 _scroll_dashboard_to_history(dashboard),
             ),
         },
-        # 3: Users page
+            # Users page
         {
             "target": _users_rect,
             "title": "Manage Pitchers",
@@ -328,7 +297,7 @@ def _build_tour_steps_coach(
             "callout_side": "bottom",
             "on_enter": lambda: switch_page("pitchers"),
         },
-        # 4: Finish
+            # Finish
         {
             "target": None,
             "title": "You're All Set!",
@@ -351,7 +320,7 @@ class MainWindow(FramelessMainWindow):
         self.ml_bundle = ml_bundle
         self._logging_out = False
         self._session_live = False
-        self._active_tour = None    # reference to a live TourOverlay
+        self._active_tour = None              # reference to a live TourOverlay
         self.setWindowTitle("Perfect Pitch")
         self.titleBar.hide()
         self.setResizeEnabled(False)
@@ -373,7 +342,6 @@ class MainWindow(FramelessMainWindow):
         self._switch_page("dashboard")
 
         # Auto-open guided tour for first-time users (Pitcher and Coach only).
-        # Deferred via singleShot so the window is fully rendered first.
         if self.role != "Admin":
             from src.db import get_has_seen_guide, set_has_seen_guide
             if not get_has_seen_guide(self.user_id):
@@ -491,7 +459,7 @@ class MainWindow(FramelessMainWindow):
 
         sb_layout.addStretch()
 
-        # Help / Guide button (Pitcher and Coach only)
+        # Help | Guide button (Pitcher and Coach only)
         if self.role != "Admin":
             self.guide_btn = QPushButton("  Guide")
             self.guide_btn.setObjectName("guideBtn")
@@ -531,10 +499,10 @@ class MainWindow(FramelessMainWindow):
         self.stack.setObjectName("contentStack")
 
         self.pages = {
-            "dashboard":       DashboardPage(self.user_id),
-            "pitchers":        PitchersPage(),
-            "users":           UsersPage(),
-            "start_session":   StartSessionPage(self.user_id, ml_bundle=self.ml_bundle),
+            "dashboard": DashboardPage(self.user_id),
+            "pitchers": PitchersPage(),
+            "users": UsersPage(),
+            "start_session": StartSessionPage(self.user_id, ml_bundle=self.ml_bundle),
             "account_settings": AccountSettingsPage(self.user_id),
         }
 
@@ -571,8 +539,6 @@ class MainWindow(FramelessMainWindow):
         # Always start on the dashboard so the spotlights make sense
         self._switch_page("dashboard")
 
-        # Build role-appropriate steps (pass switch_page so on_enter callbacks
-        # can navigate to the right page during the tour)
         if self.role == "Coach":
             steps = _build_tour_steps_coach(
                 self.pages,
@@ -586,8 +552,8 @@ class MainWindow(FramelessMainWindow):
                 self.pages,
                 self.nav_buttons,
                 self._switch_page,
-                self.stack,                # QStackedWidget – content area
-                self.centralWidget(),      # overlay parent – full window minus title bar
+                self.stack,            # QStackedWidget – content area
+                self.centralWidget(),  # overlay parent – full window minus title bar
             )
 
         from src.widgets.tour_overlay import TourOverlay

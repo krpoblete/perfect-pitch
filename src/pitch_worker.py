@@ -1,10 +1,3 @@
-"""
-QThread wrapper around live_capture.run_live().
-Emits Qt signals instead of calling cv2.imshow(), so the feed
-and pitch results flow into StartSessionPage without blocking
-the PyQt6 event loop.
-"""
-
 import time
 import warnings
 import queue
@@ -24,7 +17,6 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 warnings.filterwarnings("ignore")
 
-# Alert sound — played on every Incorrect Form verdict
 from src.config import ASSETS_DIR as _ASSETS
 _ALERT_PATH  = _Path(_ASSETS) / "sounds" / "alert.mp3"
 _SETGO_PATH  = _Path(_ASSETS) / "sounds" / "setgo.mp3"
@@ -33,14 +25,14 @@ _setgo_data, _setgo_sr = (None, None)
 
 class PitchWorker(QThread):
     # Signals
-    frame_ready = pyqtSignal(object)      # numpy BGR frame → feed_label
-    pitch_done = pyqtSignal(dict)         # full pitch result dict
+    frame_ready = pyqtSignal(object)           # numpy BGR frame → feed_label
+    pitch_done = pyqtSignal(dict)              # full pitch result dict
     stats_updated = pyqtSignal(int, int, int)  # (pitch_count, mistakes, tokens_used)
-    state_changed = pyqtSignal(str)       # WAITING | COUNTDOWN | COLLECTING | ANALYZING | POST_PITCH
-    model_loaded = pyqtSignal()           # camera + model ready
-    skeleton_ready = pyqtSignal(str)      # path to combined skeleton PNG
-    error_occurred = pyqtSignal(str)      # fatal error message
-    session_ended = pyqtSignal(str)       # log_path when thread finishes
+    state_changed = pyqtSignal(str)            # WAITING | COUNTDOWN | COLLECTING | ANALYZING | POST_PITCH
+    model_loaded = pyqtSignal()                # camera + model ready
+    skeleton_ready = pyqtSignal(str)           # path to combined skeleton PNG
+    error_occurred = pyqtSignal(str)           # fatal error message
+    session_ended = pyqtSignal(str)            # log_path when thread finishes
 
     def __init__(self, camera_id: int = 0, width: int = 1920,
                  height: int = 1080, throwing_hand: str = "RHP",
@@ -91,7 +83,7 @@ class PitchWorker(QThread):
             try:
                 sd.stop()
                 sd.play(_alert_data, _alert_sr)
-                # no sd.wait() — return immediately
+                # no sd.wait() - return immediately
             except Exception:
                 pass
         _t.Thread(target=_play, daemon=True).start()
@@ -171,10 +163,6 @@ class PitchWorker(QThread):
             with open(MODEL_DIR / "scaler.pkl", "rb") as f:
                 scaler = pickle.load(f)
 
-        # Camera — CAP_DSHOW for Windows DirectShow (works with OBS Virtual Camera).
-        # Do NOT force a FOURCC — let the driver negotiate its native format.
-        # OpenCV automatically converts YUY2/NV12 from OBS to BGR on read().
-        # Only set resolution softly; if OBS ignores it we use whatever it gives.
         cap = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
@@ -193,12 +181,7 @@ class PitchWorker(QThread):
         DETECT_WIDTH = max(1, round(actual_w * 0.1))
         DETECT_HEIGHT = max(1, round(actual_h * 0.1))
 
-        # --- Integrated-camera FOV normalisation ---
-        # When _reference_resolution is set the user previously ran the external
-        # webcam which has "the perfect view".  We centre-crop the integrated
-        # camera's larger (or differently-shaped) frame to match the external
-        # camera's aspect ratio, so MediaPipe sees the same framing on both.
-        _crop_rect: tuple | None = None   # (x, y, w, h) in actual_w × actual_h space
+        # Integrated-camera FOV normalisation
         if self._reference_resolution is not None:
             ref_w, ref_h = self._reference_resolution
             ref_ar = ref_w / max(ref_h, 1)
@@ -251,9 +234,7 @@ class PitchWorker(QThread):
         )
         landmarker = mp_vision.PoseLandmarker.create_from_options(options)
 
-        # Session log — each session gets its own subfolder under output/artifacts/
-        # Named session_<timestamp>_uid<user_id> to prevent collisions between
-        # two pitchers whose sessions happen to start at the same second.
+        # Session log
         from src.config import EXE_DIR
         session_start = datetime.now()
         session_slug = f"session_{session_start.strftime('%Y%m%d_%H%M%S')}_uid{self.user_id}"
@@ -281,7 +262,7 @@ class PitchWorker(QThread):
         n_pitches = 0
         n_correct = 0
         n_mistakes = 0
-        n_tokens_used = 0  # weighted: correct=1, incorrect=2
+        n_tokens_used = 0        # weighted: correct=1, incorrect=2
 
         def reset():
             nonlocal state, cd_start, post_start, world_pts, image_pts
@@ -384,7 +365,7 @@ class PitchWorker(QThread):
                 if person_seen:
                     state = COUNTDOWN
                     cd_start = time.perf_counter()
-                    self._play_setgo()   # plays "3...2...1...go!" alongside countdown
+                    self._play_setgo()              # plays "3...2...1...go!" alongside countdown
 
             elif state == COUNTDOWN:
                 if not person_seen:
@@ -533,16 +514,13 @@ class PitchWorker(QThread):
             # Emit frame to Qt (replaces cv2.imshow)
             self.frame_ready.emit(display)
 
-        # Cleanup — landmarker.close() can block for 10-30 s waiting for
-        # pending async inference callbacks to drain.  Run it in a daemon
-        # thread so it doesn't delay the worker's exit (and the finished
-        # signal) or skeleton generation.
+        # Cleanup
         cam_thread.stop()
         cap.release()
         threading.Thread(target=landmarker.close, daemon=True).start()
 
         if session_log:
-            # Store skeleton path on self — main thread reads it safely after wait() 
+            # Store skeleton path on self - main thread reads it safely after wait() 
             self.skeleton_path = ""
             try:
                 from src.pitch_summary import compute_summary, build_combined_skeleton
@@ -559,5 +537,5 @@ class PitchWorker(QThread):
                 print(f"[skeleton] {e}")
                 traceback.print_exc()
 
-            # Both paths emitted together — UI receives them before opening dialog
+            # Both paths emitted together - UI receives them before opening dialog
             self.session_ended.emit(str(log_path))

@@ -1,13 +1,12 @@
 import sys
 import os
 
-# Windows: tell the taskbar this is its own app, not python.exe
+# Windows: tell the taskbar this is its own app, not python.exe.
 if sys.platform == "win32":
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("perfectpitch.app")
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 from src.config import ASSETS_DIR, STYLES_DIR
 from src.db import init_db
@@ -17,11 +16,10 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
 
-    # App icon — applied globally to all windows
+    # App icon
     app.setWindowIcon(QIcon(os.path.join(ASSETS_DIR, "app_icon.ico")))
 
     # Load stylesheets
-    # ROOT_DIR is frozen-safe (resolved in config.py)
     styles_dir = STYLES_DIR 
     styles_files = [
         'base.qss',

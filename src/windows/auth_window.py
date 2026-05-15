@@ -62,7 +62,7 @@ class AuthWindow(FramelessMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Left panel — stacked pages
+        # Left panel - stacked pages
         left = QWidget()
         left.setObjectName("loginLeft")
         left.setFixedWidth(600)
@@ -89,7 +89,7 @@ class AuthWindow(FramelessMainWindow):
 
         left_layout.addWidget(self.stack)
 
-        # Right panel — image
+        # Right panel - image
         right = QWidget()
         right.setObjectName("loginRight")
         right_layout = QVBoxLayout(right)
@@ -118,8 +118,6 @@ class AuthWindow(FramelessMainWindow):
         self.win_btns.move(WIN_W - bw - 10, 10)
         self.win_btns.raise_()
 
-        # Lockout countdown timer — owned by AuthWindow so it never gets
-        # destroyed when the user navigates between auth pages.
         from PyQt6.QtCore import QTimer
         self._fp_lockout_timer = QTimer(self)
         self._fp_lockout_timer.setInterval(1000)
