@@ -127,13 +127,14 @@ class TrendChart(QWidget):
                              Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                              str(pitch_val))
 
-        # X positions
+        # X positions — inner margin keeps first/last bars fully visible
+        bar_w = max(4, min(24, chart_w // n - 4))
+        inner_pad = bar_w // 2 + 2          # half-bar + 2 px breathing room
+        plot_w = chart_w - 2 * inner_pad    # usable width between first and last centre
         if n == 1:
             xs = [PAD_L + chart_w // 2]
         else:
-            xs = [PAD_L + int(i * chart_w / (n - 1)) for i in range(n)]
-
-        bar_w = max(4, min(24, chart_w // n - 4))
+            xs = [PAD_L + inner_pad + int(i * plot_w / (n - 1)) for i in range(n)]
 
         # Bars (pitch count)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -194,26 +195,32 @@ class TrendChart(QWidget):
         painter.setFont(f_leg)
 
         items = [
-            (self._ACC_COLOR, False, "Accuracy %"),
-            (self._MISS_COLOR, True, "Mistakes"),
-            (self._BAR_COLOR, False, "Pitch Count (right axis)"),
+            (self._ACC_COLOR, False, "Accuracy %", 110),
+            (self._MISS_COLOR, True, "Mistakes", 100),
+            (self._BAR_COLOR, False, "Pitch Count (right axis)", 175),
         ]
-        for color, dashed, text in items:
+        for color, dashed, text, step in items:
             pen_l = QPen(color, 2, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine)
             painter.setPen(pen_l)
             painter.drawLine(lx, ly + 5, lx + 18, ly + 5)
             painter.setPen(self._TEXT_COLOR)
             painter.drawText(lx + 22, ly + 9, text)
-            lx += 130
+            lx += step 
 
-        # Severity dot legend
-        for sev, color in _SEV_COLOR.items():
+        # Severity dot legend - per-item steps sized to each label's width
+        for sev, color, step in [
+            ("Normal",   _SEV_COLOR["Normal"],   72),
+            ("Elevated", _SEV_COLOR["Elevated"], 80),
+            ("Moderate", _SEV_COLOR["Moderate"], 82),
+            ("High",     _SEV_COLOR["High"],     56),
+            ("Critical", _SEV_COLOR["Critical"],  0),
+        ]:
             painter.setPen(QPen(color.darker(130), 1))
             painter.setBrush(color)
             painter.drawEllipse(lx, ly + 1, 8, 8)
             painter.setPen(self._TEXT_COLOR)
             painter.drawText(lx + 12, ly + 9, sev)
-            lx += 72
+            lx += step 
 
         painter.end()
 
