@@ -1,14 +1,333 @@
-from datetime import date
+from datetime import date, datetime
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, 
+    QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit,
-    QFrame
+    QFrame, QDialog, QScrollArea, QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QRect
+from PyQt6.QtGui import QColor, QPainter, QPen, QFont
 
 from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
 from src.widgets.confirm_dialog import ConfirmDialog
+
+# Helpers
+def _fmt_date_short(dt_str: str) -> str:
+    try:
+        return datetime.fromisoformat(dt_str).strftime("%b %d")
+    except Exception:
+        return dt_str or "—"
+
+# TrendChart (self-contained copy, severity dots removed per design decision)
+class _TrendChart(QWidget):
+    _BAR_COLOR = QColor("#1a3a5c")
+    _ACC_COLOR = QColor("#4ecb71")
+    _MISS_COLOR = QColor("#e05555")
+    _GRID_COLOR = QColor("#1e1e1e")
+    _LABEL_COLOR = QColor("#555555")
+    _TEXT_COLOR = QColor("#888888")
+    _BG_COLOR = QColor("#0d0d0d")
+
+    CHART_H = 220
+
+    def __init__(self, sessions: list, parent=None):
+        super().__init__(parent)
+        self._sessions = sessions
+        self.setObjectName("trendChart")
+        self.setFixedHeight(self.CHART_H + 60)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        sessions = self._sessions
+        n = len(sessions)
+
+        W = self.width()
+        H = self.CHART_H
+        PAD_L, PAD_R, PAD_T, PAD_B = 52, 52, 16, 36
+        chart_w = W - PAD_L - PAD_R
+        chart_h = H - PAD_T - PAD_B
+
+        painter.fillRect(0, 0, W, H, self._BG_COLOR)
+
+        if n == 0:
+            painter.setPen(self._LABEL_COLOR)
+            f = QFont()
+            f.setPointSize(10)
+            painter.setFont(f)
+            painter.drawText(
+                QRect(0, 0, W, H),
+                Qt.AlignmentFlag.AlignCenter,
+                "No sessions yet."
+            )
+            painter.end()
+            return
+
+        pitches = [s["total_pitch"] or 0 for s in sessions]
+        mistakes = [s["mistakes"] or 0 for s in sessions]
+        accuracies = [float(s["accuracy"] or 0) for s in sessions]
+
+        max_pitch = max(pitches) or 1
+        max_mistake = max(mistakes) or 1
+
+        # Grid
+        painter.setPen(QPen(self._GRID_COLOR, 1))
+        for i in range(5):
+            y = PAD_T + int(chart_h * i / 4)
+            painter.drawLine(PAD_L, y, PAD_L + chart_w, y)
+
+        # Y-axis labels
+        f_small = QFont()
+        f_small.setPointSize(8)
+        painter.setFont(f_small)
+        for i in range(5):
+            frac = 1.0 - i / 4
+            y = PAD_T + int(chart_h * i / 4)
+            painter.setPen(self._ACC_COLOR)
+            painter.drawText(
+                QRect(0, y - 8, PAD_L - 6, 16),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                f"{int(frac * 100)}%"
+            )
+            painter.setPen(self._LABEL_COLOR)
+            painter.drawText(
+                QRect(PAD_L + chart_w + 4, y - 8, PAD_R - 4, 16),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                str(int(frac * max_pitch))
+            )
+
+        # X positions with inner margin
+        bar_w = max(4, min(24, chart_w // n - 4))
+        inner_pad = bar_w // 2 + 2
+        plot_w = chart_w - 2 * inner_pad
+        if n == 1:
+            xs = [PAD_L + chart_w // 2]
+        else:
+            xs = [PAD_L + inner_pad + int(i * plot_w / (n - 1)) for i in range(n)]
+
+        # Bars
+        painter.setPen(Qt.PenStyle.NoPen)
+        for x, p in zip(xs, pitches):
+            bar_h = int(chart_h * p / max_pitch)
+            painter.setBrush(self._BAR_COLOR)
+            painter.drawRoundedRect(x - bar_w // 2, PAD_T + chart_h - bar_h, bar_w, bar_h, 3, 3)
+
+        # Mistake line
+        painter.setPen(QPen(self._MISS_COLOR, 1, Qt.PenStyle.DashLine))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        pts_m = [(x, PAD_T + chart_h - int(chart_h * m / max_mistake)) for x, m in zip(xs, mistakes)]
+        for i in range(len(pts_m) - 1):
+            painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])
+
+        # Accuracy line
+        painter.setPen(QPen(self._ACC_COLOR, 2))
+        pts_a = [(x, PAD_T + chart_h - int(chart_h * a / 100.0)) for x, a in zip(xs, accuracies)]
+        for i in range(len(pts_a) - 1):
+            painter.drawLine(pts_a[i][0], pts_a[i][1], pts_a[i+1][0], pts_a[i+1][1])
+
+        # Plain dots on accuracy line
+        painter.setPen(QPen(self._ACC_COLOR.darker(130), 1))
+        painter.setBrush(self._ACC_COLOR)
+        for x, y in pts_a:
+            painter.drawEllipse(x - 5, y - 5, 10, 10)
+
+        # X-axis labels
+        painter.setPen(self._LABEL_COLOR)
+        painter.setFont(f_small)
+        step = max(1, n // 8)
+        for i in range(0, n, step):
+            x = xs[i]
+            painter.drawText(
+                QRect(x - 30, H - PAD_B + 4, 60, 18),
+                Qt.AlignmentFlag.AlignCenter,
+                _fmt_date_short(sessions[i]["date"])
+            )
+
+        # Legend
+        ly = H + 8
+        lx = PAD_L
+        f_leg = QFont()
+        f_leg.setPointSize(8)
+        painter.setFont(f_leg)
+        for color, dashed, text, step in [
+            (self._ACC_COLOR, False, "Accuracy %", 110),
+            (self._MISS_COLOR, True, "Mistakes", 100),
+            (self._BAR_COLOR, False, "Pitch Count (right axis)", 175),
+        ]:
+            painter.setPen(QPen(color, 2, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine))
+            painter.drawLine(lx, ly + 5, lx + 18, ly + 5)
+            painter.setPen(self._TEXT_COLOR)
+            painter.drawText(lx + 22, ly + 9, text)
+            lx += step
+
+        painter.end()
+
+# PitcherTrendDialog
+class PitcherTrendDialog(QDialog):
+    """Modal dialog showing a pitcher's full performance trend chart."""
+    def __init__(self, parent, pitcher: dict, sessions: list):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setObjectName("skeletonViewerDialog")
+
+        self._name = f"{pitcher['first_name']} {pitcher['last_name']}"
+        self._sessions = sessions
+        self._build_ui()
+        self._size_and_position(parent)
+
+    def _size_and_position(self, parent):
+        try:
+            top = parent.window()
+            geo = top.frameGeometry()
+            w = int(geo.width() * 0.75)
+            max_h = int(geo.height() * 0.75)
+            cx = geo.x() + (geo.width() - w) // 2
+            cy_base = geo.y() + (geo.height() - max_h) // 2
+        except Exception:
+            from PyQt6.QtWidgets import QApplication
+            sg = QApplication.primaryScreen().availableGeometry()
+            w = int(sg.width() * 0.75)
+            max_h = int(sg.height() * 0.75)
+            cx = sg.x() + (sg.width() - w) // 2
+            cy_base = sg.y() + (sg.height() - max_h) // 2
+
+        # Fit height to content: header + 2 dividers + stats + chart + footer + padding
+        HEADER = 52
+        DIVIDERS = 2
+        STATS = 90    # label row + spacing
+        CHART = 280   # _TrendChart.CHART_H (220) + legend (60)
+        FOOTER = 44
+        PADDING = 56  # bl margins top+bottom (28+28)
+        content_h = HEADER + DIVIDERS + STATS + CHART + FOOTER + PADDING
+        h = min(content_h, max_h)
+        cy = cy_base + (max_h - h) // 2
+
+        self.setFixedSize(w, h)
+        self.move(cx, cy)
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header.setObjectName("skeletonViewerHeader")
+        header.setFixedHeight(52)
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(24, 0, 16, 0)
+        hl.setSpacing(10)
+
+        badge = QLabel("PERFORMANCE TREND")
+        badge.setObjectName("skeletonViewerBadge")
+        hl.addWidget(badge)
+
+        name_lbl = QLabel(self._name)
+        name_lbl.setObjectName("skeletonViewerFooterLabel")
+        hl.addWidget(name_lbl)
+
+        hl.addStretch()
+
+        close_btn = QPushButton("✕  Close")
+        close_btn.setObjectName("skeletonViewerCloseBtn")
+        close_btn.setFixedHeight(32)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self.reject)
+        hl.addWidget(close_btn)
+
+        root.addWidget(header)
+
+        # Divider
+        div_top = QFrame()
+        div_top.setObjectName("skeletonViewerDivider")
+        div_top.setFixedHeight(1)
+        root.addWidget(div_top)
+
+        # Scrollable body
+        scroll = QScrollArea()
+        scroll.setObjectName("dashScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        body = QWidget()
+        body.setObjectName("dashContainer")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(32, 28, 32, 28)
+        bl.setSpacing(16)
+        bl.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        total = len(self._sessions)
+        pitches = sum(s["total_pitch"] or 0 for s in self._sessions)
+        mistakes = sum(s["mistakes"] or 0 for s in self._sessions)
+        avg_acc  = (
+            sum(float(s["accuracy"] or 0) for s in self._sessions) / total
+            if total else 0.0
+        )
+
+        # Summary stats strip
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(24)
+        for label, value in [
+            ("Sessions", str(total)),
+            ("Total Pitches", str(pitches)),
+            ("Total Mistakes", str(mistakes)),
+            ("Avg Accuracy", f"{avg_acc:.1f}%"),
+        ]:
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            lbl = QLabel(label)
+            lbl.setObjectName("dashStatLabel")
+            val = QLabel(value)
+            val.setObjectName("dashStatValue")
+            val.setStyleSheet("color: #4ecb71; background: transparent;")
+            col.addWidget(lbl)
+            col.addWidget(val)
+            stats_row.addLayout(col)
+        stats_row.addStretch()
+        bl.addLayout(stats_row)
+
+        # Divider
+        div_mid = QFrame()
+        div_mid.setObjectName("tableDivider")
+        div_mid.setFixedHeight(1)
+        bl.addWidget(div_mid)
+
+        # Chart
+        if self._sessions:
+            chart = _TrendChart(self._sessions, parent=body)
+            bl.addWidget(chart)
+        else:
+            empty = QLabel("No session data available for this pitcher.")
+            empty.setObjectName("tableEmptyLabel")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            bl.addWidget(empty)
+
+        bl.addStretch()
+        scroll.setWidget(body)
+        root.addWidget(scroll, stretch=1)
+
+        # Footer divider
+        div_bot = QFrame()
+        div_bot.setObjectName("skeletonViewerDivider")
+        div_bot.setFixedHeight(1)
+        root.addWidget(div_bot)
+
+        # Footer
+        footer = QWidget()
+        footer.setObjectName("skeletonViewerFooter")
+        footer.setFixedHeight(44)
+        fl = QHBoxLayout(footer)
+        fl.setContentsMargins(24, 0, 24, 0)
+        session_lbl = QLabel(
+            f"{total} session{'s' if total != 1 else ''}  ·  {pitches} total pitch{'es' if pitches != 1 else ''}"
+        )
+        session_lbl.setObjectName("skeletonViewerFooterLabel")
+        fl.addWidget(session_lbl)
+        fl.addStretch()
+        root.addWidget(footer)
 
 ROWS_PER_PAGE = 10
 COLUMNS = ["Full Name", "Email", "Throwing Hand", "Pitch Threshold", "Date Joined", ""]
@@ -144,10 +463,18 @@ class PitchersPage(QWidget):
         hand = user["throwing_hand"] if user["throwing_hand"] else "—"
         joined = _fmt_date(user["created_at"])
 
-        values = [full_name, user["email"], hand, threshold, joined]
         stretches = [3, 3, 2, 2, 2, 1]
 
-        for val, stretch in zip(values, stretches[:-1]):
+        # Full name — clickable link
+        name_btn = QPushButton(full_name)
+        name_btn.setObjectName("tableNameLink")
+        name_btn.setFlat(True)
+        name_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        name_btn.clicked.connect(lambda _, u=user: self._open_trend(u))
+        h.addWidget(name_btn, stretch=stretches[0])
+
+        values = [user["email"], hand, threshold, joined]
+        for val, stretch in zip(values, stretches[1:-1]):
             lbl = QLabel(str(val))
             lbl.setObjectName("tableCell")
             if val in ("RHP", "LHP"):
@@ -247,6 +574,13 @@ class PitchersPage(QWidget):
     def _next_page(self):
         self._page += 1
         self._render_page()
+
+    # Trend viewer
+    def _open_trend(self, user: dict):
+        from src.db import get_sessions_for_trend
+        sessions = get_sessions_for_trend(user["id"])
+        dlg = PitcherTrendDialog(self, user, sessions)
+        dlg.exec()
 
     # Delete
     def _handle_delete(self, user_id: int, name: str):

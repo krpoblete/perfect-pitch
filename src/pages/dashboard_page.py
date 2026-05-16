@@ -95,7 +95,6 @@ class TrendChart(QWidget):
         pitches = [s["total_pitch"] or 0 for s in sessions]
         mistakes = [s["mistakes"] or 0 for s in sessions]
         accuracies = [float(s["accuracy"] or 0) for s in sessions]
-        severities = [s.get("worst_severity") or "Normal" for s in sessions]
 
         max_pitch = max(pitches) or 1
         max_mistake = max(mistakes) or 1
@@ -167,11 +166,10 @@ class TrendChart(QWidget):
         for i in range(len(pts_a) - 1):
             painter.drawLine(pts_a[i][0], pts_a[i][1], pts_a[i+1][0], pts_a[i+1][1])
 
-        # Severity dots on accuracy line
-        for i, ((x, y), sev) in enumerate(zip(pts_a, severities)):
-            color = _SEV_COLOR.get(sev, _SEV_COLOR["Normal"])
-            painter.setPen(QPen(color.darker(130), 1))
-            painter.setBrush(color)
+        # Plain dots on accuracy line
+        painter.setPen(QPen(self._ACC_COLOR.darker(130), 1))
+        painter.setBrush(self._ACC_COLOR)
+        for x, y in pts_a:
             painter.drawEllipse(x - 5, y - 5, 10, 10)
 
         # X-axis labels
@@ -205,21 +203,6 @@ class TrendChart(QWidget):
             painter.drawLine(lx, ly + 5, lx + 18, ly + 5)
             painter.setPen(self._TEXT_COLOR)
             painter.drawText(lx + 22, ly + 9, text)
-            lx += step 
-
-        # Severity dot legend - per-item steps sized to each label's width
-        for sev, color, step in [
-            ("Normal",   _SEV_COLOR["Normal"],   72),
-            ("Elevated", _SEV_COLOR["Elevated"], 80),
-            ("Moderate", _SEV_COLOR["Moderate"], 82),
-            ("High",     _SEV_COLOR["High"],     56),
-            ("Critical", _SEV_COLOR["Critical"],  0),
-        ]:
-            painter.setPen(QPen(color.darker(130), 1))
-            painter.setBrush(color)
-            painter.drawEllipse(lx, ly + 1, 8, 8)
-            painter.setPen(self._TEXT_COLOR)
-            painter.drawText(lx + 12, ly + 9, sev)
             lx += step 
 
         painter.end()
