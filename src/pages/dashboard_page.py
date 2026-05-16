@@ -97,34 +97,45 @@ class TrendChart(QWidget):
         accuracies = [float(s["accuracy"] or 0) for s in sessions]
 
         max_pitch = max(pitches) or 1
-        max_mistake = max(mistakes) or 1
+        # Mistakes share the right axis (same scale as pitch count) so they
+        # plot honestly against the same reference — no separate max_mistake.
 
-        # Grid lines (4 horizontal)
+        # Choose integer grid step so right-axis labels are always whole numbers.
+        # Pick the smallest step that gives 4-6 gridlines.
+        def _nice_step(top: int) -> int:
+            for step in [1, 2, 5, 10, 20, 50, 100]:
+                if top / step <= 6:
+                    return step
+            return max(1, top // 6)
+
+        r_step = _nice_step(max_pitch)
+        r_max = ((max_pitch + r_step - 1) // r_step) * r_step  # round up to multiple
+        r_ticks = list(range(0, r_max + 1, r_step))              # e.g. [0,1,2,3,4,5,6]
+
+        # Grid lines — one per right-axis tick
         painter.setPen(QPen(self._GRID_COLOR, 1))
-        for i in range(5):
-            y = PAD_T + int(chart_h * i / 4)
+        for v in r_ticks:
+            y = PAD_T + chart_h - int(chart_h * v / r_max)
             painter.drawLine(PAD_L, y, PAD_L + chart_w, y)
 
-        # Y-axis labels (left = accuracy, right = pitch count)
+        # Y-axis labels (left = accuracy %, right = integer pitch/mistake count)
         f_small = QFont()
         f_small.setPointSize(8)
         painter.setFont(f_small)
 
-        for i in range(5):
-            frac = 1.0 - i / 4
-            y = PAD_T + int(chart_h * i / 4)
-            # Left axis — accuracy 0-100%
-            acc_val = int(frac * 100)
+        for v in r_ticks:
+            frac = v / r_max
+            y = PAD_T + chart_h - int(chart_h * frac)
+            # Left axis — matching accuracy %
             painter.setPen(self._ACC_COLOR)
             painter.drawText(QRect(0, y - 8, PAD_L - 6, 16),
                              Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                             f"{acc_val}%")
-            # Right axis — pitch count
-            pitch_val = int(frac * max_pitch)
+                             f"{int(frac * 100)}%")
+            # Right axis — integer count
             painter.setPen(self._LABEL_COLOR)
             painter.drawText(QRect(PAD_L + chart_w + 4, y - 8, PAD_R - 4, 16),
                              Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                             str(pitch_val))
+                             str(v))
 
         # X positions — inner margin keeps first/last bars fully visible
         bar_w = max(4, min(24, chart_w // n - 4))
@@ -138,7 +149,7 @@ class TrendChart(QWidget):
         # Bars (pitch count)
         painter.setPen(Qt.PenStyle.NoPen)
         for i, (x, p) in enumerate(zip(xs, pitches)):
-            bar_h = int(chart_h * p / max_pitch)
+            bar_h = int(chart_h * p / r_max)
             painter.setBrush(self._BAR_COLOR)
             painter.drawRoundedRect(
                 x - bar_w // 2, PAD_T + chart_h - bar_h,
@@ -151,7 +162,7 @@ class TrendChart(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         pts_m = []
         for i, (x, m) in enumerate(zip(xs, mistakes)):
-            y = PAD_T + chart_h - int(chart_h * m / max_mistake)
+            y = PAD_T + chart_h - int(chart_h * m / r_max)
             pts_m.append((x, y))
         for i in range(len(pts_m) - 1):
             painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])

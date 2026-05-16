@@ -70,21 +70,32 @@ class _TrendChart(QWidget):
         accuracies = [float(s["accuracy"] or 0) for s in sessions]
 
         max_pitch = max(pitches) or 1
-        max_mistake = max(mistakes) or 1
+        # Mistakes share the right axis (same scale as pitch count).
 
-        # Grid
+        # Integer-snapped grid so right-axis labels are always whole numbers.
+        def _nice_step(top: int) -> int:
+            for step in [1, 2, 5, 10, 20, 50, 100]:
+                if top / step <= 6:
+                    return step
+            return max(1, top // 6)
+
+        r_step = _nice_step(max_pitch)
+        r_max = ((max_pitch + r_step - 1) // r_step) * r_step
+        r_ticks = list(range(0, r_max + 1, r_step))
+
+        # Grid lines — one per right-axis tick
         painter.setPen(QPen(self._GRID_COLOR, 1))
-        for i in range(5):
-            y = PAD_T + int(chart_h * i / 4)
+        for v in r_ticks:
+            y = PAD_T + chart_h - int(chart_h * v / r_max)
             painter.drawLine(PAD_L, y, PAD_L + chart_w, y)
 
         # Y-axis labels
         f_small = QFont()
         f_small.setPointSize(8)
         painter.setFont(f_small)
-        for i in range(5):
-            frac = 1.0 - i / 4
-            y = PAD_T + int(chart_h * i / 4)
+        for v in r_ticks:
+            frac = v / r_max
+            y = PAD_T + chart_h - int(chart_h * frac)
             painter.setPen(self._ACC_COLOR)
             painter.drawText(
                 QRect(0, y - 8, PAD_L - 6, 16),
@@ -95,7 +106,7 @@ class _TrendChart(QWidget):
             painter.drawText(
                 QRect(PAD_L + chart_w + 4, y - 8, PAD_R - 4, 16),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                str(int(frac * max_pitch))
+                str(v)
             )
 
         # X positions with inner margin
@@ -110,14 +121,14 @@ class _TrendChart(QWidget):
         # Bars
         painter.setPen(Qt.PenStyle.NoPen)
         for x, p in zip(xs, pitches):
-            bar_h = int(chart_h * p / max_pitch)
+            bar_h = int(chart_h * p / r_max)
             painter.setBrush(self._BAR_COLOR)
             painter.drawRoundedRect(x - bar_w // 2, PAD_T + chart_h - bar_h, bar_w, bar_h, 3, 3)
 
         # Mistake line
         painter.setPen(QPen(self._MISS_COLOR, 1, Qt.PenStyle.DashLine))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        pts_m = [(x, PAD_T + chart_h - int(chart_h * m / max_mistake)) for x, m in zip(xs, mistakes)]
+        pts_m = [(x, PAD_T + chart_h - int(chart_h * m / r_max)) for x, m in zip(xs, mistakes)]
         for i in range(len(pts_m) - 1):
             painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])
 
