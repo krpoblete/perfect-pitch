@@ -72,6 +72,18 @@
     background-color: #1e1e1e;
 }
 
+/* Trend chart */
+#trendChart {
+    background-color: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+}
+
+#trendPlaceholder {
+    background-color: #0d0d0d;
+    border: 1px solid #1e1e1e;
+}
+
 /* Clickable date link in history table */
 #sessionDateLink {
     background: transparent;

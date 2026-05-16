@@ -4,12 +4,12 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy,
     QDialog,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import Qt, QTimer, QRect, QPoint
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QFont, QPainterPath
 
 from src.utils.icons import get_icon
 
-ROWS_PER_PAGE = 5 
+ROWS_PER_PAGE = 5
 
 def _fmt_dt(dt_str: str) -> str:
     try:
@@ -18,6 +18,204 @@ def _fmt_dt(dt_str: str) -> str:
     except Exception:
         return dt_str or "—"
 
+def _fmt_date_short(dt_str: str) -> str:
+    try:
+        return datetime.fromisoformat(dt_str).strftime("%b %d")
+    except Exception:
+        return dt_str or "—"
+
+# Severity colour map (matches the rest of the app)
+_SEV_COLOR = {
+    "Normal": QColor("#4ecb71"),
+    "Elevated": QColor("#f0e040"),
+    "Moderate": QColor("#f0a500"),
+    "High": QColor("#e07800"),
+    "Critical": QColor("#e05555"),
+}
+
+# Trend chart
+class TrendChart(QWidget):
+    """
+    Custom QPainter trend chart.
+
+    Draws:
+      • Bars  — pitch count per session (muted blue)
+      • Line  — accuracy % (green)
+      • Line  — mistake count (red, secondary Y-axis)
+      • Dots  — accuracy dots colored by worst_joint severity
+      • X axis labels — short date strings, every N sessions to avoid crowding
+    """
+
+    _BAR_COLOR = QColor("#1a3a5c")
+    _ACC_COLOR = QColor("#4ecb71")
+    _MISS_COLOR = QColor("#e05555")
+    _GRID_COLOR = QColor("#1e1e1e")
+    _LABEL_COLOR = QColor("#555555")
+    _TEXT_COLOR = QColor("#888888")
+    _BG_COLOR = QColor("#0d0d0d")
+
+    CHART_H = 220  # fixed chart area height in pixels
+
+    def __init__(self, sessions: list, label: str = "", parent=None):
+        super().__init__(parent)
+        self._sessions = sessions               # list of dicts: date,total_pitch,mistakes,accuracy,worst_joint,worst_severity
+        self._label = label
+        self.setObjectName("trendChart")
+        self.setFixedHeight(self.CHART_H + 60)  # +60 for x-labels + legend
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        sessions = self._sessions
+        n = len(sessions)
+
+        W = self.width()
+        H = self.CHART_H
+        PAD_L, PAD_R, PAD_T, PAD_B = 52, 52, 16, 36
+
+        chart_w = W - PAD_L - PAD_R
+        chart_h = H - PAD_T - PAD_B
+
+        # Background
+        painter.fillRect(0, 0, W, H, self._BG_COLOR)
+
+        if n == 0:
+            painter.setPen(self._LABEL_COLOR)
+            f = QFont()
+            f.setPointSize(10)
+            painter.setFont(f)
+            painter.drawText(QRect(0, 0, W, H), Qt.AlignmentFlag.AlignCenter,
+                             "No sessions yet — complete a session to see your trend.")
+            painter.end()
+            return
+
+        # Data ranges
+        pitches = [s["total_pitch"] or 0 for s in sessions]
+        mistakes = [s["mistakes"] or 0 for s in sessions]
+        accuracies = [float(s["accuracy"] or 0) for s in sessions]
+        severities = [s.get("worst_severity") or "Normal" for s in sessions]
+
+        max_pitch = max(pitches) or 1
+        max_mistake = max(mistakes) or 1
+
+        # Grid lines (4 horizontal)
+        painter.setPen(QPen(self._GRID_COLOR, 1))
+        for i in range(5):
+            y = PAD_T + int(chart_h * i / 4)
+            painter.drawLine(PAD_L, y, PAD_L + chart_w, y)
+
+        # Y-axis labels (left = accuracy, right = pitch count)
+        f_small = QFont()
+        f_small.setPointSize(8)
+        painter.setFont(f_small)
+
+        for i in range(5):
+            frac = 1.0 - i / 4
+            y = PAD_T + int(chart_h * i / 4)
+            # Left axis — accuracy 0-100%
+            acc_val = int(frac * 100)
+            painter.setPen(self._ACC_COLOR)
+            painter.drawText(QRect(0, y - 8, PAD_L - 6, 16),
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                             f"{acc_val}%")
+            # Right axis — pitch count
+            pitch_val = int(frac * max_pitch)
+            painter.setPen(self._LABEL_COLOR)
+            painter.drawText(QRect(PAD_L + chart_w + 4, y - 8, PAD_R - 4, 16),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                             str(pitch_val))
+
+        # X positions
+        if n == 1:
+            xs = [PAD_L + chart_w // 2]
+        else:
+            xs = [PAD_L + int(i * chart_w / (n - 1)) for i in range(n)]
+
+        bar_w = max(4, min(24, chart_w // n - 4))
+
+        # Bars (pitch count)
+        painter.setPen(Qt.PenStyle.NoPen)
+        for i, (x, p) in enumerate(zip(xs, pitches)):
+            bar_h = int(chart_h * p / max_pitch)
+            painter.setBrush(self._BAR_COLOR)
+            painter.drawRoundedRect(
+                x - bar_w // 2, PAD_T + chart_h - bar_h,
+                bar_w, bar_h, 3, 3
+            )
+
+        # Mistake line
+        pen = QPen(self._MISS_COLOR, 1, Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        pts_m = []
+        for i, (x, m) in enumerate(zip(xs, mistakes)):
+            y = PAD_T + chart_h - int(chart_h * m / max_mistake)
+            pts_m.append((x, y))
+        for i in range(len(pts_m) - 1):
+            painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])
+
+        # Accuracy line
+        pen_acc = QPen(self._ACC_COLOR, 2)
+        painter.setPen(pen_acc)
+        pts_a = []
+        for i, (x, a) in enumerate(zip(xs, accuracies)):
+            y = PAD_T + chart_h - int(chart_h * a / 100.0)
+            pts_a.append((x, y))
+        for i in range(len(pts_a) - 1):
+            painter.drawLine(pts_a[i][0], pts_a[i][1], pts_a[i+1][0], pts_a[i+1][1])
+
+        # Severity dots on accuracy line
+        for i, ((x, y), sev) in enumerate(zip(pts_a, severities)):
+            color = _SEV_COLOR.get(sev, _SEV_COLOR["Normal"])
+            painter.setPen(QPen(color.darker(130), 1))
+            painter.setBrush(color)
+            painter.drawEllipse(x - 5, y - 5, 10, 10)
+
+        # X-axis labels
+        painter.setPen(self._LABEL_COLOR)
+        painter.setFont(f_small)
+        step = max(1, n // 8)        # show at most ~8 labels
+        for i in range(0, n, step):
+            x = xs[i]
+            label = _fmt_date_short(sessions[i]["date"])
+            painter.drawText(
+                QRect(x - 30, H - PAD_B + 4, 60, 18),
+                Qt.AlignmentFlag.AlignCenter, label
+            )
+
+        # Legend
+        ly = H + 8
+        lx = PAD_L
+
+        f_leg = QFont()
+        f_leg.setPointSize(8)
+        painter.setFont(f_leg)
+
+        items = [
+            (self._ACC_COLOR, False, "Accuracy %"),
+            (self._MISS_COLOR, True, "Mistakes"),
+            (self._BAR_COLOR, False, "Pitch Count (right axis)"),
+        ]
+        for color, dashed, text in items:
+            pen_l = QPen(color, 2, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine)
+            painter.setPen(pen_l)
+            painter.drawLine(lx, ly + 5, lx + 18, ly + 5)
+            painter.setPen(self._TEXT_COLOR)
+            painter.drawText(lx + 22, ly + 9, text)
+            lx += 130
+
+        # Severity dot legend
+        for sev, color in _SEV_COLOR.items():
+            painter.setPen(QPen(color.darker(130), 1))
+            painter.setBrush(color)
+            painter.drawEllipse(lx, ly + 1, 8, 8)
+            painter.setPen(self._TEXT_COLOR)
+            painter.drawText(lx + 12, ly + 9, sev)
+            lx += 72
+
+        painter.end()
 
 class SkeletonViewerDialog(QDialog):
     def __init__(self, parent, session):
@@ -141,7 +339,7 @@ class SkeletonViewerDialog(QDialog):
                 self._img_lbl.setPixmap(scaled)
                 return
 
-        # Graceful fallback — file missing or unreadable
+        # Graceful fallback - file missing or unreadable
         self._img_lbl.setText("⚠  Skeleton image not found on disk.")
         self._img_lbl.setObjectName("skeletonViewerMissing")
         self._img_lbl.style().unpolish(self._img_lbl)
@@ -178,7 +376,7 @@ class DashboardPage(QWidget):
         scroll.setWidget(self._container)
         outer.addWidget(scroll)
 
-    # Stat card builders
+    # Helpers
     def _stat_card(self, icon_name: str, label: str,
                    value: str, color: str, wide: bool = False) -> QWidget:
         card = QWidget()
@@ -211,18 +409,45 @@ class DashboardPage(QWidget):
         layout.addLayout(text_col)
         layout.addStretch()
         return card
-    
+
     def _section_title(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setObjectName("dashSectionTitle")
         return lbl
-    
+
     def _divider(self) -> QFrame:
         f = QFrame()
         f.setObjectName("tableDivider")
         f.setFixedHeight(1)
         return f
-    
+
+    def _trend_section(self, layout: QVBoxLayout, sessions: list,
+                       subtitle: str = ""):
+        """Insert the trend chart section between stat cards and history table."""
+        layout.addWidget(self._section_title("Performance Trend"))
+        if subtitle:
+            sub = QLabel(subtitle)
+            sub.setObjectName("dashSubtitle")
+            layout.addSpacing(4)
+            layout.addWidget(sub)
+        layout.addSpacing(12)
+
+        if len(sessions) < 2:
+            placeholder = QWidget()
+            placeholder.setObjectName("trendPlaceholder")
+            placeholder.setFixedHeight(60)
+            ph_layout = QHBoxLayout(placeholder)
+            ph_lbl = QLabel("Complete at least 2 sessions to see your performance trend.")
+            ph_lbl.setObjectName("dashSubtitle")
+            ph_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ph_layout.addWidget(ph_lbl)
+            layout.addWidget(placeholder)
+        else:
+            chart = TrendChart(sessions, parent=self)
+            layout.addWidget(chart)
+
+        layout.addSpacing(32)
+
     # History table
     def _build_history_table(self, layout: QVBoxLayout,
                              columns: list, col_stretches: list,
@@ -352,9 +577,6 @@ class DashboardPage(QWidget):
         has_skeleton = bool(session["path"])
 
         def _date_widget(stretch: int) -> tuple:
-            """Return (widget, stretch) for the Date column.
-            A link-styled QPushButton when a skeleton image exists,
-            a plain QLabel otherwise."""
             if has_skeleton:
                 btn = QPushButton(date_str)
                 btn.setObjectName("sessionDateLink")
@@ -377,33 +599,34 @@ class DashboardPage(QWidget):
 
             for text, stretch in [
                 (str(session["total_pitch"]), stretches[2]),
-                (str(session["mistakes"]),    stretches[3]),
-                (acc_str,                     stretches[4]),
+                (str(session["mistakes"]), stretches[3]),
+                (acc_str, stretches[4]),
             ]:
                 lbl = QLabel(text)
                 lbl.setObjectName("tableCell")
                 h.addWidget(lbl, stretch=stretch)
         else:
-            # Pitcher / Admin layout: Date | Pitches | Mistakes | Accuracy
+            # Pitcher / Admin layout: Date | Pitches | Mistakes | Accuracy 
             date_w, date_s = _date_widget(stretches[0])
             h.addWidget(date_w, stretch=date_s)
 
             for text, stretch in [
                 (str(session["total_pitch"]), stretches[1]),
-                (str(session["mistakes"]),    stretches[2]),
-                (acc_str,                     stretches[3]),
+                (str(session["mistakes"]), stretches[2]),
+                (acc_str, stretches[3]),
             ]:
                 lbl = QLabel(text)
                 lbl.setObjectName("tableCell")
                 h.addWidget(lbl, stretch=stretch)
 
         return row
-    
-    # Role dasboards
+
+    # Role dashboards
     def _build_pitcher_dashboard(self):
-        from src.db import get_dashboard_stats, get_sessions_for_user
+        from src.db import get_dashboard_stats, get_sessions_for_user, get_sessions_for_trend
         stats = get_dashboard_stats(self.user_id)
         sessions = get_sessions_for_user(self.user_id)
+        trend = get_sessions_for_trend(self.user_id)
 
         layout = self._layout
 
@@ -424,9 +647,9 @@ class DashboardPage(QWidget):
             ("play-handball", "Total Pitches", str(int(stats["total_pitches"])), "#4a9eff"),
             ("x-mark", "Total Mistakes", str(int(stats["total_mistakes"])), "#e05555"),
             ("target", "Total Sessions", str(int(stats["total_sessions"])), "#4ecb71"),
-            ("play-handball", "Avg Pitch", f"{stats['avg_pitch']:.1f}", "#4a9eff"), 
-            ("x-mark", "Avg Mistakes", f"{stats['avg_mistakes']:.1f}", "#e05555"), 
-            ("target", "Avg Accuracy", f"{stats['avg_accuracy']:.1f}", "#4ecb71"), 
+            ("play-handball", "Avg Pitch", f"{stats['avg_pitch']:.1f}", "#4a9eff"),
+            ("x-mark", "Avg Mistakes", f"{stats['avg_mistakes']:.1f}", "#e05555"),
+            ("target", "Avg Accuracy", f"{stats['avg_accuracy']:.1f}", "#4ecb71"),
         ]
         for i, (icon, label, value, color) in enumerate(cards):
             grid.addWidget(self._stat_card(icon, label, value, color), i // 3, i % 3)
@@ -434,20 +657,26 @@ class DashboardPage(QWidget):
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Session history
+        # Trend chart
+        self._trend_section(layout, trend,
+                            subtitle="Accuracy, mistakes, and pitch count across all your sessions")
+
+        # History table
         self._sessions_filtered = list(sessions)
         columns = ["Date", "Pitches", "Mistakes", "Accuracy"]
         stretches = [4, 2, 2, 2]
         self._build_history_table(
             layout, columns, stretches, sessions,
             lambda s, alternate: self._make_session_row(s, alternate, stretches)
-        ) 
+        )
         self._render_rows()
 
     def _build_coach_dashboard(self):
-        from src.db import get_coach_dashboard_stats, get_coach_pitcher_sessions
+        from src.db import (get_coach_dashboard_stats, get_coach_pitcher_sessions,
+                            get_coach_sessions_for_trend)
         stats = get_coach_dashboard_stats()
         sessions = get_coach_pitcher_sessions()
+        trend = get_coach_sessions_for_trend()
 
         layout = self._layout
 
@@ -468,17 +697,20 @@ class DashboardPage(QWidget):
             ("play-handball", "Total Pitches", str(int(stats["total_pitches"])), "#4a9eff"),
             ("x-mark", "Total Mistakes", str(int(stats["total_mistakes"])), "#e05555"),
             ("target", "Total Sessions", str(int(stats["total_sessions"])), "#4ecb71"),
-            ("play-handball", "Avg Pitch", f"{stats['avg_pitch']:.1f}", "#4a9eff"), 
-            ("x-mark", "Avg Mistakes", f"{stats['avg_mistakes']:.1f}", "#e05555"), 
-            ("target", "Avg Accuracy", f"{stats['avg_accuracy']:.1f}", "#4ecb71"), 
+            ("play-handball", "Avg Pitch", f"{stats['avg_pitch']:.1f}", "#4a9eff"),
+            ("x-mark", "Avg Mistakes", f"{stats['avg_mistakes']:.1f}", "#e05555"),
+            ("target", "Avg Accuracy", f"{stats['avg_accuracy']:.1f}", "#4ecb71"),
         ]
         for i, (icon, label, value, color) in enumerate(cards):
             grid.addWidget(self._stat_card(icon, label, value, color), i // 3, i % 3)
-
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Session history with pitcher name column
+        # Trend chart - combined across all pitchers
+        self._trend_section(layout, trend,
+                            subtitle="Combined accuracy, mistakes, and pitch count across all your pitchers")
+
+        # History table with pitcher name column
         self._sessions_filtered = list(sessions)
         columns = ["Pitcher", "Date", "Pitches", "Mistakes", "Accuracy"]
         stretches = [3, 4, 2, 2, 2]
@@ -492,10 +724,12 @@ class DashboardPage(QWidget):
         self._render_rows()
 
     def _build_admin_dashboard(self):
-        from src.db import get_admin_dashboard_stats, get_dashboard_stats, get_sessions_for_user
+        from src.db import (get_admin_dashboard_stats, get_dashboard_stats,
+                            get_sessions_for_user, get_sessions_for_trend)
         user_stats, session_stats = get_admin_dashboard_stats()
         personal_stats = get_dashboard_stats(self.user_id)
         sessions = get_sessions_for_user(self.user_id)
+        trend = get_sessions_for_trend(self.user_id)
 
         layout = self._layout
 
@@ -509,7 +743,7 @@ class DashboardPage(QWidget):
         layout.addWidget(sub)
         layout.setSpacing(28)
 
-        # Users card — wide with active/inactive breakdown
+        # Wide users card
         users_card = QWidget()
         users_card.setObjectName("dashStatCardWide")
         ul = QHBoxLayout(users_card)
@@ -534,7 +768,7 @@ class DashboardPage(QWidget):
         ul.addLayout(total_col)
         ul.addStretch()
 
-        # Active / Inactive breakdown
+        # Active | Inactive breakdown
         for label, value, color in [
             ("Active", str(int(user_stats["active_users"])), "#4ecb71"),
             ("Inactive", str(int(user_stats["inactive_users"])), "#e05555"),
@@ -573,14 +807,18 @@ class DashboardPage(QWidget):
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Personal session history
+        # Trend chart - personal sessions (for debugging Start Session)
+        self._trend_section(layout, trend,
+                            subtitle="Your personal session history (use Start Session to generate data)")
+
+        # Personal history table
         self._sessions_filtered = list(sessions)
         columns = ["Date", "Pitches", "Mistakes", "Accuracy"]
         stretches = [4, 2, 2, 2]
         self._build_history_table(
             layout, columns, stretches, sessions,
             lambda s, alternate: self._make_session_row(s, alternate, stretches)
-        ) 
+        )
         self._render_rows()
 
     # Skeleton viewer
@@ -592,13 +830,11 @@ class DashboardPage(QWidget):
     def refresh(self):
         from src.db import get_user_by_id
 
-        # Clear layout
         while self._layout.count():
             item = self._layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
             elif item.layout():
-                # Clear nested layouts
                 while item.layout().count():
                     sub = item.layout().takeAt(0)
                     if sub.widget():

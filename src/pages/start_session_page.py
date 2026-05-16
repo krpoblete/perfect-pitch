@@ -562,16 +562,20 @@ class StartSessionPage(QWidget, CameraMixin):
     def _save_session(self, accuracy: float):
         toast_success(self, "Session saved successfully.")
         skeleton_path = getattr(self._ending_worker, "skeleton_path", "") or None
+        worst_joint = getattr(self._ending_worker, "worst_joint", "") or None
+        worst_severity = getattr(self._ending_worker, "worst_severity", "") or None
         from src.db import get_connection, _manila_now
-        
+
         tokens_used = self._pitch_count + self._mistakes
         conn = get_connection()
         conn.execute(
-            """INSERT INTO sessions (user_id, date, total_pitch, mistakes, accuracy, path)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO sessions
+                (user_id, date, total_pitch, mistakes, accuracy, path,
+                 worst_joint, worst_severity)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (self.user_id, _manila_now(),
              tokens_used, self._mistakes, round(accuracy, 2),
-             skeleton_path),
+             skeleton_path, worst_joint, worst_severity),
         )
         conn.commit()
         conn.close()

@@ -87,6 +87,10 @@ def _migrate(conn):
     ]
     if "path" not in session_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN path TEXT DEFAULT NULL")
+    if "worst_joint" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN worst_joint TEXT DEFAULT NULL")
+    if "worst_severity" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN worst_severity TEXT DEFAULT NULL")
 
     conn.commit()
 
@@ -435,3 +439,32 @@ def get_coach_pitcher_sessions():
     """).fetchall()
     conn.close()
     return rows
+
+# Trend helpers
+def get_sessions_for_trend(user_id: int) -> list:
+    """Pitcher / Admin: all sessions oldest-first for trend charting."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT date, total_pitch, mistakes, accuracy, worst_joint, worst_severity
+        FROM sessions
+        WHERE user_id = ?
+        ORDER BY date ASC
+    """, (user_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_coach_sessions_for_trend() -> list:
+    """Coach: one row per session across all active Pitchers, oldest-first."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            s.date, s.total_pitch, s.mistakes, s.accuracy,
+            s.worst_joint, s.worst_severity,
+            u.first_name || ' ' || u.last_name AS pitcher_name
+        FROM sessions s
+        INNER JOIN users u ON s.user_id = u.id
+        WHERE u.role = 'Pitcher' AND u.is_active = 1
+        ORDER BY s.date ASC
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

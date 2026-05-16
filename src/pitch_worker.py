@@ -48,6 +48,8 @@ class PitchWorker(QThread):
         self._reference_resolution = reference_resolution  # (w, h) of external cam, or None
         self._stop_event = threading.Event()
         self.skeleton_path = ""                            # written by worker thread, read by main after wait()
+        self.worst_joint = ""                              # full joint name of worst severity (e.g. "Right Elbow")
+        self.worst_severity = ""                           # severity label (Normal/Elevated/Moderate/High/Critical)
 
     def stop(self):
         self._stop_event.set()
@@ -83,7 +85,6 @@ class PitchWorker(QThread):
             try:
                 sd.stop()
                 sd.play(_alert_data, _alert_sr)
-                # no sd.wait() - return immediately
             except Exception:
                 pass
         _t.Thread(target=_play, daemon=True).start()
@@ -182,11 +183,12 @@ class PitchWorker(QThread):
         DETECT_HEIGHT = max(1, round(actual_h * 0.1))
 
         # Integrated-camera FOV normalisation
+        _crop_rect: tuple | None = None               # (x, y, w, h) in actual_w × actual_h space 
         if self._reference_resolution is not None:
             ref_w, ref_h = self._reference_resolution
             ref_ar = ref_w / max(ref_h, 1)
             src_ar = actual_w / max(actual_h, 1)
-            if abs(src_ar - ref_ar) > 0.02:          # only crop when AR differs
+            if abs(src_ar - ref_ar) > 0.02:           # only crop when AR differs
                 if src_ar > ref_ar:
                     # source is wider — crop sides
                     crop_w = int(actual_h * ref_ar)
@@ -262,7 +264,7 @@ class PitchWorker(QThread):
         n_pitches = 0
         n_correct = 0
         n_mistakes = 0
-        n_tokens_used = 0        # weighted: correct=1, incorrect=2
+        n_tokens_used = 0         # weighted: correct=1, incorrect=2
 
         def reset():
             nonlocal state, cd_start, post_start, world_pts, image_pts
@@ -520,8 +522,9 @@ class PitchWorker(QThread):
         threading.Thread(target=landmarker.close, daemon=True).start()
 
         if session_log:
-            # Store skeleton path on self - main thread reads it safely after wait() 
-            self.skeleton_path = ""
+            self.skeleton_path  = ""
+            self.worst_joint = ""
+            self.worst_severity = ""
             try:
                 from src.pitch_summary import compute_summary, build_combined_skeleton
                 from src.config import ASSETS_DIR
@@ -532,6 +535,10 @@ class PitchWorker(QThread):
                 if out_png.exists():
                     self.skeleton_path = str(out_png)
                     print(f"[skeleton] ready -> {self.skeleton_path}")
+                # Always populate worst joint from stats regardless of PNG success
+                wi = stats["worst_i"]
+                self.worst_joint    = stats["joint_names"][wi]
+                self.worst_severity = stats["avg_sev"][wi]
             except Exception as e:
                 import traceback
                 print(f"[skeleton] {e}")
