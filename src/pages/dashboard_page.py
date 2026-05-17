@@ -97,45 +97,34 @@ class TrendChart(QWidget):
         accuracies = [float(s["accuracy"] or 0) for s in sessions]
 
         max_pitch = max(pitches) or 1
-        # Mistakes share the right axis (same scale as pitch count) so they
-        # plot honestly against the same reference — no separate max_mistake.
+        max_mistake = max(mistakes) or 1
 
-        # Choose integer grid step so right-axis labels are always whole numbers.
-        # Pick the smallest step that gives 4-6 gridlines.
-        def _nice_step(top: int) -> int:
-            for step in [1, 2, 5, 10, 20, 50, 100]:
-                if top / step <= 6:
-                    return step
-            return max(1, top // 6)
-
-        r_step = _nice_step(max_pitch)
-        r_max = ((max_pitch + r_step - 1) // r_step) * r_step  # round up to multiple
-        r_ticks = list(range(0, r_max + 1, r_step))              # e.g. [0,1,2,3,4,5,6]
-
-        # Grid lines — one per right-axis tick
+        # Grid lines (4 horizontal)
         painter.setPen(QPen(self._GRID_COLOR, 1))
-        for v in r_ticks:
-            y = PAD_T + chart_h - int(chart_h * v / r_max)
+        for i in range(5):
+            y = PAD_T + int(chart_h * i / 4)
             painter.drawLine(PAD_L, y, PAD_L + chart_w, y)
 
-        # Y-axis labels (left = accuracy %, right = integer pitch/mistake count)
+        # Y-axis labels (left = accuracy, right = pitch count)
         f_small = QFont()
         f_small.setPointSize(8)
         painter.setFont(f_small)
 
-        for v in r_ticks:
-            frac = v / r_max
-            y = PAD_T + chart_h - int(chart_h * frac)
-            # Left axis — matching accuracy %
+        for i in range(5):
+            frac = 1.0 - i / 4
+            y = PAD_T + int(chart_h * i / 4)
+            # Left axis — accuracy 0-100%
+            acc_val = int(frac * 100)
             painter.setPen(self._ACC_COLOR)
             painter.drawText(QRect(0, y - 8, PAD_L - 6, 16),
                              Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                             f"{int(frac * 100)}%")
-            # Right axis — integer count
+                             f"{acc_val}%")
+            # Right axis — pitch count
+            pitch_val = int(frac * max_pitch)
             painter.setPen(self._LABEL_COLOR)
             painter.drawText(QRect(PAD_L + chart_w + 4, y - 8, PAD_R - 4, 16),
                              Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                             str(v))
+                             str(pitch_val))
 
         # X positions — inner margin keeps first/last bars fully visible
         bar_w = max(4, min(24, chart_w // n - 4))
@@ -149,7 +138,7 @@ class TrendChart(QWidget):
         # Bars (pitch count)
         painter.setPen(Qt.PenStyle.NoPen)
         for i, (x, p) in enumerate(zip(xs, pitches)):
-            bar_h = int(chart_h * p / r_max)
+            bar_h = int(chart_h * p / max_pitch)
             painter.setBrush(self._BAR_COLOR)
             painter.drawRoundedRect(
                 x - bar_w // 2, PAD_T + chart_h - bar_h,
@@ -162,7 +151,7 @@ class TrendChart(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         pts_m = []
         for i, (x, m) in enumerate(zip(xs, mistakes)):
-            y = PAD_T + chart_h - int(chart_h * m / r_max)
+            y = PAD_T + chart_h - int(chart_h * m / max_mistake)
             pts_m.append((x, y))
         for i in range(len(pts_m) - 1):
             painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])
@@ -218,6 +207,56 @@ class TrendChart(QWidget):
 
         painter.end()
 
+
+class _PitcherSparkline(QWidget):
+    """Tiny accuracy sparkline for a single pitcher's last N sessions."""
+    _LINE_COLOR = QColor("#4a9eff")
+    _DOT_COLOR = QColor("#4a9eff")
+    _BG_COLOR = QColor("#111111")
+
+    def __init__(self, accuracies: list, parent=None):
+        super().__init__(parent)
+        self._data = accuracies
+        self.setFixedHeight(44)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W, H = self.width(), self.height()
+        PAD = 6
+        draw_w = W - PAD * 2
+        draw_h = H - PAD * 2
+
+        painter.fillRect(0, 0, W, H, self._BG_COLOR)
+
+        n = len(self._data)
+        if n < 2:
+            painter.setPen(QColor("#333333"))
+            painter.drawText(QRect(0, 0, W, H), Qt.AlignmentFlag.AlignCenter, "—")
+            painter.end()
+            return
+
+        def _pt(i):
+            x = PAD + int(i * draw_w / (n - 1))
+            y = PAD + draw_h - int(draw_h * self._data[i] / 100.0)
+            return x, y
+
+        pts = [_pt(i) for i in range(n)]
+
+        painter.setPen(QPen(self._LINE_COLOR, 1.5))
+        for i in range(n - 1):
+            painter.drawLine(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1])
+
+        painter.setPen(QPen(self._DOT_COLOR.darker(130), 1))
+        painter.setBrush(self._DOT_COLOR)
+        for x, y in pts:
+            painter.drawEllipse(x - 3, y - 3, 6, 6)
+
+        painter.end()
+
+
 class SkeletonViewerDialog(QDialog):
     def __init__(self, parent, session):
         super().__init__(parent)
@@ -239,16 +278,16 @@ class SkeletonViewerDialog(QDialog):
         try:
             top = parent.window()
             geo = top.frameGeometry()
-            w   = int(geo.width()  * 0.75)
-            h   = int(geo.height() * 0.75)
-            cx  = geo.x() + (geo.width()  - w) // 2
-            cy  = geo.y() + (geo.height() - h) // 2
+            w = int(geo.width()  * 0.75)
+            h = int(geo.height() * 0.75)
+            cx = geo.x() + (geo.width()  - w) // 2
+            cy = geo.y() + (geo.height() - h) // 2
         except Exception:
             from PyQt6.QtWidgets import QApplication
-            sg  = QApplication.primaryScreen().availableGeometry()
+            sg = QApplication.primaryScreen().availableGeometry()
             w, h = int(sg.width() * 0.75), int(sg.height() * 0.75)
-            cx  = sg.x() + (sg.width()  - w) // 2
-            cy  = sg.y() + (sg.height() - h) // 2
+            cx = sg.x() + (sg.width()  - w) // 2
+            cy = sg.y() + (sg.height() - h) // 2
         self.setFixedSize(w, h)
         self.move(cx, cy)
 
@@ -673,11 +712,9 @@ class DashboardPage(QWidget):
         self._render_rows()
 
     def _build_coach_dashboard(self):
-        from src.db import (get_coach_dashboard_stats, get_coach_pitcher_sessions,
-                            get_coach_sessions_for_trend)
+        from src.db import (get_coach_dashboard_stats, get_coach_pitcher_sessions)
         stats = get_coach_dashboard_stats()
         sessions = get_coach_pitcher_sessions()
-        trend = get_coach_sessions_for_trend()
 
         layout = self._layout
 
@@ -707,9 +744,8 @@ class DashboardPage(QWidget):
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Trend chart - combined across all pitchers
-        self._trend_section(layout, trend,
-                            subtitle="Combined accuracy, mistakes, and pitch count across all your pitchers")
+        # Per-pitcher performance card overview (replaces combined trend chart)
+        self._pitcher_overview_section(layout, sessions)
 
         # History table with pitcher name column
         self._sessions_filtered = list(sessions)
@@ -723,6 +759,170 @@ class DashboardPage(QWidget):
             )
         )
         self._render_rows()
+
+    # Coach: per-pitcher overview
+    def _pitcher_overview_section(self, layout: QVBoxLayout, sessions: list):
+        """Render per-pitcher performance cards, sorted worst accuracy first."""
+        layout.addWidget(self._section_title("Pitcher Overview"))
+        sub = QLabel("Per-pitcher accuracy trend - sorted by those who need attention first")
+        sub.setObjectName("dashSubtitle")
+        layout.addSpacing(4)
+        layout.addWidget(sub)
+        layout.addSpacing(12)
+
+        # Group sessions by pitcher — key on user_id to handle duplicate names
+        from collections import defaultdict
+        pitcher_sessions: dict = defaultdict(list)
+        for s in sessions:
+            pitcher_sessions[s["user_id"]].append(s)
+
+        if not pitcher_sessions:
+            ph = QLabel("No pitcher session data yet.")
+            ph.setObjectName("dashSubtitle")
+            ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(ph)
+            layout.addSpacing(32)
+            return
+
+        # Build summary per pitcher
+        summaries = []
+        for user_id, rows in pitcher_sessions.items():
+            rows_sorted = sorted(rows, key=lambda r: r["date"])
+            accuracies = [float(r["accuracy"] or 0) for r in rows_sorted]
+            avg_acc = sum(accuracies) / len(accuracies)
+            total_pitch = sum(r["total_pitch"] or 0 for r in rows_sorted)
+            total_miss = sum(r["mistakes"]    or 0 for r in rows_sorted)
+            last_date = _fmt_date_short(rows_sorted[-1]["date"])
+
+            # Trend direction: compare last 2 sessions if available
+            if len(accuracies) >= 2:
+                delta = accuracies[-1] - accuracies[-2]
+                if delta > 3: 
+                    trend_arrow, trend_color = "↑", "#4ecb71"
+                elif delta < -3: 
+                    trend_arrow, trend_color = "↓", "#e05555"
+                else: 
+                    trend_arrow, trend_color = "→", "#888888"
+            else:
+                trend_arrow, trend_color = "—", "#555555"
+
+            # Accuracy color thresholds
+            if avg_acc >= 70: 
+                acc_color = "#4ecb71"
+            elif avg_acc >= 40: 
+                acc_color = "#f0a500"
+            else:
+                acc_color = "#e05555"
+
+            name = rows_sorted[0]["pitcher_name"]
+            summaries.append({
+                "user_id": user_id,
+                "name": name,
+                "avg_acc": avg_acc,
+                "acc_color": acc_color,
+                "total_pitch": total_pitch,
+                "total_miss": total_miss,
+                "sessions": len(rows_sorted),
+                "last_date": last_date,
+                "trend_arrow": trend_arrow,
+                "trend_color": trend_color,
+                "sparkline": accuracies[-8:],  # last 8 sessions max
+            })
+
+        # Sort: worst avg accuracy first
+        summaries.sort(key=lambda s: s["avg_acc"])
+
+        # Render 2-column grid of cards
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        for idx, p in enumerate(summaries):
+            card = self._pitcher_card(p)
+            grid.addWidget(card, idx // 2, idx % 2)
+
+        layout.addLayout(grid)
+        layout.addSpacing(32)
+
+    def _pitcher_card(self, p: dict) -> QWidget:
+        """Single pitcher summary card with sparkline."""
+        card = QWidget()
+        card.setObjectName("dashStatCard")
+
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(20, 16, 20, 16)
+        outer.setSpacing(10)
+
+        # Row 1: name + trend arrow + last date + view button
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+
+        name_lbl = QLabel(p["name"])
+        name_lbl.setObjectName("dashStatLabel")
+        name_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #dddddd; background: transparent;")
+
+        arrow_lbl = QLabel(p["trend_arrow"])
+        arrow_lbl.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {p['trend_color']}; background: transparent;")
+
+        date_lbl = QLabel(f"Last: {p['last_date']}")
+        date_lbl.setObjectName("dashStatLabel")
+        date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        view_btn = QPushButton("View →")
+        view_btn.setObjectName("tableNameLink")
+        view_btn.setFlat(True)
+        view_btn.setFixedHeight(22)
+        view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        view_btn.clicked.connect(lambda _, uid=p["user_id"], name=p["name"]: self._open_pitcher_trend(uid, name))
+
+        top_row.addWidget(name_lbl)
+        top_row.addWidget(arrow_lbl)
+        top_row.addStretch()
+        top_row.addWidget(date_lbl)
+        top_row.addSpacing(12)
+        top_row.addWidget(view_btn)
+        outer.addLayout(top_row)
+
+        # Row 2: sparkline
+        spark = _PitcherSparkline(p["sparkline"])
+        outer.addWidget(spark)
+
+        # Row 3: stats strip
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(0)
+        for label, value, color in [
+            ("Avg Acc", f"{p['avg_acc']:.1f}%", p["acc_color"]),
+            ("Pitches", str(p["total_pitch"]), "#4a9eff"),
+            ("Mistakes", str(p["total_miss"]), "#e05555"),
+            ("Sessions", str(p["sessions"]), "#888888"),
+        ]:
+            col = QVBoxLayout()
+            col.setSpacing(1)
+            lbl = QLabel(label)
+            lbl.setObjectName("dashStatLabel")
+            lbl.setStyleSheet("font-size: 10px; color: #555555; background: transparent;")
+            val = QLabel(value)
+            val.setObjectName("dashStatValue")
+            val.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {color}; background: transparent;")
+            col.addWidget(lbl)
+            col.addWidget(val)
+            stats_row.addLayout(col)
+            stats_row.addStretch()
+
+        outer.addLayout(stats_row)
+        return card
+
+    def _open_pitcher_trend(self, user_id: int, name: str):
+        from src.db import get_sessions_for_trend
+        from src.pages.pitchers_page import PitcherTrendDialog
+        sessions = get_sessions_for_trend(user_id)
+        # Build a minimal pitcher dict matching what PitcherTrendDialog expects
+        first, *rest = name.split(" ", 1)
+        pitcher = {
+            "id":         user_id,
+            "first_name": first,
+            "last_name":  rest[0] if rest else "",
+        }
+        dlg = PitcherTrendDialog(self, pitcher, sessions)
+        dlg.exec()
 
     def _build_admin_dashboard(self):
         from src.db import (get_admin_dashboard_stats, get_dashboard_stats,

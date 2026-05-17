@@ -476,13 +476,10 @@ class PitchersPage(QWidget):
 
         stretches = [3, 3, 2, 2, 2, 1]
 
-        # Full name — clickable link
-        name_btn = QPushButton(full_name)
-        name_btn.setObjectName("tableNameLink")
-        name_btn.setFlat(True)
-        name_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        name_btn.clicked.connect(lambda _, u=user: self._open_trend(u))
-        h.addWidget(name_btn, stretch=stretches[0])
+        # Full name — plain label
+        name_lbl = QLabel(full_name)
+        name_lbl.setObjectName("tableCell")
+        h.addWidget(name_lbl, stretch=stretches[0])
 
         values = [user["email"], hand, threshold, joined]
         for val, stretch in zip(values, stretches[1:-1]):
@@ -585,13 +582,6 @@ class PitchersPage(QWidget):
     def _next_page(self):
         self._page += 1
         self._render_page()
-
-    # Trend viewer
-    def _open_trend(self, user: dict):
-        from src.db import get_sessions_for_trend
-        sessions = get_sessions_for_trend(user["id"])
-        dlg = PitcherTrendDialog(self, user, sessions)
-        dlg.exec()
 
     # Delete
     def _handle_delete(self, user_id: int, name: str):
