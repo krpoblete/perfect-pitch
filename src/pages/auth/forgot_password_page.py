@@ -33,7 +33,7 @@ class ForgotPasswordPage(AuthBasePage):
         self.stack.addWidget(self._build_reset_page())
         layout.addWidget(self.stack)
 
-    # Page 1: Verify email + DOB
+    # Page 1: Verify Email + DOB
     def _build_verify_page(self):
         page = QWidget() 
         page.setObjectName("loginLeft") 
@@ -80,7 +80,7 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addSpacing(12)
 
-        # Lockout label
+        # Lockout Label
         self.lockout_label = QLabel("")
         self.lockout_label.setObjectName("lockoutLabel")
         self.lockout_label.setWordWrap(True)
@@ -89,7 +89,7 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addSpacing(14)
 
-        # Continue button
+        # Continue Button
         self.verify_btn = QPushButton("Continue")
         self.verify_btn.setObjectName("loginBtn")
         self.verify_btn.setFixedHeight(50)
@@ -99,7 +99,7 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addSpacing(16)
 
-        # Back to login
+        # Back to Login
         back_row = QHBoxLayout()
         back_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         back_lbl = QLabel("Remembered your password?")
@@ -114,11 +114,11 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addStretch()
 
-        # Enter key navigation
+        # Enter Key Navigation
         self.verify_email_input.returnPressed.connect(self._handle_verify)
         return page
     
-    # Page 2: Set new password
+    # Page 2: Set New Password
     def _build_reset_page(self):
         page = QWidget()
         page.setObjectName("loginLeft")
@@ -157,7 +157,7 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addSpacing(26)
 
-        # Reset button
+        # Reset Button
         reset_btn = QPushButton("Reset Password")
         reset_btn.setObjectName("loginBtn")
         reset_btn.setFixedHeight(50)
@@ -167,7 +167,7 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addSpacing(16)
 
-        # Back to verify
+        # Back to Verify
         back_row = QHBoxLayout()
         back_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         back_lbl = QLabel("Wrong account?")
@@ -182,7 +182,7 @@ class ForgotPasswordPage(AuthBasePage):
 
         layout.addStretch()
 
-        # Enter key navigation
+        # Enter Key Navigation
         self.new_pw_input.line_edit.returnPressed.connect(
             self.confirm_pw_input.line_edit.setFocus
         )
@@ -191,7 +191,7 @@ class ForgotPasswordPage(AuthBasePage):
     
     # Handlers
     def _handle_verify(self):
-        # Check lockout
+        # Check Lockout
         if self.auth._fp_locked_until and datetime.now() < self.auth._fp_locked_until:
             return
         
@@ -205,7 +205,7 @@ class ForgotPasswordPage(AuthBasePage):
             toast_error(self, "Please enter your email address.")
             return
 
-        # Validate domain — don't count as an attempt
+        # Validate Domain - don't count as an attempt
         valid, msg = validate_email(email)
         if not valid:
             toast_error(self, msg)
@@ -231,7 +231,7 @@ class ForgotPasswordPage(AuthBasePage):
                 )
             return
         
-        # Match — store user id and proceed to reset page
+        # Match - store user id and proceed to reset page
         self._verified_user_id = user["id"]
         self.new_pw_input.clear()
         self.confirm_pw_input.clear()
@@ -257,7 +257,7 @@ class ForgotPasswordPage(AuthBasePage):
             toast_error(self, "Passwords do not match. Please try again.")
             return
 
-        # Check new password is different from current
+        # Check New Password is Different from Current
         user = get_user_by_id(self._verified_user_id)
         if user and verify_password(password, user["password"]):
             toast_info(
@@ -294,7 +294,7 @@ class ForgotPasswordPage(AuthBasePage):
         self.auth.show_page("login")
 
     def clear(self):
-        """Reset form fields only — lockout state is intentionally preserved
+        """Reset form fields only - lockout state is intentionally preserved
         on AuthWindow so the countdown survives navigating away and back."""
         self.verify_email_input.clear()
         self.verify_dob_input.setDate(QDate(2000, 1, 1))
@@ -304,7 +304,7 @@ class ForgotPasswordPage(AuthBasePage):
         self._verified_user_id = None
 
     def _reset_state(self):
-        """Full reset including lockout — called only after a successful
+        """Full reset including lockout - called only after a successful
         password reset, when the lockout is no longer relevant."""
         self.clear()
         self.auth._fp_attempts = 0

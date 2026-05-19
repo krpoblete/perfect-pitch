@@ -44,7 +44,7 @@ class LoginPage(AuthBasePage):
 
         layout.addSpacing(18)
 
-        # Password row with forgot link
+        # Password Row with Forgot Link
         pw_row = QHBoxLayout()
         pw_row.addWidget(self._label("Password"))
         pw_row.addStretch()
@@ -61,7 +61,7 @@ class LoginPage(AuthBasePage):
 
         layout.addSpacing(26)
 
-        # Login button
+        # Login Button
         login_btn = QPushButton("Login")
         login_btn.setObjectName("loginBtn")
         login_btn.setFixedHeight(50)
@@ -71,7 +71,7 @@ class LoginPage(AuthBasePage):
 
         layout.addSpacing(16)
 
-        # Sign up link
+        # Sign up Link
         signup_row = QHBoxLayout()
         signup_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         signup_row.addWidget(self._label_plain("Don't have an account?"))
@@ -84,7 +84,7 @@ class LoginPage(AuthBasePage):
 
         layout.addStretch()
 
-        # Enter key navigation
+        # Enter Key Navigation
         self.email_input.returnPressed.connect(self.pw_input.line_edit.setFocus)
         self.pw_input.line_edit.returnPressed.connect(self._handle_login)
 

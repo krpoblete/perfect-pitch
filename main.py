@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Windows: tell the taskbar this is its own app, not python.exe.
+# Windows: Tell the Taskbar this is its Own App, Not python.exe.
 if sys.platform == "win32":
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("perfectpitch.app")
@@ -16,10 +16,10 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
 
-    # App icon
+    # App Icon
     app.setWindowIcon(QIcon(os.path.join(ASSETS_DIR, "app_icon.ico")))
 
-    # Load stylesheets
+    # Load Stylesheets
     styles_dir = STYLES_DIR 
     styles_files = [
         'base.qss',
@@ -42,16 +42,16 @@ def main():
             combined += f.read() + "\n"
     app.setStyleSheet(combined)
 
-    # Initialize database
+    # Initialize Database
     init_db()
 
-    # Pre-load ML model once at startup so StartSession launches instantly.
+    # Pre-load ML Model Once at Startup so StartSession Launches Instantly.
     # load_model() returns (model, scaler, threshold, joint_thresholds).
     from src.analyze import load_model
     ml_bundle = load_model()
     print("ML model loaded.")
 
-    # Show login window centered
+    # Show Login Window Centered
     window = AuthWindow(ml_bundle=ml_bundle)
     window.show()
 

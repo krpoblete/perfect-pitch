@@ -3,9 +3,7 @@ from PyQt6.QtCore import Qt
 from src.utils.icons import get_icon
 
 class AuthBasePage(QWidget):
-    """Thin base class that provides shared UI helpers for auth pages."""
-
-    # Logo row
+    # Logo Row
     def _logo_row(self) -> QHBoxLayout:
         """Return a horizontal layout containing the app logo and name."""
         row = QHBoxLayout()
@@ -27,7 +25,7 @@ class AuthBasePage(QWidget):
         row.addStretch()
         return row
     
-    # Field helpers
+    # Field Helpers
     def _label(self, text: str) -> QLabel:
         """Return a styled field-heading label."""
         lbl = QLabel(text)

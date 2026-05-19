@@ -52,7 +52,7 @@
     background: transparent;
 }
 
-/* Field labels */
+/* Field Labels */
 #fieldLabel {
     font-size: 12px;
     font-weight: 600;
@@ -61,7 +61,7 @@
     letter-spacing: 0.4px;
 }
 
-/* Text inputs */
+/* Text Inputs */
 #authInput {
     background-color: #181818;
     border: 1px solid #2a2a2a;
@@ -85,7 +85,7 @@ QLineEdit#authInput::placeholder {
     color: #444444;
 }
 
-/* Primary button */
+/* Primary Button */
 #loginBtn {
     background-color: #d4d4d4;
     color: #0d0d0d;
@@ -104,7 +104,7 @@ QLineEdit#authInput::placeholder {
     background-color: #bbbbbb;
 }
 
-/* Link button */
+/* Link Button */
 #linkBtn {
     background: transparent;
     border: none;
@@ -124,7 +124,7 @@ QLineEdit#authInput::placeholder {
     font-size: 12px;
 }
 
-/* Date picker */
+/* Date Picker */
 QDateEdit#authInput {
     background-color: #181818;
     border: 1px solid #2a2a2a;
@@ -187,36 +187,14 @@ QCalendarWidget QAbstractItemView {
     selection-color: #fff;
 }
 
-/* Signup scroll area */
-#signupScroll {
-    background-color: transparent;
-    border: none;
-}
-
-#signupScroll QScrollBar:vertical {
-    background: #111;
-    width: 6px;
-    border-radius: 3px;
-}
-
-#signupScroll QScrollBar::handle:vertical {
-    background: #333;
-    border-radius: 3px;
-}
-
-#signupScroll QScrollBar::add-line:vertical,
-#signupScroll QScrollBar::sub-line:vertical {
-    height: 0;
-}
-
-/* Forgot password lockout label */
+/* Forgot Password Lockout Label */
 #lockoutLabel {
     font-size: 12px;
     color: #c0392b;
     background: transparent;
 }
 
-/* Password toggle button */
+/* Password Toggle Button */
 #pwToggleBtn {
     background: transparent;
     border: none;
@@ -234,7 +212,7 @@ QCalendarWidget QAbstractItemView {
     outline: none;
 }
 
-/* Throwing hand toggle buttons (shared: auth + account settings) */
+/* Throwing Hand Toggle Buttons */
 #handBtn {
     background-color: #181818;
     border: 1px solid #2a2a2a;

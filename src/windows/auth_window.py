@@ -62,7 +62,7 @@ class AuthWindow(FramelessMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Left panel - stacked pages
+        # Left Panel - Stacked Pages
         left = QWidget()
         left.setObjectName("loginLeft")
         left.setFixedWidth(600)
@@ -89,7 +89,7 @@ class AuthWindow(FramelessMainWindow):
 
         left_layout.addWidget(self.stack)
 
-        # Right panel - image
+        # Right Panel - Image
         right = QWidget()
         right.setObjectName("loginRight")
         right_layout = QVBoxLayout(right)
@@ -111,7 +111,7 @@ class AuthWindow(FramelessMainWindow):
         main_layout.addWidget(left)
         main_layout.addWidget(right)
 
-        # Window buttons
+        # Window Buttons
         self.win_btns = WindowButtons(parent=root)
         self.win_btns.adjustSize()
         bw = self.win_btns.sizeHint().width()
@@ -125,7 +125,7 @@ class AuthWindow(FramelessMainWindow):
 
     def show_page(self, page: str):
         """Switch to a named page."""
-        # Resolve the page object currently visible so we only clear that one.
+        # Resolve the Page Object Currently Visible so we Only Clear that One.
         _page_objects = {
             "login": self.login_page,
             "signup": self.signup_page,
@@ -144,7 +144,7 @@ class AuthWindow(FramelessMainWindow):
         target = self._pages.get(page, 0)
         self.stack.setCurrentIndex(target)
 
-        # Re-apply lockout UI if the user returns to forgot while still locked.
+        # Re-apply Lockout UI if the User Returns to Forgot while still Locked.
         if page == "forgot" and self._fp_locked_until:
             from datetime import datetime
             if datetime.now() < self._fp_locked_until:

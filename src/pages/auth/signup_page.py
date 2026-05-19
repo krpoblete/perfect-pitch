@@ -104,7 +104,7 @@ class SignupPage(AuthBasePage):
         layout.addLayout(pw_row)
         layout.addSpacing(28)
 
-        # Create Account button
+        # Create Account Button
         btn = QPushButton("Create Account")
         btn.setObjectName("loginBtn")
         btn.setFixedHeight(50)
@@ -113,7 +113,7 @@ class SignupPage(AuthBasePage):
         layout.addWidget(btn)
         layout.addSpacing(16)
 
-        # Back to login
+        # Back to Login
         back_row = QHBoxLayout()
         back_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         back_lbl = QLabel("Already have an account?")
@@ -128,7 +128,7 @@ class SignupPage(AuthBasePage):
         
         layout.addStretch()
 
-        # Enter key navigation
+        # Enter Key Navigation
         self.first_name_input.returnPressed.connect(self.last_name_input.setFocus)
         self.last_name_input.returnPressed.connect(self.email_input.setFocus)
         self.email_input.returnPressed.connect(self.pw_input.line_edit.setFocus)
