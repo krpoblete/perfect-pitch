@@ -426,7 +426,7 @@ def get_admin_dashboard_stats():
     return row, sessions
 
 def get_coach_pitcher_sessions():
-    """Coach: recent sessions across all active Pitchers with pitcher name."""
+    """Coach: all sessions across active Pitchers with pitcher name, newest first."""
     conn = get_connection()
     rows = conn.execute("""
         SELECT

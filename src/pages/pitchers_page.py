@@ -1,189 +1,42 @@
 from datetime import date, datetime
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit,
     QFrame, QDialog, QScrollArea, QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QSize, QRect
-from PyQt6.QtGui import QColor, QPainter, QPen, QFont
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QColor
 
 from src.utils.icons import get_icon
 from src.utils.toast import toast_success, toast_error
 from src.widgets.confirm_dialog import ConfirmDialog
+from src.widgets.trend_chart import TrendChart
 
-# Helpers
+def _fmt_date(dt_str: str) -> str:
+    """Return 'Mon DD, YYYY' from a date or datetime string."""
+    try:
+        return date.fromisoformat(dt_str[:10]).strftime("%b %d, %Y")
+    except Exception:
+        return dt_str
+
 def _fmt_date_short(dt_str: str) -> str:
+    """Return 'Mon DD' from a datetime string."""
     try:
         return datetime.fromisoformat(dt_str).strftime("%b %d")
     except Exception:
         return dt_str or "—"
 
-# TrendChart (self-contained copy, severity dots removed per design decision)
-class _TrendChart(QWidget):
-    _BAR_COLOR = QColor("#1a3a5c")
-    _ACC_COLOR = QColor("#4ecb71")
-    _MISS_COLOR = QColor("#e05555")
-    _GRID_COLOR = QColor("#1e1e1e")
-    _LABEL_COLOR = QColor("#555555")
-    _TEXT_COLOR = QColor("#888888")
-    _BG_COLOR = QColor("#0d0d0d")
-
-    CHART_H = 220
-
-    def __init__(self, sessions: list, parent=None):
-        super().__init__(parent)
-        self._sessions = sessions
-        self.setObjectName("trendChart")
-        self.setFixedHeight(self.CHART_H + 60)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        sessions = self._sessions
-        n = len(sessions)
-
-        W = self.width()
-        H = self.CHART_H
-        PAD_L, PAD_R, PAD_T, PAD_B = 52, 52, 16, 36
-        chart_w = W - PAD_L - PAD_R
-        chart_h = H - PAD_T - PAD_B
-
-        painter.fillRect(0, 0, W, H, self._BG_COLOR)
-
-        if n == 0:
-            painter.setPen(self._LABEL_COLOR)
-            f = QFont()
-            f.setPointSize(10)
-            painter.setFont(f)
-            painter.drawText(
-                QRect(0, 0, W, H),
-                Qt.AlignmentFlag.AlignCenter,
-                "No sessions yet."
-            )
-            painter.end()
-            return
-
-        pitches = [s["total_pitch"] or 0 for s in sessions]
-        mistakes = [s["mistakes"] or 0 for s in sessions]
-        accuracies = [float(s["accuracy"] or 0) for s in sessions]
-
-        max_pitch = max(pitches) or 1
-        # Mistakes share the right axis (same scale as pitch count).
-
-        # Integer-snapped grid so right-axis labels are always whole numbers.
-        def _nice_step(top: int) -> int:
-            for step in [1, 2, 5, 10, 20, 50, 100]:
-                if top / step <= 6:
-                    return step
-            return max(1, top // 6)
-
-        r_step = _nice_step(max_pitch)
-        r_max = ((max_pitch + r_step - 1) // r_step) * r_step
-        r_ticks = list(range(0, r_max + 1, r_step))
-
-        # Grid lines — one per right-axis tick
-        painter.setPen(QPen(self._GRID_COLOR, 1))
-        for v in r_ticks:
-            y = PAD_T + chart_h - int(chart_h * v / r_max)
-            painter.drawLine(PAD_L, y, PAD_L + chart_w, y)
-
-        # Y-axis labels
-        f_small = QFont()
-        f_small.setPointSize(8)
-        painter.setFont(f_small)
-        for v in r_ticks:
-            frac = v / r_max
-            y = PAD_T + chart_h - int(chart_h * frac)
-            painter.setPen(self._ACC_COLOR)
-            painter.drawText(
-                QRect(0, y - 8, PAD_L - 6, 16),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                f"{int(frac * 100)}%"
-            )
-            painter.setPen(self._LABEL_COLOR)
-            painter.drawText(
-                QRect(PAD_L + chart_w + 4, y - 8, PAD_R - 4, 16),
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                str(v)
-            )
-
-        # X positions with inner margin
-        bar_w = max(4, min(24, chart_w // n - 4))
-        inner_pad = bar_w // 2 + 2
-        plot_w = chart_w - 2 * inner_pad
-        if n == 1:
-            xs = [PAD_L + chart_w // 2]
-        else:
-            xs = [PAD_L + inner_pad + int(i * plot_w / (n - 1)) for i in range(n)]
-
-        # Bars
-        painter.setPen(Qt.PenStyle.NoPen)
-        for x, p in zip(xs, pitches):
-            bar_h = int(chart_h * p / r_max)
-            painter.setBrush(self._BAR_COLOR)
-            painter.drawRoundedRect(x - bar_w // 2, PAD_T + chart_h - bar_h, bar_w, bar_h, 3, 3)
-
-        # Mistake line
-        painter.setPen(QPen(self._MISS_COLOR, 1, Qt.PenStyle.DashLine))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        pts_m = [(x, PAD_T + chart_h - int(chart_h * m / r_max)) for x, m in zip(xs, mistakes)]
-        for i in range(len(pts_m) - 1):
-            painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])
-
-        # Accuracy line
-        painter.setPen(QPen(self._ACC_COLOR, 2))
-        pts_a = [(x, PAD_T + chart_h - int(chart_h * a / 100.0)) for x, a in zip(xs, accuracies)]
-        for i in range(len(pts_a) - 1):
-            painter.drawLine(pts_a[i][0], pts_a[i][1], pts_a[i+1][0], pts_a[i+1][1])
-
-        # Plain dots on accuracy line
-        painter.setPen(QPen(self._ACC_COLOR.darker(130), 1))
-        painter.setBrush(self._ACC_COLOR)
-        for x, y in pts_a:
-            painter.drawEllipse(x - 5, y - 5, 10, 10)
-
-        # X-axis labels
-        painter.setPen(self._LABEL_COLOR)
-        painter.setFont(f_small)
-        step = max(1, n // 8)
-        for i in range(0, n, step):
-            x = xs[i]
-            painter.drawText(
-                QRect(x - 30, H - PAD_B + 4, 60, 18),
-                Qt.AlignmentFlag.AlignCenter,
-                _fmt_date_short(sessions[i]["date"])
-            )
-
-        # Legend
-        ly = H + 8
-        lx = PAD_L
-        f_leg = QFont()
-        f_leg.setPointSize(8)
-        painter.setFont(f_leg)
-        for color, dashed, text, step in [
-            (self._ACC_COLOR, False, "Accuracy %", 110),
-            (self._MISS_COLOR, True, "Mistakes", 100),
-            (self._BAR_COLOR, False, "Pitch Count (right axis)", 175),
-        ]:
-            painter.setPen(QPen(color, 2, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine))
-            painter.drawLine(lx, ly + 5, lx + 18, ly + 5)
-            painter.setPen(self._TEXT_COLOR)
-            painter.drawText(lx + 22, ly + 9, text)
-            lx += step
-
-        painter.end()
-
-# PitcherTrendDialog
 class PitcherTrendDialog(QDialog):
-    """Modal dialog showing a pitcher's full performance trend chart."""
+    """
+    Modal dialog showing a single pitcher's full performance trend chart.
+    Opened from the Coach Dashboard pitcher overview cards via 'View →'.
+    """
     def __init__(self, parent, pitcher: dict, sessions: list):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setObjectName("skeletonViewerDialog")
-
         self._name = f"{pitcher['first_name']} {pitcher['last_name']}"
         self._sessions = sessions
         self._build_ui()
@@ -306,9 +159,9 @@ class PitcherTrendDialog(QDialog):
         div_mid.setFixedHeight(1)
         bl.addWidget(div_mid)
 
-        # Chart
+        # Chart - shared TrendChart, severity dots off (pitcher view is clean)
         if self._sessions:
-            chart = _TrendChart(self._sessions, parent=body)
+            chart = TrendChart(self._sessions, show_severity_dots=False, parent=body)
             bl.addWidget(chart)
         else:
             empty = QLabel("No session data available for this pitcher.")

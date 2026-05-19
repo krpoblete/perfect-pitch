@@ -120,7 +120,7 @@
     letter-spacing: 0.5px;
 }
 
-/* Search bar — active/inactive states */
+/* Search bar - active/inactive states */
 #searchBar {
     background-color: #181818;
     border: 1px solid #2a2a2a;
@@ -145,4 +145,22 @@
     font-weight: 700;
     color: #e05555;
     background: transparent;
+}
+
+/* Pitcher card "View →" link button */
+#tableNameLink {
+    background: transparent;
+    border: none;
+    color: #4a9eff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0;
+}
+
+#tableNameLink:hover {
+    color: #79b8ff;
+}
+
+#tableNameLink:pressed {
+    color: #2a7edf;
 }
