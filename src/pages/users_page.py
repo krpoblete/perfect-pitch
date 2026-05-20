@@ -46,7 +46,7 @@ class UsersPage(QWidget):
         self._page = 0
         self._build_ui()
 
-        # Refresh every minute to keep status badges current (purge date is static)
+        # Refresh Every Minute to Keep Status Badges Current (Purge Date is Static)
         self._timer = QTimer(self)
         self._timer.setInterval(60_000)
         self._timer.timeout.connect(self._refresh_days)
@@ -69,7 +69,7 @@ class UsersPage(QWidget):
         title_col.addWidget(title)
         title_col.addWidget(self.count_lbl)
 
-        # Search bar — plain input, active border on focus
+        # Search Bar - Plain Input, Active Border on Focus
         self.search_input = QLineEdit()
         self.search_input.setObjectName("searchBar")
         self.search_input.setPlaceholderText("Search users...")
@@ -135,7 +135,7 @@ class UsersPage(QWidget):
         layout.addLayout(pag_row)
         layout.addStretch()
 
-    # Table builders
+    # Table Builders
     def _make_header_row(self) -> QWidget:
         row = QWidget()
         row.setObjectName("tableHeaderRow")
@@ -175,7 +175,7 @@ class UsersPage(QWidget):
         email_lbl.setObjectName("tableCell")
         h.addWidget(email_lbl, stretch=stretches[1])
 
-        # Role — inline dropdown for non-admins, plain label for Admin
+        # Role - Inline Dropdown for Non-Admins, Plain Label for Admin
         current_role = user["role"]
         is_admin = current_role == "Admin"
 
@@ -208,7 +208,7 @@ class UsersPage(QWidget):
             h.addLayout(role_wrapper)
             h.setStretch(h.count() - 1, stretches[2])
 
-        # Status badge
+        # Status Badge
         status_lbl = QLabel("Active" if is_active else "Inactive")
         status_lbl.setObjectName("statusBadgeActive" if is_active else "statusBadgeInactive")
         status_lbl.setFixedHeight(24)
@@ -232,7 +232,7 @@ class UsersPage(QWidget):
         deleted_lbl.setObjectName("tableCellMuted" if deleted_at else "tableCell")
         h.addWidget(deleted_lbl, stretch=stretches[5])
 
-        # Purge Date — static datetime when the account will be permanently deleted
+        # Purge Date - Static Datetime when the Account will be Permanently Deleted
         if deleted_at:
             purge_str, critical = _fmt_purge_datetime(deleted_at)
             purge_obj = "daysLeftWarning" if critical else "daysLeftNormal"
@@ -244,7 +244,7 @@ class UsersPage(QWidget):
         purge_lbl.setObjectName(purge_obj)
         h.addWidget(purge_lbl, stretch=stretches[6])
 
-        # Restore button — always visible; disabled/grey for active accounts
+        # Restore Button - Always Visible; Disabled/Grey for Active Accounts
         can_restore = not is_active and bool(deleted_at)
         restore_btn = QPushButton()
         restore_btn.setObjectName("restoreBtn" if can_restore else "restoreBtnDisabled")
@@ -286,7 +286,7 @@ class UsersPage(QWidget):
 
     # Render
     def _render_page(self):
-        # Clear existing rows
+        # Clear Existing Rows
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
             if item.widget():
@@ -311,15 +311,15 @@ class UsersPage(QWidget):
                     div.setFixedHeight(1)
                     self.rows_layout.addWidget(div)
 
-        # Pagination controls
+        # Pagination Controls
         self.page_lbl.setText(f"Page {self._page + 1} of {total_pages}")
         self.prev_btn.setEnabled(self._page > 0)
         self.next_btn.setEnabled(self._page < total_pages - 1)
 
-        # Count label
+        # Count Label
         self.count_lbl.setText(f"{total} user{'s' if total != 1 else ''}")
 
-    # Search & pagination
+    # Search and Pagination
     def _on_search(self, text: str):
         q = text.strip().lower()
         if not q:
@@ -346,7 +346,7 @@ class UsersPage(QWidget):
         self._page += 1
         self._render_page()
 
-    # Role change
+    # Role Change
     def _handle_role_change(self, user_id: int, name: str, role: str, combo: "QComboBox"):
         from src.db import update_user_role
         from src.widgets.confirm_dialog import ConfirmDialog
@@ -358,7 +358,7 @@ class UsersPage(QWidget):
         )
         dlg.exec()
         if not dlg.result_yes():
-            # Revert combo to the current DB value without triggering signal
+            # Revert Combo to the Current DB Value without Triggering Signal
             combo.blockSignals(True)
             from src.db import get_user_by_id
             user = get_user_by_id(user_id)
@@ -374,7 +374,7 @@ class UsersPage(QWidget):
             toast_error(self, f"Failed to update {name}'s role.")
 
     def _refresh_days(self):
-        pass  # No-op — purge date is static, no per-second re-render needed
+        pass  # No-Op - Purge Date is Static, No Per-Second Re-Render Needed
 
     # Restore
     def _handle_restore(self, user_id: int, name: str):
@@ -402,7 +402,7 @@ class UsersPage(QWidget):
         self._all_rows = get_all_users()
         self._filtered = list(self._all_rows)
 
-        # Re-apply search if active
+        # Re-Apply Search if Active
         q = self.search_input.text().strip().lower()
         if q:
             matches_active = "active".startswith(q) and not "inactive".startswith(q)

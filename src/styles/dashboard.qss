@@ -72,7 +72,7 @@
     background-color: #1e1e1e;
 }
 
-/* Trend chart */
+/* Trend Chart */
 #trendChart {
     background-color: #0d0d0d;
     border: 1px solid #1e1e1e;
@@ -85,7 +85,7 @@
     border-radius: 10px;
 }
 
-/* Clickable date link in history table */
+/* Clickable Date Link in History Table */
 #sessionDateLink {
     background: transparent;
     border: none;
@@ -105,7 +105,7 @@
     color: #2a7edf;
 }
 
-/* Skeleton viewer dialog */
+/* Skeleton Viewer Dialog */
 #skeletonViewerDialog {
     background-color: #0e0e0e;
     border: 1px solid #2a2a2a;

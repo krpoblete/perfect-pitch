@@ -6,14 +6,14 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
 
 from src.utils.icons import get_icon
-from src.utils.toast import toast_warning, toast_error
+from src.utils.toast import toast_error
 
 # LiveCameraCombo
 class LiveCameraCombo(QComboBox):
     """Passive camera selector combo.
 
     Populated only when the user explicitly clicks 'Find Cameras'.
-    Never probes hardware on its own — no LEDs activate, no startup lag.
+    Never probes hardware on its own - no LEDs activate, no startup lag.
     set_session_live() disables interaction during a live session.
     """
     def __init__(self, parent=None):
@@ -31,40 +31,18 @@ class LiveCameraCombo(QComboBox):
 
 # CameraMixin
 class CameraMixin:
-    # Static hardware query
+    # Static Hardware Query
     @staticmethod
     def _get_camera_names() -> tuple:
-        """Return (physical_names, virtual_names) for the camera pairing step.
-
-        Primary path — PyGrabber (pygrabber):
-        ───────────────────────────────────────
-        PyGrabber wraps the Windows DirectShow ICreateDevEnum COM interface —
-        the exact same enumeration OpenCV uses with CAP_DSHOW. It returns
-        FriendlyName values in the same order as OpenCV device indices, so
-        index 0 here == index 0 in CAP_DSHOW, including OBS Virtual Camera.
-
-        We split the flat list into physical vs virtual by cross-checking
-        with MSMF-visible indices: devices MSMF can open are physical
-        hardware (no LED activated — isOpened() only); the rest are virtual.
-
-        Fallback path — PowerShell + registry:
-        ───────────────────────────────────────
-        Used when pygrabber is not installed. Queries WMI for physical camera
-        names and reads KSCATEGORY_VIDEO_CAMERA registry for virtual cameras.
-        Less reliable for OBS because OBS's FriendlyName registry subkey
-        structure varies between OBS versions and Windows builds.
-
-        Install pygrabber once to make OBS detection permanent:
-            pip install pygrabber
-        """
+        """Return (physical_names, virtual_names) for the camera pairing step."""
         # Primary: PyGrabber
         try:
             from pygrabber.dshow_graph import FilterGraph as _FG
             import cv2 as _cv2
 
-            all_names: list[str] = _FG().get_input_devices()  # DirectShow order
+            all_names: list[str] = _FG().get_input_devices()  # DirectShow Order
 
-            # Classify physical vs virtual via MSMF (no LED - isOpened only)
+            # Classify Physical VS Virtual Via MSMF (No LED - isOpened only)
             msmf_set: set[int] = set()
             for idx in range(len(all_names)):
                 cap = _cv2.VideoCapture(idx, _cv2.CAP_MSMF)
@@ -77,25 +55,25 @@ class CameraMixin:
             return (physical_names, virtual_names)
 
         except ImportError:
-            pass  # pygrabber not installed — fall through to PowerShell
+            pass  # pygrabber Not Installed - Fall through to PowerShell
         except Exception:
-            pass  # COM error, driver issue, etc. — fall through
+            pass  # COM Error, Driver Issue, etc. - Fall Through
 
-        # Fallback: PowerShell + registry
+        # Fallback: PowerShell + Registry
         import subprocess, json as _json
 
         ps_script = (
-            # Physical cameras from WMI PnP, sorted by PNPDeviceID to match
-            # the MSMF enumeration order OpenCV uses internally.
+            # Physical Cameras from WMI PnP, Sorted by PNPDeviceID to Match
+            # MSMF Enumeration Order OpenCV uses Internally.
             "$phys = Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue "
             "| Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' } "
             "| Sort-Object PNPDeviceID "
             "| Select-Object -ExpandProperty Name; "
 
-            # Virtual cameras from KSCATEGORY_VIDEO registry.
-            # Windows Virtual Camera registers under this GUID.
-            # KSCATEGORY_VIDEO_CAMERA (65e8773d) is for physical UVC devices
-            # and is NOT where Windows Virtual Camera appears.
+            # Virtual Cameras from KSCATEGORY_VIDEO registry.
+            # Windows Virtual Camera Registers under this GUID.
+            # KSCATEGORY_VIDEO_CAMERA (65e8773d) is for Physical UVC Devices
+            # and is NOT where Windows Virtual Camera Appears.
             "$guid = '{e5323777-f976-4f5b-9b55-b94699c46e44}'; "
             "$base = \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\$guid\"; "
             "$virt = @(); "
@@ -114,7 +92,7 @@ class CameraMixin:
             "    if ($fn) { $virt += $fn.Trim() } "
             "  } "
             "}; "
-            # Deduplicate: drop any virtual name that already appears in phys
+            # Deduplicate: Drop Any Virtual Name that Already Appears in phys
             "$physLower = $phys | ForEach-Object { $_.ToLower() }; "
             "$virtOnly = $virt | Where-Object { $physLower -notcontains $_.ToLower() }; "
             "@{ phys = @($phys); virt = @($virtOnly) } | ConvertTo-Json -Compress"
@@ -135,13 +113,13 @@ class CameraMixin:
         except Exception:
             return ([], [])
 
-    # Combo population
+    # Combo Population
     def _populate_camera_combo(self):
         """Fill the combo from _camera_cache and restore the user's desired camera.
 
         Selection priority:
-          1. _desired_camera_name — the user's explicit choice (survives index shifts)
-          2. _camera_index — fallback if name not found in new cache
+          1. _desired_camera_name - the user's explicit choice (survives index shifts)
+          2. _camera_index - fallback if name not found in new cache
         Never overwrites _desired_camera_name so it always reflects user intent.
         """
         self.camera_combo.blockSignals(True)
@@ -159,7 +137,7 @@ class CameraMixin:
             label = f"{name} ({idx})" if is_duplicate else name
             self.camera_combo.addItem(label, idx)
 
-        # Try to match by desired name
+        # Try to Match by Desired Name
         selected = False
         if self._desired_camera_name:
             for i in range(self.camera_combo.count()):
@@ -171,7 +149,7 @@ class CameraMixin:
                     selected = True
                     break
 
-        # Fall back to index match
+        # Fall Back to Index Match
         if not selected:
             for i in range(self.camera_combo.count()):
                 if self.camera_combo.itemData(i) == self._camera_index:
@@ -288,15 +266,8 @@ class CameraMixin:
 
         self._refresh_token_status()
 
-    # Button handlers
+    # Button Handlers
     def _handle_find_cameras(self):
-        """Triggered by 'Find Cameras' button.
-
-        Transitions the button through three states:
-          🔍 Find Cameras  →  ⏳ Searching...  →  ✅ Found (N)  or  ⚠ None found
-
-        No camera LED ever activates here — MSMF enumerate-only.
-        """
         if self._running:
             return
 
@@ -310,7 +281,7 @@ class CameraMixin:
     def _handle_test_camera(self):
         """Open a live preview popup for the selected camera.
 
-        Stays open until the user clicks anywhere — no auto-close timer.
+        Stays open until the user clicks anywhere - no auto-close timer.
         Uses CAP_DSHOW for the actual frame grab (MSMF is slow to produce
         the first frame on some drivers, and won't stream OBS at all).
         """
@@ -350,7 +321,7 @@ class CameraMixin:
             sg.y() + (sg.height() - dlg.height()) // 2,
         )
 
-        self._stop_device_change_listener()   # re-registered after preview closes
+        self._stop_device_change_listener()  # Re-Registered After Preview Closes
 
         cap = _cv2.VideoCapture(cam_idx, _cv2.CAP_DSHOW)
 
@@ -377,14 +348,9 @@ class CameraMixin:
         dlg.exec()
         timer.stop()
         cap.release()
-        self._start_device_change_listener()  # re-register after camera fully released
+        self._start_device_change_listener()  # Re-Register After Camera Fully Released
 
     def _on_camera_changed(self, combo_idx: int):
-        """Update camera index and desired name — takes effect on next START.
-
-        Also drives the Test button: enabled only when a real camera (idx >= 0)
-        is selected, disabled for any placeholder item.
-        """
         idx = self.camera_combo.itemData(combo_idx)
         if idx is not None and idx >= 0:
             self._camera_index = idx
@@ -395,7 +361,7 @@ class CameraMixin:
         else:
             self.test_cam_btn.setEnabled(False)
 
-    # Guide card
+    # Guide Card
     def _build_guide_card(self) -> QWidget:
         card = QWidget()
         card.setObjectName("cameraGuideCard")
@@ -491,7 +457,7 @@ class CameraMixin:
         )
         self.camera_side_lbl.setText(f"Position camera at:\n{side}")
 
-    # Feed helpers
+    # Feed Helpers
     def _show_idle_feed(self):
         self.feed_label.setText("Camera not started")
         self.feed_label.setObjectName("feedLabelIdle")
@@ -515,7 +481,7 @@ class CameraMixin:
         self.feed_label.setObjectName("feedLabel")
         self.feed_label.setPixmap(_QP.fromImage(scaled))
 
-    # Device-change listener (WM_DEVICECHANGE)
+    # Device-Change Listener (WM_DEVICECHANGE)
     def _start_device_change_listener(self):
         """Register a hidden native window that receives WM_DEVICECHANGE from
         Windows whenever any device is plugged or unplugged.
@@ -528,17 +494,17 @@ class CameraMixin:
           - Detection is instant (~50 ms OS message latency)
 
         The listener stays registered the whole time.  During a live session
-        _on_device_removed() returns immediately — PitchWorker already handles
+        _on_device_removed() returns immediately - PitchWorker already handles
         its own disconnection via error_occurred.
         """
         if getattr(self, "_devchange_listener", None) is not None:
-            return   # already registered
+            return  # Already Registered
 
         try:
             from PyQt6.QtGui import QWindow
             import ctypes, ctypes.wintypes as _wt
 
-            page_ref = self   # capture mixin/page reference
+            page_ref = self   # Capture Mixin | Page Reference
 
             class _DevChangeWindow(QWindow):
                 WM_DEVICECHANGE = 0x0219
@@ -554,10 +520,10 @@ class CameraMixin:
                     return False, 0
 
             win = _DevChangeWindow()
-            win.create()                     # allocates the native HWND
+            win.create()                     # Allocates the Native HWND
             self._devchange_listener = win
         except Exception:
-            self._devchange_listener = None  # not on Windows or ctypes issue
+            self._devchange_listener = None  # Not on Windows or ctypes Issue
 
     def _stop_device_change_listener(self):
         """Destroy the native listener window (called on page teardown)."""
@@ -588,9 +554,8 @@ class CameraMixin:
         cap.release()
 
         if still_alive:
-            return   # something else was unplugged - our camera is fine
+            return      # Something Else was Unplugged - Our Camera is Fine
 
-        # Selected camera is gone - reset UI exactly like a mid-session disconnect
         lost_name = self._desired_camera_name or f"Camera {idx}"
 
         self._camera_index = -1
@@ -616,9 +581,9 @@ class CameraMixin:
             f"Click 'Find Cameras' to reconnect."
         )
 
-    # Disconnection handler (called by StartSessionPage._on_worker_error)
+    # Disconnection Handler (Called by StartSessionPage._on_worker_error)
     def _handle_camera_disconnected(self):
-        # Reset session counters
+        # Reset Session Counters
         self._pitch_count = 0
         self._mistakes = 0
         self._worker_state = ""
@@ -631,13 +596,11 @@ class CameraMixin:
 
         lost_name = self._active_camera_name or f"Camera {self._camera_index}"
 
-        # Reset camera selection state - indices are stale after a disconnect
         self._camera_index = -1
         self._desired_camera_name = ""
         self._active_camera_name = ""
         self._camera_cache = []
 
-        # Lock combo and Test — their contents are stale
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
         self.camera_combo.addItem("No camera selected", -1)
@@ -647,12 +610,11 @@ class CameraMixin:
         self.test_cam_btn.setEnabled(False)
         self.start_btn.setEnabled(False)
 
-        # Reset Find Cameras to idle so it's the obvious next action
         self.find_cam_btn.setText("🔍  Find Cameras")
         self.find_cam_btn.setEnabled(True)
 
         toast_error(
             self,
-            f"⚠  \"{lost_name}\" disconnected — session discarded. "
+            f"⚠  \"{lost_name}\" disconnected - session discarded. "
             f"Click 'Find Cameras' to reconnect."
         )

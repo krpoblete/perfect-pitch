@@ -1,15 +1,13 @@
-from datetime import date, datetime
-
+from datetime import date
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit,
-    QFrame, QDialog, QScrollArea, QSizePolicy,
+    QFrame, QDialog, QScrollArea
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QColor
 
 from src.utils.icons import get_icon
-from src.utils.toast import toast_success, toast_error
+from src.utils.toast import toast_success
 from src.widgets.confirm_dialog import ConfirmDialog
 from src.widgets.trend_chart import TrendChart
 
@@ -19,13 +17,6 @@ def _fmt_date(dt_str: str) -> str:
         return date.fromisoformat(dt_str[:10]).strftime("%b %d, %Y")
     except Exception:
         return dt_str
-
-def _fmt_date_short(dt_str: str) -> str:
-    """Return 'Mon DD' from a datetime string."""
-    try:
-        return datetime.fromisoformat(dt_str).strftime("%b %d")
-    except Exception:
-        return dt_str or "—"
 
 class PitcherTrendDialog(QDialog):
     """
@@ -58,13 +49,12 @@ class PitcherTrendDialog(QDialog):
             cx = sg.x() + (sg.width() - w) // 2
             cy_base = sg.y() + (sg.height() - max_h) // 2
 
-        # Fit height to content: header + 2 dividers + stats + chart + footer + padding
         HEADER = 52
         DIVIDERS = 2
-        STATS = 90    # label row + spacing
-        CHART = 280   # _TrendChart.CHART_H (220) + legend (60)
+        STATS = 90
+        CHART = 280
         FOOTER = 44
-        PADDING = 56  # bl margins top+bottom (28+28)
+        PADDING = 56
         content_h = HEADER + DIVIDERS + STATS + CHART + FOOTER + PADDING
         h = min(content_h, max_h)
         cy = cy_base + (max_h - h) // 2
@@ -110,7 +100,7 @@ class PitcherTrendDialog(QDialog):
         div_top.setFixedHeight(1)
         root.addWidget(div_top)
 
-        # Scrollable body
+        # Scrollable Body
         scroll = QScrollArea()
         scroll.setObjectName("dashScroll")
         scroll.setWidgetResizable(True)
@@ -126,12 +116,12 @@ class PitcherTrendDialog(QDialog):
         total = len(self._sessions)
         pitches = sum(s["total_pitch"] or 0 for s in self._sessions)
         mistakes = sum(s["mistakes"] or 0 for s in self._sessions)
-        avg_acc  = (
+        avg_acc = (
             sum(float(s["accuracy"] or 0) for s in self._sessions) / total
             if total else 0.0
         )
 
-        # Summary stats strip
+        # Summary Stats Strip
         stats_row = QHBoxLayout()
         stats_row.setSpacing(24)
         for label, value in [
@@ -159,7 +149,7 @@ class PitcherTrendDialog(QDialog):
         div_mid.setFixedHeight(1)
         bl.addWidget(div_mid)
 
-        # Chart - shared TrendChart, severity dots off (pitcher view is clean)
+        # Chart - Shared TrendChart, Severity Dots Off (Pitcher View is Clean)
         if self._sessions:
             chart = TrendChart(self._sessions, show_severity_dots=False, parent=body)
             bl.addWidget(chart)
@@ -173,7 +163,7 @@ class PitcherTrendDialog(QDialog):
         scroll.setWidget(body)
         root.addWidget(scroll, stretch=1)
 
-        # Footer divider
+        # Footer Divider
         div_bot = QFrame()
         div_bot.setObjectName("skeletonViewerDivider")
         div_bot.setFixedHeight(1)
@@ -195,12 +185,6 @@ class PitcherTrendDialog(QDialog):
 
 ROWS_PER_PAGE = 10
 COLUMNS = ["Full Name", "Email", "Throwing Hand", "Pitch Threshold", "Date Joined", ""]
-
-def _fmt_date(dt_str: str) -> str:
-    try:
-        return date.fromisoformat(dt_str[:10]).strftime("%b %d, %Y")
-    except Exception:
-        return dt_str
 
 class PitchersPage(QWidget):
     def __init__(self):
@@ -228,7 +212,7 @@ class PitchersPage(QWidget):
         title_col.addWidget(title)
         title_col.addWidget(self.count_lbl)
 
-        # Search bar — plain input, active border on focus
+        # Search Bar - Plain Input, Active Border on Focus
         self.search_input = QLineEdit()
         self.search_input.setObjectName("searchBar")
         self.search_input.setPlaceholderText("Search users...")
@@ -242,14 +226,14 @@ class PitchersPage(QWidget):
         layout.addLayout(header_row)
         layout.addSpacing(24) 
 
-        # Table header
+        # Table Header
         self.table_container = QWidget()
         self.table_container.setObjectName("tableContainer")
         table_layout = QVBoxLayout(self.table_container)
         table_layout.setContentsMargins(0, 0, 0, 0)
         table_layout.setSpacing(0)
 
-        # Column header row
+        # Column Header Row
         header = self._make_header_row()
         table_layout.addWidget(header)
 
@@ -259,7 +243,7 @@ class PitchersPage(QWidget):
         div.setFixedHeight(1)
         table_layout.addWidget(div)
 
-        # Rows area
+        # Rows Area
         self.rows_widget = QWidget()
         self.rows_widget.setObjectName("tableRows")
         self.rows_layout = QVBoxLayout(self.rows_widget)
@@ -298,7 +282,7 @@ class PitchersPage(QWidget):
         layout.addLayout(pag_row)
         layout.addStretch()
 
-    # Table builders
+    # Table Builders
     def _make_header_row(self) -> QWidget:
         row = QWidget()
         row.setObjectName("tableHeaderRow")
@@ -329,7 +313,7 @@ class PitchersPage(QWidget):
 
         stretches = [3, 3, 2, 2, 2, 1]
 
-        # Full name — plain label
+        # Full Name - Plain Label
         name_lbl = QLabel(full_name)
         name_lbl.setObjectName("tableCell")
         h.addWidget(name_lbl, stretch=stretches[0])
@@ -344,7 +328,7 @@ class PitchersPage(QWidget):
                 )
             h.addWidget(lbl, stretch=stretch)
 
-        # Delete button
+        # Delete Button
         del_btn = QPushButton()
         del_btn.setObjectName("tableDeleteBtn")
         del_btn.setFixedSize(30, 30)
@@ -376,7 +360,7 @@ class PitchersPage(QWidget):
     
     # Render
     def _render_page(self):
-        # Clear existing rows
+        # Clear Existing Rows
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
             if item.widget():
@@ -401,15 +385,15 @@ class PitchersPage(QWidget):
                     div.setFixedHeight(1)
                     self.rows_layout.addWidget(div)
 
-        # Pagination controls
+        # Pagination Controls
         self.page_lbl.setText(f"Page {self._page + 1} of {total_pages}")
         self.prev_btn.setEnabled(self._page > 0)
         self.next_btn.setEnabled(self._page < total_pages - 1)
 
-        # Count label
+        # Count Label
         self.count_lbl.setText(f"{total} pitcher{'s' if total != 1 else ''}")
 
-    # Search & pagination
+    # Search and Pagination
     def _on_search(self, text: str):
         q = text.strip().lower()
         if not q:
@@ -458,7 +442,7 @@ class PitchersPage(QWidget):
         self._all_rows = get_pitchers()
         self._filtered = list(self._all_rows)
 
-        # Re-apply search if active
+        # Re-Apply Search if Active
         q = self.search_input.text().strip().lower()
         if q:
             matches_rhp = "rhp".startswith(q)

@@ -226,7 +226,7 @@
     padding: 0 24px;
 }
 
-/* Threshold indicators */
+/* Threshold Indicators */
 #thresholdIndicator {
     font-size: 11px;
     color: #666666;
@@ -239,7 +239,7 @@
     background: transparent;
 }
 
-/* Pitchers only badge */
+/* Pitchers Only Badge */
 #pitchersOnlyBadge {
     font-size: 10px;
     font-weight: 600;
@@ -250,7 +250,7 @@
     padding: 1px 6px;
 }
 
-/* Disabled hand buttons (Coach role) */
+/* Disabled Hand Buttons (Coach Role) */
 #handBtnDisabled {
     background-color: #141414;
     border: 1px solid #1e1e1e;
@@ -260,7 +260,7 @@
     font-weight: 600;
 }
 
-/* Disabled threshold spinbox (Coach role) */
+/* Disabled Threshold Spinbox (Coach Role) */
 #thresholdSpinBoxDisabled {
     background-color: #141414;
     border: 1px solid #1e1e1e;

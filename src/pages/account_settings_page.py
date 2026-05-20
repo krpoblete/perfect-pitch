@@ -25,7 +25,6 @@ class AccountSettingsPage(QWidget):
         self.setObjectName("contentPage")
         self.build_ui()
 
-        # Check every 60s if Manila date has changed → replenish spinbox at midnight
         from PyQt6.QtCore import QTimer as _QTimer
         self._midnight_timer = _QTimer(self)
         self._midnight_timer.setInterval(60_000)
@@ -42,7 +41,7 @@ class AccountSettingsPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # Scrollable content
+        # Scrollable Content
         scroll = QScrollArea()
         scroll.setObjectName("settingsScroll")
         scroll.setWidgetResizable(True)
@@ -66,7 +65,7 @@ class AccountSettingsPage(QWidget):
         layout.addWidget(subtitle)
         layout.addSpacing(36)
 
-        # Profile card 
+        # Profile Card 
         layout.addWidget(self._section_label("Profile"))
         layout.addSpacing(16)
 
@@ -75,7 +74,7 @@ class AccountSettingsPage(QWidget):
         card_layout.setContentsMargins(28, 24, 28, 28)
         card_layout.setSpacing(0)
 
-        # Avatar + name header
+        # Avatar + Name Header
         header_row = QHBoxLayout()
         header_row.setSpacing(20)
 
@@ -153,7 +152,7 @@ class AccountSettingsPage(QWidget):
         card_layout.addLayout(info_row)
         card_layout.addSpacing(24)
 
-        # Pitch threshold — editable spinbox 
+        # Pitch Threshold - Editable Spinbox 
         card_layout.addWidget(self._divider())
         card_layout.addSpacing(20)
 
@@ -189,7 +188,7 @@ class AccountSettingsPage(QWidget):
         card_layout.addLayout(threshold_row)
         card_layout.addSpacing(12)
 
-        # Recommended cap + remaining pitches indicators
+        # Recommended Cap + Remaining Pitches Indicators
         indicators_row = QHBoxLayout()
         indicators_row.setSpacing(10)
         self.rec_cap_lbl = QLabel()
@@ -202,7 +201,7 @@ class AccountSettingsPage(QWidget):
         card_layout.addLayout(indicators_row)
         card_layout.addSpacing(16)
 
-        # Save button — disabled until changes detected
+        # Save Button - Disabled until Changes Detected
         self.save_btn = QPushButton("Save Changes")
         self.save_btn.setObjectName("settingsSaveBtnDisabled")
         self.save_btn.setFixedHeight(44)
@@ -215,14 +214,14 @@ class AccountSettingsPage(QWidget):
         btn_row.addWidget(self.save_btn)
         card_layout.addLayout(btn_row)
 
-        # Enter key navigation
+        # Enter Key Navigation
         self.first_name_input.returnPressed.connect(self.last_name_input.setFocus)
         self.last_name_input.returnPressed.connect(self._try_save_from_enter)
 
         layout.addWidget(profile_card)
         layout.addSpacing(28)
 
-        # Security card
+        # Security Card
         layout.addWidget(self._section_label("Security"))
         layout.addSpacing(16)
 
@@ -272,7 +271,7 @@ class AccountSettingsPage(QWidget):
         confirm_row.addLayout(btn_col)
         sec_layout.addLayout(confirm_row)
 
-        # Enter key navigation
+        # Enter Key Navigation
         self.current_pw_input.line_edit.returnPressed.connect(
             self.new_pw_input.line_edit.setFocus
         )
@@ -365,7 +364,7 @@ class AccountSettingsPage(QWidget):
         self.save_btn.style().unpolish(self.save_btn)
         self.save_btn.style().polish(self.save_btn)
 
-    # Change detection
+    # Change Detection
     def _has_changes(self) -> bool:
         is_coach = self._role == "Coach"
         return (
@@ -415,7 +414,7 @@ class AccountSettingsPage(QWidget):
         except Exception:
             self.dob_display.setText(self._dob)
 
-        # Threshold logic
+        # Threshold Logic
         cap = get_pitch_limit(self._dob)
         user_today = get_pitches_used_today(self.user_id)
         saved = user["pitch_threshold"] or cap 
@@ -441,7 +440,7 @@ class AccountSettingsPage(QWidget):
             self.threshold_input.setValue(spin_value)
         self.threshold_input.blockSignals(False)
 
-        # When threshold-only exhausted, keep enabled so user can increment.
+        # When Threshold-Only Exhausted, Keep Enabled so User Can Increment.
         self.threshold_input.setEnabled(not cap_exhausted and self._role != "Coach")
         if cap_exhausted:
             self.threshold_input.setToolTip(
@@ -452,7 +451,7 @@ class AccountSettingsPage(QWidget):
             self.threshold_input.setToolTip("")
             self.threshold_input.setCursor(Qt.CursorShape.IBeamCursor)
 
-        # Recommended cap indicator
+        # Recommended Cap Indicator
         self.rec_cap_lbl.setText(f"Recommended: {cap} pitches/day")
         self.remaining_lbl.setText(f"Remaining today: {true_remaining}")
         self.remaining_lbl.setStyleSheet(
@@ -461,12 +460,12 @@ class AccountSettingsPage(QWidget):
             "color: #e05555; background: transparent;"
         )
 
-        # Hand selector — block its signal so refresh doesn't trigger change detection
+        # Hand Selector - Block its Signal so Refresh doesn't Trigger Change Detection
         self.hand_selector.changed.disconnect()
         self.hand_selector.set_hand(hand)
         self.hand_selector.changed.connect(lambda _: self._on_profile_changed())
 
-        # Coaches don't pitch — grey out hand buttons and threshold entirely
+        # Coaches don't Pitch - Grey Out Hand Buttons and Threshold Entirely
         is_coach = self._role == "Coach"
         self.hand_selector.set_enabled_both(not is_coach)
         self.hand_selector.set_disabled_style(is_coach)
@@ -494,7 +493,7 @@ class AccountSettingsPage(QWidget):
 
         self._set_save_enabled(False)
 
-        # Delete button — only Coaches can delete their own account
+        # Delete Button - Only Coaches Can Delete their Own Account
         self.delete_btn.setEnabled(is_coach)
         self.delete_btn.setObjectName(
             "dangerBtn" if is_coach else "dangerBtnDisabled"
@@ -512,7 +511,7 @@ class AccountSettingsPage(QWidget):
         self.delete_btn.style().unpolish(self.delete_btn)
         self.delete_btn.style().polish(self.delete_btn)
 
-        # Clear password fields
+        # Clear Password Fields
         self.current_pw_input.clear()
         self.new_pw_input.clear()
         self.confirm_pw_input.clear()
@@ -525,7 +524,7 @@ class AccountSettingsPage(QWidget):
         self._handle_save_profile()
 
     def _check_midnight_reset(self):
-        """Called every 60s — detects Manila midnight and replenishes the spinbox."""
+        """Called every 60s - detects Manila midnight and replenishes the spinbox."""
         today = self._manila_today()
         if today != self._last_date:
             self._last_date = today
@@ -560,7 +559,7 @@ class AccountSettingsPage(QWidget):
         self._original_threshold = threshold
         self._original_hand = hand
 
-        # Update avatar and header in this page immediately
+        # Update Avatar and Header in this Page Immediately
         initials = f"{first_name[0]}{last_name[0]}".upper()
         self.avatar_label.setText(initials)
         self.header_name.setText(f"{first_name} {last_name}")
@@ -599,7 +598,7 @@ class AccountSettingsPage(QWidget):
 
         deactivate_user(self.user_id)
 
-        # Return to login
+        # Return to Login
         self._auth_window = AuthWindow()
         self._auth_window.show()
 

@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QPixmap
 
 from src.utils.icons import get_icon
 from src.utils.toast import toast_warning, toast_error, toast_success
@@ -20,7 +19,7 @@ class StartSessionPage(QWidget, CameraMixin):
     def __init__(self, user_id: int, ml_bundle=None):
         super().__init__()
         self.user_id = user_id
-        self._ml_bundle = ml_bundle                     # (model, scaler, threshold, joint_thresholds)
+        self._ml_bundle = ml_bundle                      # (model, scaler, threshold, joint_thresholds)
         self._running = False
         self._pitch_count = 0
         self._mistakes = 0
@@ -52,7 +51,7 @@ class StartSessionPage(QWidget, CameraMixin):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Camera feed
+        # Camera Feed
         feed_wrapper = QWidget()
         feed_wrapper.setObjectName("feedWrapper")
         feed_layout = QVBoxLayout(feed_wrapper)
@@ -69,7 +68,7 @@ class StartSessionPage(QWidget, CameraMixin):
         feed_layout.addWidget(self.feed_label)
         root.addWidget(feed_wrapper, stretch=3)
 
-        # Stats panel
+        # Stats Panel
         from PyQt6.QtWidgets import QApplication as _QApp
         _sw = _QApp.primaryScreen().availableGeometry().width()
         _panel_w = max(180, min(240, int(_sw * 0.13)))
@@ -80,7 +79,7 @@ class StartSessionPage(QWidget, CameraMixin):
         panel_layout.setContentsMargins(12, 40, 12, 18)
         panel_layout.setSpacing(8)
 
-        # Stats cards
+        # Stats Cards
         self.pitch_card    = self._stat_card("Pitch Count", "play-handball", "#4a9eff")
         self.mistake_card  = self._stat_card("Mistake Count", "x-mark", "#e05555")
         self.accuracy_card = self._stat_card("Accuracy", "target", "#4ecb71")
@@ -93,12 +92,12 @@ class StartSessionPage(QWidget, CameraMixin):
         panel_layout.addWidget(self.mistake_card)
         panel_layout.addWidget(self.accuracy_card)
 
-        # Pitches Left card
+        # Pitches Left Card
         self.token_card = self._stat_card("Pitches Left", "ball-baseball", "#f0a500")
         self.token_val  = self.token_card.findChild(QLabel, "statValue")
         panel_layout.addWidget(self.token_card)
 
-        # Token status widget — alert icon + message
+        # Token Status Widget - Alert Icon + Message
         self.token_status_widget = QWidget()
         self.token_status_widget.setObjectName("tokenStatusWidget")
         token_status_layout = QHBoxLayout(self.token_status_widget)
@@ -123,11 +122,11 @@ class StartSessionPage(QWidget, CameraMixin):
 
         panel_layout.addStretch()
 
-        # Camera guide card (built by CameraMixin)
+        # Camera Guide Card (Built by CameraMixin)
         self.camera_guide_card = self._build_guide_card()
         panel_layout.addWidget(self.camera_guide_card)
 
-        # Camera combo
+        # Camera Combo
         guide_toggle_row = QHBoxLayout()
         guide_toggle_row.setContentsMargins(0, 0, 0, 0)
         guide_toggle_row.setSpacing(6)
@@ -143,7 +142,7 @@ class StartSessionPage(QWidget, CameraMixin):
         guide_toggle_row.addWidget(self.camera_combo, stretch=1)
         panel_layout.addLayout(guide_toggle_row)
 
-        # Find Cameras + Test row
+        # Find Cameras + Test Row
         find_test_row = QHBoxLayout()
         find_test_row.setContentsMargins(0, 0, 0, 0)
         find_test_row.setSpacing(6)
@@ -171,7 +170,7 @@ class StartSessionPage(QWidget, CameraMixin):
         find_test_row.addWidget(self.test_cam_btn)
         panel_layout.addLayout(find_test_row)
 
-        # START button
+        # Start Button
         self.start_btn = QPushButton("START")
         self.start_btn.setObjectName("sessionStartBtn")
         self.start_btn.setFixedHeight(48)
@@ -182,7 +181,7 @@ class StartSessionPage(QWidget, CameraMixin):
         self.start_btn.clicked.connect(self._handle_start)
         panel_layout.addWidget(self.start_btn)
 
-        # END button
+        # End Button
         self.end_btn = QPushButton("END")
         self.end_btn.setObjectName("sessionEndBtn")
         self.end_btn.setFixedHeight(48)
@@ -195,7 +194,7 @@ class StartSessionPage(QWidget, CameraMixin):
 
         root.addWidget(panel)
 
-    # Stat card builder (panel-local; SessionSummaryDialog has its own)
+    # Stat Card Builder (Panel-Local; SessionSummaryDialog has its Own)
     def _stat_card(self, title: str, icon_name: str, color: str) -> QWidget:
         card = QWidget()
         card.setObjectName("sessionStatCard")
@@ -231,7 +230,7 @@ class StartSessionPage(QWidget, CameraMixin):
 
         return card
 
-    # Stats update (called by PitchWorker)
+    # Stats Update (Called by PitchWorker)
     def update_stats(self, pitch_count: int, mistakes: int, tokens_used: int):
         """Update counters. Called from live_capture after each pitch."""
         self._pitch_count = pitch_count
@@ -250,7 +249,7 @@ class StartSessionPage(QWidget, CameraMixin):
             if pitches_live <= 0:
                 self._handle_token_exhausted_mid_session()
 
-    # Token system
+    # Token System
     def _refresh_token_status(self):
         """Load today's token status from DB and update all token UI.
 
@@ -339,7 +338,7 @@ class StartSessionPage(QWidget, CameraMixin):
         self._refresh_token_status()
         return self._tokens_remaining <= 0
 
-    # Session handlers
+    # Session Handlers
     def _handle_start(self):
         if self._check_tokens_on_start():
             return
@@ -588,15 +587,15 @@ class StartSessionPage(QWidget, CameraMixin):
         self.token_status_widget.hide()
         self._refresh_token_status()
 
-    # PitchWorker signal handlers
+    # PitchWorker Signal Handlers
     def _on_model_loaded(self):
         self._show_idle_feed()
 
     def _on_pitch_done(self, result: dict):
         verdict = result.get("verdict", "")
-        issue   = result.get("main_issue") or "None"
-        mse     = result.get("mse", 0.0)
-        pitch   = result.get("pitch_number", self._pitch_count)
+        issue = result.get("main_issue") or "None"
+        mse = result.get("mse", 0.0)
+        pitch = result.get("pitch_number", self._pitch_count)
         print(f"Pitch {pitch}: {verdict} | Issue: {issue} | MSE: {mse:.5f}")
 
     def _on_worker_error(self, message: str):

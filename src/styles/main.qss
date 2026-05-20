@@ -28,7 +28,7 @@
     background: transparent;
 }
 
-/* Role badges */
+/* Role Badges */
 #roleBadgePitcher {
     font-size: 10px;
     font-weight: 700;
@@ -53,7 +53,7 @@
     background: transparent;
 }
 
-/* Nav section label */
+/* Nav Section Label */
 #navSectionLabel {
     font-size: 10px;
     font-weight: 700;
@@ -62,7 +62,7 @@
     background: transparent;
 }
 
-/* Nav buttons */
+/* Nav Buttons */
 #navBtn {
     background-color: transparent;
     border: none;
@@ -92,7 +92,7 @@
     margin: 1px 12px;
 }
 
-/* Sidebar divider */
+/* Sidebar Divider */
 #sidebarDivider {
     background-color: transparent;
 }

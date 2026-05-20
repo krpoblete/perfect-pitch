@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QDialog,
 )
 from PyQt6.QtCore import Qt, QTimer, QRect
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QFont
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen
 
 from src.utils.icons import get_icon
 from src.widgets.trend_chart import TrendChart, _fmt_date_short
@@ -131,13 +131,13 @@ class SkeletonViewerDialog(QDialog):
 
         root.addWidget(header)
 
-        # Header divider
+        # Header Divider
         div_top = QFrame()
         div_top.setObjectName("skeletonViewerDivider")
         div_top.setFixedHeight(1)
         root.addWidget(div_top)
 
-        # Image body
+        # Image Body
         self._img_lbl = QLabel()
         self._img_lbl.setObjectName("skeletonViewerImage")
         self._img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -146,13 +146,13 @@ class SkeletonViewerDialog(QDialog):
         )
         root.addWidget(self._img_lbl, stretch=1)
 
-        # Footer divider
+        # Footer Divider
         div_bot = QFrame()
         div_bot.setObjectName("skeletonViewerDivider")
         div_bot.setFixedHeight(1)
         root.addWidget(div_bot)
 
-        # Footer stat strip
+        # Footer Stat Strip
         footer = QWidget()
         footer.setObjectName("skeletonViewerFooter")
         footer.setFixedHeight(44)
@@ -192,7 +192,7 @@ class SkeletonViewerDialog(QDialog):
                 self._img_lbl.setPixmap(scaled)
                 return
 
-        # Graceful fallback - file missing or unreadable
+        # Graceful Fallback - File Missing or Unreadable
         self._img_lbl.setText("⚠  Skeleton image not found on disk.")
         self._img_lbl.setObjectName("skeletonViewerMissing")
         self._img_lbl.style().unpolish(self._img_lbl)
@@ -296,12 +296,12 @@ class DashboardPage(QWidget):
             ph_layout.addWidget(ph_lbl)
             layout.addWidget(placeholder)
         else:
-            chart = TrendChart(sessions, show_severity_dots=True, parent=self)
+            chart = TrendChart(sessions, show_severity_dots=False, parent=self)
             layout.addWidget(chart)
 
         layout.addSpacing(32)
 
-    # History table
+    # History Table
     def _build_history_table(self, layout: QVBoxLayout,
                              columns: list, col_stretches: list,
                              rows: list, row_builder):
@@ -330,7 +330,7 @@ class DashboardPage(QWidget):
         tl.addWidget(hrow)
         tl.addWidget(self._divider())
 
-        # Rows container
+        # Rows Container
         self._rows_widget = QWidget()
         self._rows_widget.setObjectName("tableRows")
         self._rows_layout = QVBoxLayout(self._rows_widget)
@@ -365,7 +365,7 @@ class DashboardPage(QWidget):
         pag.addWidget(self._next_btn)
         layout.addLayout(pag)
 
-        # Store row builder for pagination
+        # Store Row Builder for Pagination
         self._row_builder = row_builder
         self._col_stretches = col_stretches
 
@@ -442,7 +442,7 @@ class DashboardPage(QWidget):
             return lbl, stretch
 
         if extra_col:
-            # Coach layout: Pitcher | Date | Pitches | Mistakes | Accuracy
+            # Coach Layout: Pitcher | Date | Pitches | Mistakes | Accuracy
             pitcher_lbl = QLabel(str(extra_col(session)))
             pitcher_lbl.setObjectName("tableCell")
             h.addWidget(pitcher_lbl, stretch=stretches[0])
@@ -459,7 +459,7 @@ class DashboardPage(QWidget):
                 lbl.setObjectName("tableCell")
                 h.addWidget(lbl, stretch=stretch)
         else:
-            # Pitcher / Admin layout: Date | Pitches | Mistakes | Accuracy 
+            # Pitcher | Admin Layout: Date | Pitches | Mistakes | Accuracy 
             date_w, date_s = _date_widget(stretches[0])
             h.addWidget(date_w, stretch=date_s)
 
@@ -474,7 +474,7 @@ class DashboardPage(QWidget):
 
         return row
 
-    # Role dashboards
+    # Role Dashboards
     def _build_pitcher_dashboard(self):
         from src.db import get_dashboard_stats, get_sessions_for_user, get_sessions_for_trend
         stats = get_dashboard_stats(self.user_id)
@@ -483,7 +483,7 @@ class DashboardPage(QWidget):
 
         layout = self._layout
 
-        # Page title
+        # Page Title
         title = QLabel("Dashboard")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
@@ -510,11 +510,11 @@ class DashboardPage(QWidget):
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Trend chart
+        # Trend Chart
         self._trend_section(layout, trend,
                             subtitle="Accuracy, mistakes, and pitch count across all your sessions")
 
-        # History table
+        # History Table
         self._sessions_filtered = list(sessions)
         columns = ["Date", "Pitches", "Mistakes", "Accuracy"]
         stretches = [4, 2, 2, 2]
@@ -531,7 +531,7 @@ class DashboardPage(QWidget):
 
         layout = self._layout
 
-        # Page title
+        # Page Title
         title = QLabel("Dashboard")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
@@ -557,10 +557,10 @@ class DashboardPage(QWidget):
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Per-pitcher performance card overview (replaces combined trend chart)
+        # Per-Pitcher Performance Card Overview (Replaces Combined Trend Chart)
         self._pitcher_overview_section(layout, sessions)
 
-        # History table with pitcher name column
+        # History Table with Pitcher Name Column
         self._sessions_filtered = list(sessions)
         columns = ["Pitcher", "Date", "Pitches", "Mistakes", "Accuracy"]
         stretches = [3, 4, 2, 2, 2]
@@ -573,7 +573,7 @@ class DashboardPage(QWidget):
         )
         self._render_rows()
 
-    # Coach: per-pitcher overview
+    # Coach: Per-Pitcher Overview
     def _pitcher_overview_section(self, layout: QVBoxLayout, sessions: list):
         """Render per-pitcher performance cards, sorted worst accuracy first."""
         layout.addWidget(self._section_title("Pitcher Overview"))
@@ -583,7 +583,7 @@ class DashboardPage(QWidget):
         layout.addWidget(sub)
         layout.addSpacing(12)
 
-        # Group sessions by pitcher — key on user_id to handle duplicate names
+        # Group Sessions by Pitcher - Key on user_id to Handle Duplicate Names
         from collections import defaultdict
         pitcher_sessions: dict = defaultdict(list)
         for s in sessions:
@@ -597,7 +597,7 @@ class DashboardPage(QWidget):
             layout.addSpacing(32)
             return
 
-        # Build summary per pitcher
+        # Build Summary Per Pitcher
         summaries = []
         for user_id, rows in pitcher_sessions.items():
             rows_sorted = sorted(rows, key=lambda r: r["date"])
@@ -607,7 +607,7 @@ class DashboardPage(QWidget):
             total_miss = sum(r["mistakes"]    or 0 for r in rows_sorted)
             last_date = _fmt_date_short(rows_sorted[-1]["date"])
 
-            # Trend direction: compare last 2 sessions if available
+            # Trend Direction: Compare Last 2 Sessions if Available
             if len(accuracies) >= 2:
                 delta = accuracies[-1] - accuracies[-2]
                 if delta > 3: 
@@ -619,7 +619,7 @@ class DashboardPage(QWidget):
             else:
                 trend_arrow, trend_color = "—", "#555555"
 
-            # Accuracy color thresholds
+            # Accuracy Color Thresholds
             if avg_acc >= 70: 
                 acc_color = "#4ecb71"
             elif avg_acc >= 40: 
@@ -639,13 +639,13 @@ class DashboardPage(QWidget):
                 "last_date": last_date,
                 "trend_arrow": trend_arrow,
                 "trend_color": trend_color,
-                "sparkline": accuracies[-8:],  # last 8 sessions max
+                "sparkline": accuracies[-8:],  # Last 8 Sessions Max
             })
 
-        # Sort: worst avg accuracy first
+        # Sort: Worst Avg Accuracy First
         summaries.sort(key=lambda s: s["avg_acc"])
 
-        # Render 2-column grid of cards
+        # Render 2-Column Grid of Cards
         grid = QGridLayout()
         grid.setSpacing(12)
         for idx, p in enumerate(summaries):
@@ -664,7 +664,7 @@ class DashboardPage(QWidget):
         outer.setContentsMargins(20, 16, 20, 16)
         outer.setSpacing(10)
 
-        # Row 1: name + trend arrow + last date + view button
+        # Row 1: Name + Trend Arrow + Last Date + View Button
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
 
@@ -694,11 +694,11 @@ class DashboardPage(QWidget):
         top_row.addWidget(view_btn)
         outer.addLayout(top_row)
 
-        # Row 2: sparkline
+        # Row 2: Sparkline
         spark = _PitcherSparkline(p["sparkline"])
         outer.addWidget(spark)
 
-        # Row 3: stats strip
+        # Row 3: Stats Strip
         stats_row = QHBoxLayout()
         stats_row.setSpacing(0)
         for label, value, color in [
@@ -727,7 +727,7 @@ class DashboardPage(QWidget):
         from src.db import get_sessions_for_trend
         from src.pages.pitchers_page import PitcherTrendDialog
         sessions = get_sessions_for_trend(user_id)
-        # Build a minimal pitcher dict matching what PitcherTrendDialog expects
+        # Build a Minimal Pitcher Dict Matching what PitcherTrendDialog Expects
         first, *rest = name.split(" ", 1)
         pitcher = {
             "id":         user_id,
@@ -747,7 +747,7 @@ class DashboardPage(QWidget):
 
         layout = self._layout
 
-        # Page title
+        # Page Title
         title = QLabel("Dashboard")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
@@ -757,14 +757,14 @@ class DashboardPage(QWidget):
         layout.addWidget(sub)
         layout.setSpacing(28)
 
-        # Wide users card
+        # Wide Users Card
         users_card = QWidget()
         users_card.setObjectName("dashStatCardWide")
         ul = QHBoxLayout(users_card)
         ul.setContentsMargins(24, 20, 24, 20)
         ul.setSpacing(0)
 
-        # Total users
+        # Total Users
         icon_lbl = QLabel()
         icon_lbl.setFixedSize(22, 22)
         icon_lbl.setPixmap(get_icon("users-group", color="#4a9eff", size=22).pixmap(22, 22))
@@ -782,7 +782,7 @@ class DashboardPage(QWidget):
         ul.addLayout(total_col)
         ul.addStretch()
 
-        # Active | Inactive breakdown
+        # Active | Inactive Breakdown
         for label, value, color in [
             ("Active", str(int(user_stats["active_users"])), "#4ecb71"),
             ("Inactive", str(int(user_stats["inactive_users"])), "#e05555"),
@@ -807,7 +807,7 @@ class DashboardPage(QWidget):
         layout.addWidget(users_card)
         layout.addSpacing(14)
 
-        # App-wide bottom stat grid
+        # App-Wide Bottom Stat Grid
         grid = QGridLayout()
         grid.setSpacing(14)
         bottom_cards = [
@@ -821,11 +821,11 @@ class DashboardPage(QWidget):
         layout.addLayout(grid)
         layout.addSpacing(32)
 
-        # Trend chart - personal sessions (for debugging Start Session)
+        # Trend Chart - Personal Sessions (For Debugging Start Session)
         self._trend_section(layout, trend,
                             subtitle="Your personal session history (use Start Session to generate data)")
 
-        # Personal history table
+        # Personal History Table
         self._sessions_filtered = list(sessions)
         columns = ["Date", "Pitches", "Mistakes", "Accuracy"]
         stretches = [4, 2, 2, 2]
@@ -835,7 +835,7 @@ class DashboardPage(QWidget):
         )
         self._render_rows()
 
-    # Skeleton viewer
+    # Skeleton Viewer
     def _open_skeleton_viewer(self, session):
         dlg = SkeletonViewerDialog(self, session)
         dlg.exec()

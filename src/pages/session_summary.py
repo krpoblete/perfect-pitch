@@ -8,7 +8,6 @@ from PyQt6.QtGui import QPixmap
 from src.utils.icons import get_icon
 
 class SessionSummaryDialog(QDialog):
-    # Fallback size used when parent geometry is unavailable
     _W_DEFAULT = 940
     _H_DEFAULT = 620
 
@@ -61,7 +60,7 @@ class SessionSummaryDialog(QDialog):
                 self.skeleton_lbl.setPixmap(scaled)
                 self.skeleton_pending_lbl.hide()
                 return
-        # Replace text label with icon + message
+        # Replace Text Label with Icon + Message
         icon_lbl = QLabel()
         icon_lbl.setFixedSize(16, 16)
         icon_lbl.setStyleSheet("background: transparent;")
@@ -89,7 +88,7 @@ class SessionSummaryDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Left: skeleton panel
+        # Left: Skeleton Panel
         self.skeleton_panel = QWidget()
         self.skeleton_panel.setObjectName("summarySkeletonPanel")
         sk_layout = QVBoxLayout(self.skeleton_panel)
@@ -117,7 +116,7 @@ class SessionSummaryDialog(QDialog):
         div.setFrameShape(QFrame.Shape.VLine)
         root.addWidget(div)
 
-        # Right: stats panel
+        # Right: Stats Panel
         right = QWidget()
         right.setObjectName("summaryStatsPanel")
         rl = QVBoxLayout(right)

@@ -14,7 +14,7 @@ from src.utils.icons import get_icon
 from src.widgets.window_buttons import WindowButtons
 from src.widgets.confirm_dialog import ConfirmDialog
 
-# Nav items per role
+# Nav Items Per Role
 NAV_PITCHER = [
     ("dashboard", "home", "Dashboard"),
     ("start_session", "play-handball", "Start Session"),
@@ -67,29 +67,26 @@ def _build_tour_steps_pitcher(
     dashboard = pages["dashboard"]
     start_page = pages["start_session"]
 
-    # Lazy rect helpers
-    PAD = 10  # spotlight padding around widget edges
+    PAD = 10
 
     def _stats_rect() -> QRect:
-        """Top portion of the content area — the six stat cards."""
-        # Try the precisely-named widget first
+        """Top portion of the content area - the six stat cards."""
+        # Try the Precisely-Named Widget First
         w = dashboard.findChild(QWidget, "statsSection")
         if w and w.isVisible():
             tl = w.mapTo(overlay_parent, QPoint(0, 0))
             return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
-        # Fallback: top ~46 % of the content stack height
         cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
         h = int(cs.height() * 0.46)
         return QRect(pos.x(), pos.y(), cs.width(), h).adjusted(-PAD, -PAD, PAD, PAD)
 
     def _history_rect() -> QRect:
-        """Bottom portion of the content area — the pitching history table."""
+        """Bottom portion of the content area - the pitching history table."""
         w = dashboard.findChild(QWidget, "historySection")
         if w and w.isVisible():
             tl = w.mapTo(overlay_parent, QPoint(0, 0))
             return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
-        # Fallback: bottom ~54 % of the content stack height
         cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
         top_off = int(cs.height() * 0.46)
@@ -101,15 +98,14 @@ def _build_tour_steps_pitcher(
         ).adjusted(-PAD, -PAD, PAD, PAD)
 
     def _start_panel_rect() -> QRect:
-        """Left panel of the Start Session page (camera / session controls)."""
-        # Try common objectNames the start session page might use
+        """Left panel of the Start Session page (camera | session controls)."""
+        # Try Common objectNames the Start Session Page might Use
         for name in ("sessionPanel", "sessionLeftPanel", "startPanel",
                      "sessionControls", "cameraPanel"):
             w = start_page.findChild(QWidget, name)
             if w and w.isVisible():
                 tl = w.mapTo(overlay_parent, QPoint(0, 0))
                 return QRect(tl, w.size()).adjusted(-PAD, -PAD, PAD, PAD)
-        # Fallback: left ~45 % of the content stack – covers a typical left panel
         cs = content_stack
         pos = cs.mapTo(overlay_parent, QPoint(0, 0))
         return QRect(
@@ -320,17 +316,17 @@ class MainWindow(FramelessMainWindow):
         self.ml_bundle = ml_bundle
         self._logging_out = False
         self._session_live = False
-        self._active_tour = None              # reference to a live TourOverlay
+        self._active_tour = None              # Reference to a Live TourOverlay
         self.setWindowTitle("Perfect Pitch")
         self.titleBar.hide()
         self.setResizeEnabled(False)
 
-        # Fetch user role
+        # Fetch User Role
         from src.db import get_user_by_id
         user = get_user_by_id(user_id)
         self.role = user["role"] if user else "Pitcher"
 
-        # Pick nav items based on role
+        # Pick Nav Items Based on Role
         if self.role == "Admin":
             self.nav_items = NAV_ADMIN
         elif self.role == "Coach":
@@ -341,7 +337,7 @@ class MainWindow(FramelessMainWindow):
         self.build_ui()
         self._switch_page("dashboard")
 
-        # Auto-open guided tour for first-time users (Pitcher and Coach only).
+        # Auto-Open Guided Tour for First-Time Users (Pitcher and Coach Only).
         if self.role != "Admin":
             from src.db import get_has_seen_guide, set_has_seen_guide
             if not get_has_seen_guide(self.user_id):
@@ -349,7 +345,7 @@ class MainWindow(FramelessMainWindow):
                 from PyQt6.QtCore import QTimer
                 QTimer.singleShot(400, self._launch_tour)
 
-    # platform helpers
+    # Platform Helpers
     def _disable_rounded_corners(self):
         import sys
         if sys.platform == "win32":
@@ -430,13 +426,13 @@ class MainWindow(FramelessMainWindow):
         sb_layout.addWidget(logo_widget)
         sb_layout.addSpacing(8)
 
-        # Nav section label
+        # Nav Section Label
         nav_section = QLabel("MENU")
         nav_section.setObjectName("navSectionLabel")
         nav_section.setContentsMargins(24, 8, 0, 4)
         sb_layout.addWidget(nav_section)
 
-        # Nav buttons
+        # Nav Buttons
         self.nav_buttons = {}
         for key, icon_name, label in self.nav_items:
             btn = QPushButton(f"  {label}")
@@ -450,7 +446,7 @@ class MainWindow(FramelessMainWindow):
             self.nav_buttons[key] = btn
             sb_layout.addWidget(btn)
 
-        # Role badge
+        # Role Badge
         sb_layout.addSpacing(12)
         role_badge = QLabel(self.role.upper())
         role_badge.setObjectName(f"roleBadge{self.role}")
@@ -459,7 +455,7 @@ class MainWindow(FramelessMainWindow):
 
         sb_layout.addStretch()
 
-        # Help | Guide button (Pitcher and Coach only)
+        # Help | Guide Button (Pitcher and Coach Only)
         if self.role != "Admin":
             self.guide_btn = QPushButton("  Guide")
             self.guide_btn.setObjectName("guideBtn")
@@ -491,10 +487,10 @@ class MainWindow(FramelessMainWindow):
         sb_layout.addWidget(acc_btn)
         sb_layout.addSpacing(8)
 
-        # User info at bottom
+        # User Info at Bottom
         self._load_user_info(sb_layout)
 
-        # Content stack
+        # Content Stack
         self.stack = QStackedWidget()
         self.stack.setObjectName("contentStack")
 
@@ -518,7 +514,7 @@ class MainWindow(FramelessMainWindow):
         layout.addWidget(sidebar)
         layout.addWidget(self.stack)
 
-        # Window buttons
+        # Window Buttons
         self.win_btns = WindowButtons(parent=root)
         self.win_btns.adjustSize()
         bw = self.win_btns.sizeHint().width()
@@ -528,7 +524,7 @@ class MainWindow(FramelessMainWindow):
     # Tour
     def _launch_tour(self):
         """Open the interactive guided tour overlay."""
-        # Close any existing tour first
+        # Close Any Existing Tour First
         if self._active_tour is not None:
             try:
                 self._active_tour.close_tour()
@@ -536,7 +532,7 @@ class MainWindow(FramelessMainWindow):
                 pass
             self._active_tour = None
 
-        # Always start on the dashboard so the spotlights make sense
+        # Always Start on the Dashboard so the Spotlights make Sense
         self._switch_page("dashboard")
 
         if self.role == "Coach":
@@ -561,7 +557,7 @@ class MainWindow(FramelessMainWindow):
         overlay.closed.connect(self._on_tour_closed)
         self._active_tour = overlay
 
-        # Highlight the Guide button while the tour is open
+        # Highlight the Guide Button while the Tour is Open
         if self.guide_btn:
             self.guide_btn.setObjectName("guideBtnActive")
             self.guide_btn.setIcon(get_icon("help", color="#ffffff", size=18))
@@ -570,14 +566,14 @@ class MainWindow(FramelessMainWindow):
 
     def _on_tour_closed(self):
         self._active_tour = None
-        # Restore guide button appearance
+        # Restore Guide Button Appearance
         if self.guide_btn:
             self.guide_btn.setObjectName("guideBtn")
             self.guide_btn.setIcon(get_icon("help", color="#555555", size=18))
             self.guide_btn.style().unpolish(self.guide_btn)
             self.guide_btn.style().polish(self.guide_btn)
 
-    # Sidebar user info
+    # Sidebar User Info
     def _load_user_info(self, sb_layout):
         from src.db import get_user_by_id
         user = get_user_by_id(self.user_id)
@@ -634,7 +630,7 @@ class MainWindow(FramelessMainWindow):
         self._sidebar_bottom.deleteLater()
         self._load_user_info(self._sb_layout)
 
-    # Page switching
+    # Page Switching
     def _switch_page(self, key: str, icon_name: str = None):
         icon_map = {k: i for k, i, _ in self.nav_items}
         icon_map["account_settings"] = "settings"
@@ -653,7 +649,7 @@ class MainWindow(FramelessMainWindow):
         if hasattr(page, "refresh"):
             page.refresh()
 
-    # Session lock / unlock
+    # Session Lock | Unlock
     def _lock_nav(self):
         """Disable all nav and window actions while a session is live."""
         self._session_live = True

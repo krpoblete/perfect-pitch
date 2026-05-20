@@ -78,7 +78,7 @@
     letter-spacing: 0.5px;
 }
 
-/* Restore button */
+/* Restore Button */
 #restoreBtn {
     background-color: transparent;
     border: 1px solid transparent;
