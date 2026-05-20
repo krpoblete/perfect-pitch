@@ -300,14 +300,14 @@ def check_verdict(mse, threshold, joint_risks, joint_thresholds):
     if mse <= threshold:
         return False, f"MSE within threshold. {label}", n_critical, n_high, n_moderate, n_elevated
 
-    # MSE is above threshold - now check joint evidence to confirm
+    # MSE is Above Threshold - Now Check Joint Evidence to Confirm
     if (n_critical >= CRITICAL_LIMIT or
         n_high >= HIGH_LIMIT or
         n_moderate >= MODERATE_LIMIT or
         risk_score >= 3):
         return True, f"High MSE + joint evidence. {label}", n_critical, n_high, n_moderate, n_elevated
 
-    # MSE is elevated but joints don't confirm - flag only if MSE is significantly high
+    # MSE is Elevated but Joints don't Confirm - Flag Only if MSE is Significantly High
     if mse > threshold * 1.5:
         return True, f"MSE significantly exceeds threshold. {label}", n_critical, n_high, n_moderate, n_elevated
 
@@ -403,7 +403,7 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
         cv2.putText(panel, f"Issue: {issue[:20]}", (8, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (220, 220, 220), 1, cv2.LINE_AA)
         y = 78
 
-    # Session accuracy bar
+    # Session Accuracy Bar
     cv2.putText(panel, "Session Accuracy", (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
     if pitch_count > 0:
         acc = correct_count / pitch_count * 100
@@ -417,7 +417,7 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
     else:
         cv2.putText(panel, "No pitches yet", (8, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 100, 100), 1, cv2.LINE_AA)
 
-    # Per-joint risk bars
+    # Per-Joint Risk Bars
     y = 108
     cv2.putText(panel, "Joint Risk (this frame)", (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
     for i, name in enumerate(JOINT_NAMES):
@@ -432,7 +432,7 @@ def draw_panel(frame, verdict, issue, frame_risk, joint_thresholds, feedback_df,
         cv2.rectangle(panel, (76, y - 10), (76 + bar_w, y), color, -1)
         cv2.putText(panel, f"{risk:.2f}", (190, y), cv2.FONT_HERSHEY_SIMPLEX, 0.30, (140, 140, 140), 1, cv2.LINE_AA)
 
-    # Top feedback
+    # Top Feedback
     y += 22
     cv2.putText(panel, "Top Movement Feedback", (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
     for _, row in feedback_df.head(3).iterrows():
@@ -454,8 +454,8 @@ def load_model():
     cfg = checkpoint["config"]
     threshold = checkpoint["threshold"]
 
-    # Load per-joint thresholds saved during training.
-    # Falls back to a flat multiplier of 1.0 for checkpoints that pre-date this change.
+    # Load Per-Joint Thresholds Saved During Training.
+    # Falls Back to a Flat Multiplier of 1.0 for Checkpoints that Pre-Date this Change.
     if "joint_thresholds" in checkpoint:
         joint_thresholds = np.array(checkpoint["joint_thresholds"], dtype=np.float32)
     else:
@@ -517,7 +517,7 @@ def analyze(video_path, out_path=None):
 
     frame_risks, joint_risks, mse = compute_scores(features_scaled, model)
 
-    # Stretch frame-level data back to original video length for annotation
+    # Stretch Frame-Level Data Back to Original Video Length for Annotation
     frame_risks_full = resample(frame_risks, pose["n_frames"])
     image_lms_full = resample(pose["image"], pose["n_frames"])
 

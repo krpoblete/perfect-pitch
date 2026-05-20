@@ -1,13 +1,13 @@
 from datetime import date as _date
 
-# USA Baseball age-bracket daily limits
+# USA Baseball Age-Bracket Daily Limits
 PITCH_LIMITS: list[tuple[int, int, int]] = [
     (13, 16, 95),
     (17, 18, 105),
     (19, 22, 120),
 ]
 
-_FLOOR = 95  # age < 13 (signup minimum)
+_FLOOR = 95  # age < 13 (Signup Minimum)
 _CEIL = 120  # age > 22
 
 def get_age(dob_str: str) -> int:

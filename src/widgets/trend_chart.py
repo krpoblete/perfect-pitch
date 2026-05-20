@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import QWidget, QSizePolicy
 from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QColor, QPainter, QPen, QFont
 
-# Severity color map
+# Severity Color Map
 SEV_COLORS: dict[str, QColor] = {
     "Normal": QColor("#4ecb71"),
     "Elevated": QColor("#f0e040"),
@@ -39,7 +39,7 @@ class TrendChart(QWidget):
     _TEXT_COLOR = QColor("#888888")
     _BG_COLOR = QColor("#0d0d0d")
 
-    # Layout constants
+    # Layout Constants
     CHART_H = 220  # chart drawing area height (px)
     _PAD_L = 52
     _PAD_R = 52
@@ -132,14 +132,14 @@ class TrendChart(QWidget):
             painter.setBrush(self._BAR_COLOR)
             painter.drawRoundedRect(x - bar_w // 2, PT + ch - bh, bar_w, bh, 3, 3)
 
-        # Mistake line
+        # Mistake Line
         pts_m = [(x, PT + ch - int(ch * m / r_max)) for x, m in zip(xs, mistakes)]
         painter.setPen(QPen(self._MISS_COLOR, 1, Qt.PenStyle.DashLine))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         for i in range(len(pts_m) - 1):
             painter.drawLine(pts_m[i][0], pts_m[i][1], pts_m[i+1][0], pts_m[i+1][1])
 
-        # Accuracy line
+        # Accuracy Line
         pts_a = [(x, PT + ch - int(ch * a / 100.0)) for x, a in zip(xs, accuracies)]
         painter.setPen(QPen(self._ACC_COLOR, 2))
         for i in range(len(pts_a) - 1):

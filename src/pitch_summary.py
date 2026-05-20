@@ -31,7 +31,7 @@ def severity(ratio: float) -> str:
     else:
         return "Critical"
 
-# LOAD
+# Load
 def load_session(path: Path) -> dict:
     with open(path) as f:
         data = json.load(f)
@@ -51,7 +51,7 @@ def load_all_sessions(folder: Path) -> list[dict]:
             print(f"  [skip] {p.name}: {e}")
     return sessions
 
-# COMPUTATION
+# Computation
 def compute_summary(pitches: list[dict]) -> dict:
     n = len(pitches)
     joint_names = pitches[0]["joint_names"]
@@ -102,7 +102,7 @@ def compute_summary(pitches: list[dict]) -> dict:
         "history": history,
     }
 
-# SUMMARY (TEXT ONLY)
+# Summary (Text Only)
 def print_summary(title: str, stats: dict):
     print(f"\n=== PITCH SESSION SUMMARY: {title} ===")
     print(f"Total pitches: {stats['n_pitches']}")
@@ -131,10 +131,10 @@ def print_summary(title: str, stats: dict):
 
     print()
 
-# COMBINED SKELETON
+# Combined Skeleton
 def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) -> None:
     if not CV2_AVAILABLE:
-        print("[warn] opencv-python not installed — skipping combined skeleton.")
+        print("[warn] opencv-python not installed - skipping combined skeleton.")
         return
 
     SIZE = 480
@@ -142,7 +142,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
     joint_names = stats["joint_names"]
     avg_sev = stats["avg_sev"]
 
-    # Load every joint image
+    # Load Every Joint Image
     frames: list = []
     missing = []
     for idx, (name, sev) in enumerate(zip(joint_names, avg_sev)):
@@ -163,16 +163,16 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
 
     valid_frames = [f for f in frames if f is not None]
     if not valid_frames:
-        print("[error] No joint images could be loaded — aborting combined skeleton.")
+        print("[error] No joint images could be loaded - aborting combined skeleton.")
         return
 
-    # Median base = clean grey skeleton (highlights cancel out)
+    # Median Base = Clean Grey Skeleton (Highlights Cancel Out)
     stack = np.stack(valid_frames, axis=0).astype(np.float32)
     base  = np.median(stack, axis=0).astype(np.uint8)
 
     base_hsv = cv2.cvtColor(base, cv2.COLOR_BGR2HSV).astype(np.float32)
 
-    # Composite highlighted regions from each joint frame
+    # Composite Highlighted Regions from Each Joint Frame
     canvas = base.copy()
 
     SAT_THRESHOLD = 40
@@ -201,7 +201,6 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
 
         canvas[highlight_mask] = frame[highlight_mask]
 
-    # Final canvas: dark bg + skeleton + legend + footer
     LEGEND_W = 190
     PAD = 20
     HEADER_H = 46
@@ -230,7 +229,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
         ly = ly_start + idx * row_h
         is_worst = (idx == worst_i and sev != "Normal")
 
-        # Highlight worst joint row with a background band
+        # Highlight Worst Joint Row with a Background Band
         if is_worst:
             cv2.rectangle(final,
                           (lx, ly - 2), (lx + LEGEND_W - PAD, ly + row_h - 4),
@@ -250,7 +249,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
                     (lx + 24, ly + 23),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.30, color, 1, cv2.LINE_AA)
 
-        # flag_rate = fraction of pitches where joint exceeded threshold
+        # flag_rate = Fraction of Pitches where Joint Exceeded Threshold
         n_flagged = int(round(stats["flag_rate"][idx] * stats["n_pitches"]))
         flag_str = f"{stats['flag_rate'][idx] * 100:.0f}% of pitches ({n_flagged}/{stats['n_pitches']})"
         cv2.putText(final, flag_str,
@@ -272,7 +271,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
     cv2.putText(final, acc_str, (PAD, total_h - 12),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.38, (140, 140, 140), 1, cv2.LINE_AA)
 
-    # Worst joint callout banner overlaid at the bottom of the skeleton panel
+    # Worst Joint Callout Banner Overlaid at the Bottom of the Skeleton Panel
     worst_i = stats["worst_i"]
     worst_sev = avg_sev[worst_i]
     if worst_sev != "Normal":
@@ -293,7 +292,7 @@ def build_combined_skeleton(stats: dict, images_folder: Path, out_path: Path) ->
     cv2.imwrite(str(out_path), final)
     print(f"Combined skeleton saved → {out_path}")
 
-# MAIN
+# Main
 def main():
     parser = argparse.ArgumentParser(
         description="Summarise pitch session log(s) produced by live_capture.py"
@@ -317,7 +316,7 @@ def main():
     images_dir = Path(args.images) if args.images else None
 
     if images_dir and not images_dir.is_dir():
-        print(f"[warn] --images folder '{images_dir}' does not exist — skipping visuals.")
+        print(f"[warn] --images folder '{images_dir}' does not exist - skipping visuals.")
         images_dir = None
 
     def save_skeleton_png(stats: dict, label: str, base_path: Path):
@@ -327,14 +326,14 @@ def main():
         print(f"\nBuilding combined skeleton for: {label}")
         build_combined_skeleton(stats, images_dir, out_png)
 
-    # Single session file
+    # Single Session File
     if target.is_file():
         data = load_session(target)
         stats = compute_summary(data["pitches"])
         print_summary(target.name, stats)
         save_skeleton_png(stats, target.name, target)
 
-    # Folder of session files
+    # Folder of Session Files
     elif target.is_dir():
         sessions = load_all_sessions(target)
         print(f"\nFound {len(sessions)} session(s) in {target}")

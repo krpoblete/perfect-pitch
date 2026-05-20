@@ -137,7 +137,7 @@ def _seed_admin(conn):
     )
     conn.commit()
 
-# User helpers
+# User Helpers
 def create_user(
     first_name, last_name, date_of_birth, email, password,
     throwing_hand: str = "RHP"
@@ -242,7 +242,7 @@ def update_user_role(user_id: int, role: str) -> bool:
     conn.close()
     return True
 
-# Profile helpers
+# Profile Helpers
 def update_user_profile(user_id: int, first_name: str, last_name: str) -> bool:
     conn = get_connection()
     conn.execute(
@@ -286,7 +286,7 @@ def update_throwing_hand(user_id: int, hand: str) -> bool:
     conn.close()
     return True
 
-# Guide helpers
+# Guide Helpers
 def get_has_seen_guide(user_id: int) -> bool:
     conn = get_connection()
     row = conn.execute(
@@ -304,7 +304,7 @@ def set_has_seen_guide(user_id: int) -> None:
     conn.commit()
     conn.close()
 
-# Session helpers
+# Session Helpers
 def get_sessions_for_user(user_id):
     conn = get_connection()
     rows = conn.execute(
@@ -322,7 +322,7 @@ def get_session_skeleton_path(session_id: int) -> str | None:
     conn.close()
     return row["path"] if row else None
 
-# Pitch token helpers
+# Pitch Token Helpers
 def get_pitches_used_today(user_id: int) -> int:
     """Return total pitches thrown today (Manila time, UTC+8)."""
     from datetime import datetime, timezone, timedelta
@@ -368,7 +368,7 @@ def get_pitch_token_status(user_id: int) -> dict:
         "locked": used_today >= threshold,
     }
 
-# Dashboard helpers
+# Dashboard Helpers
 def get_dashboard_stats(user_id):
     conn = get_connection()
     row = conn.execute("""
@@ -440,7 +440,7 @@ def get_coach_pitcher_sessions():
     conn.close()
     return rows
 
-# Trend helpers
+# Trend Helpers
 def get_sessions_for_trend(user_id: int) -> list:
     """Pitcher / Admin: all sessions oldest-first for trend charting."""
     conn = get_connection()
