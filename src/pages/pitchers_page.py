@@ -114,7 +114,7 @@ class PitcherTrendDialog(QDialog):
         bl.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         total = len(self._sessions)
-        pitches = sum(s["total_pitch"] or 0 for s in self._sessions)
+        pitches = sum(s["pitch_count"] or 0 for s in self._sessions)
         mistakes = sum(s["mistakes"] or 0 for s in self._sessions)
         avg_acc = (
             sum(float(s["accuracy"] or 0) for s in self._sessions) / total

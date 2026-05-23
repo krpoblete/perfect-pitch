@@ -80,12 +80,12 @@ class StartSessionPage(QWidget, CameraMixin):
         panel_layout.setSpacing(8)
 
         # Stats Cards
-        self.pitch_card    = self._stat_card("Pitch Count", "play-handball", "#4a9eff")
-        self.mistake_card  = self._stat_card("Mistake Count", "x-mark", "#e05555")
+        self.pitch_card = self._stat_card("Pitch Count", "play-handball", "#4a9eff")
+        self.mistake_card = self._stat_card("Mistake Count", "x-mark", "#e05555")
         self.accuracy_card = self._stat_card("Accuracy", "target", "#4ecb71")
 
-        self.pitch_val    = self.pitch_card.findChild(QLabel, "statValue")
-        self.mistake_val  = self.mistake_card.findChild(QLabel, "statValue")
+        self.pitch_val = self.pitch_card.findChild(QLabel, "statValue")
+        self.mistake_val = self.mistake_card.findChild(QLabel, "statValue")
         self.accuracy_val = self.accuracy_card.findChild(QLabel, "statValue")
 
         panel_layout.addWidget(self.pitch_card)
@@ -565,15 +565,17 @@ class StartSessionPage(QWidget, CameraMixin):
         worst_severity = getattr(self._ending_worker, "worst_severity", "") or None
         from src.db import get_connection, _manila_now
 
-        tokens_used = self._pitch_count + self._mistakes
+        pitch_count = self._pitch_count                   # true number of pitches thrown
+        tokens_used = self._pitch_count + self._mistakes  # weighted token cost
+
         conn = get_connection()
         conn.execute(
             """INSERT INTO sessions
-                (user_id, date, total_pitch, mistakes, accuracy, path,
-                 worst_joint, worst_severity)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, date, pitch_count, total_pitch, mistakes, accuracy,
+                 path, worst_joint, worst_severity)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (self.user_id, _manila_now(),
-             tokens_used, self._mistakes, round(accuracy, 2),
+             pitch_count, tokens_used, self._mistakes, round(accuracy, 2),
              skeleton_path, worst_joint, worst_severity),
         )
         conn.commit()

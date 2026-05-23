@@ -79,9 +79,9 @@ class SkeletonViewerDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setObjectName("skeletonViewerDialog")
 
-        self._path     = session["path"] or ""
+        self._path = session["path"] or ""
         self._date_str = _fmt_dt(session["date"])
-        self._pitches  = int(session["total_pitch"])
+        self._pitches = int(session["pitch_count"])
         self._accuracy = float(session["accuracy"] or 0.0)
 
         self._build_ui()
@@ -451,7 +451,7 @@ class DashboardPage(QWidget):
             h.addWidget(date_w, stretch=date_s)
 
             for text, stretch in [
-                (str(session["total_pitch"]), stretches[2]),
+                (str(session["pitch_count"]), stretches[2]),
                 (str(session["mistakes"]), stretches[3]),
                 (acc_str, stretches[4]),
             ]:
@@ -464,7 +464,7 @@ class DashboardPage(QWidget):
             h.addWidget(date_w, stretch=date_s)
 
             for text, stretch in [
-                (str(session["total_pitch"]), stretches[1]),
+                (str(session["pitch_count"]), stretches[1]),
                 (str(session["mistakes"]), stretches[2]),
                 (acc_str, stretches[3]),
             ]:
@@ -603,8 +603,8 @@ class DashboardPage(QWidget):
             rows_sorted = sorted(rows, key=lambda r: r["date"])
             accuracies = [float(r["accuracy"] or 0) for r in rows_sorted]
             avg_acc = sum(accuracies) / len(accuracies)
-            total_pitch = sum(r["total_pitch"] or 0 for r in rows_sorted)
-            total_miss = sum(r["mistakes"]    or 0 for r in rows_sorted)
+            total_pitch = sum(r["pitch_count"] or 0 for r in rows_sorted)
+            total_miss = sum(r["mistakes"] or 0 for r in rows_sorted)
             last_date = _fmt_date_short(rows_sorted[-1]["date"])
 
             # Trend Direction: Compare Last 2 Sessions if Available
@@ -633,7 +633,7 @@ class DashboardPage(QWidget):
                 "name": name,
                 "avg_acc": avg_acc,
                 "acc_color": acc_color,
-                "total_pitch": total_pitch,
+                "pitch_count": total_pitch,
                 "total_miss": total_miss,
                 "sessions": len(rows_sorted),
                 "last_date": last_date,
@@ -703,7 +703,7 @@ class DashboardPage(QWidget):
         stats_row.setSpacing(0)
         for label, value, color in [
             ("Avg Acc", f"{p['avg_acc']:.1f}%", p["acc_color"]),
-            ("Pitches", str(p["total_pitch"]), "#4a9eff"),
+            ("Pitches", str(p["pitch_count"]), "#4a9eff"),
             ("Mistakes", str(p["total_miss"]), "#e05555"),
             ("Sessions", str(p["sessions"]), "#888888"),
         ]:
@@ -741,7 +741,6 @@ class DashboardPage(QWidget):
         from src.db import (get_admin_dashboard_stats, get_dashboard_stats,
                             get_sessions_for_user, get_sessions_for_trend)
         user_stats, session_stats = get_admin_dashboard_stats()
-        personal_stats = get_dashboard_stats(self.user_id)
         sessions = get_sessions_for_user(self.user_id)
         trend = get_sessions_for_trend(self.user_id)
 

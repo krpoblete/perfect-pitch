@@ -82,7 +82,7 @@ class TrendChart(QWidget):
             return
 
         # Data
-        pitches = [int(s.get("total_pitch") or 0) for s in sessions]
+        pitches = [int(s.get("pitch_count") or 0) for s in sessions]
         mistakes = [int(s.get("mistakes") or 0) for s in sessions]
         accuracies = [float(s.get("accuracy") or 0) for s in sessions]
         severities = [s.get("worst_severity") or "Normal" for s in sessions]
@@ -92,6 +92,7 @@ class TrendChart(QWidget):
         r_max = ((max_pitch + r_step - 1) // r_step) * r_step
         r_ticks = list(range(0, r_max + 1, r_step))
 
+        # Grid + Y-Axis Labels
         f_small = QFont()
         f_small.setPointSize(8)
         painter.setFont(f_small)
@@ -101,14 +102,14 @@ class TrendChart(QWidget):
             y = PT + ch - int(ch * frac)
             painter.setPen(QPen(self._GRID_COLOR, 1))
             painter.drawLine(PL, y, PL + cw, y)
-            # Left axis - accuracy
+            # Left Axis - Accuracy
             painter.setPen(self._ACC_COLOR)
             painter.drawText(
                 QRect(0, y - 8, PL - 6, 16),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 f"{int(frac * 100)}%",
             )
-            # Right axis - pitch count
+            # Right Axis - Pitch Count
             painter.setPen(self._LABEL_COLOR)
             painter.drawText(
                 QRect(PL + cw + 4, y - 8, PR - 4, 16),
@@ -116,6 +117,7 @@ class TrendChart(QWidget):
                 str(v),
             )
 
+        # X Positions
         bar_w = max(4, min(24, cw // n - 4))
         inner_pad = bar_w // 2 + 2
         plot_w = cw - 2 * inner_pad
@@ -156,6 +158,7 @@ class TrendChart(QWidget):
             painter.setBrush(color)
             painter.drawEllipse(x - 5, y - 5, 10, 10)
 
+        # X-Axis Date Labels
         painter.setPen(self._LABEL_COLOR)
         painter.setFont(f_small)
         label_step = max(1, n // 8)

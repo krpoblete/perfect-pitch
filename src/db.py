@@ -39,6 +39,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             date TEXT DEFAULT (datetime('now')),
+            pitch_count INTEGER DEFAULT 0,
             total_pitch INTEGER DEFAULT 0,
             mistakes INTEGER DEFAULT 0,
             accuracy REAL DEFAULT 0.0,
@@ -87,6 +88,15 @@ def _migrate(conn):
     ]
     if "path" not in session_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN path TEXT DEFAULT NULL")
+    if "pitch_count" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN pitch_count INTEGER DEFAULT 0")
+        # Back-fill existing rows: pitch_count = total_pitch - mistakes
+        # (reverses the weighted formula: tokens = pitches + mistakes)
+        conn.execute("""
+            UPDATE sessions
+            SET pitch_count = MAX(0, total_pitch - mistakes)
+            WHERE pitch_count = 0
+        """)
     if "worst_joint" not in session_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN worst_joint TEXT DEFAULT NULL")
     if "worst_severity" not in session_cols:
@@ -308,7 +318,9 @@ def set_has_seen_guide(user_id: int) -> None:
 def get_sessions_for_user(user_id):
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM sessions WHERE user_id = ? ORDER BY date DESC",
+        """SELECT id, user_id, date, pitch_count, total_pitch,
+                  mistakes, accuracy, path, worst_joint, worst_severity
+           FROM sessions WHERE user_id = ? ORDER BY date DESC""",
         (user_id,),
     ).fetchall()
     conn.close()
@@ -372,11 +384,11 @@ def get_pitch_token_status(user_id: int) -> dict:
 def get_dashboard_stats(user_id):
     conn = get_connection()
     row = conn.execute("""
-        SELECT 
+        SELECT
             COUNT(*) AS total_sessions,
-            COALESCE(SUM(total_pitch), 0) AS total_pitches,
+            COALESCE(SUM(pitch_count), 0) AS total_pitches,
             COALESCE(SUM(mistakes), 0) AS total_mistakes,
-            COALESCE(AVG(total_pitch), 0) AS avg_pitch,
+            COALESCE(AVG(pitch_count), 0) AS avg_pitch,
             COALESCE(AVG(mistakes), 0) AS avg_mistakes,
             COALESCE(AVG(accuracy), 0.0) AS avg_accuracy
         FROM sessions
@@ -389,16 +401,16 @@ def get_coach_dashboard_stats():
     """Coach: combined stats across all active pitchers."""
     conn = get_connection()
     row = conn.execute("""
-        SELECT 
+        SELECT
             COUNT(DISTINCT s.id) AS total_sessions,
-            COALESCE(SUM(s.total_pitch), 0) AS total_pitches,
+            COALESCE(SUM(s.pitch_count), 0) AS total_pitches,
             COALESCE(SUM(s.mistakes), 0) AS total_mistakes,
-            COALESCE(AVG(s.total_pitch), 0) AS avg_pitch,
+            COALESCE(AVG(s.pitch_count), 0) AS avg_pitch,
             COALESCE(AVG(s.mistakes), 0) AS avg_mistakes,
             COALESCE(AVG(s.accuracy), 0.0) AS avg_accuracy
         FROM sessions s
         INNER JOIN users u ON s.user_id = u.id
-        WHERE u.role = 'Pitcher' AND u.is_active = 1 
+        WHERE u.role = 'Pitcher' AND u.is_active = 1
     """).fetchone()
     conn.close()
     return row
@@ -430,7 +442,8 @@ def get_coach_pitcher_sessions():
     conn = get_connection()
     rows = conn.execute("""
         SELECT
-            s.*,
+            s.id, s.user_id, s.date, s.pitch_count, s.total_pitch,
+            s.mistakes, s.accuracy, s.path, s.worst_joint, s.worst_severity,
             u.first_name || ' ' || u.last_name AS pitcher_name
         FROM sessions s
         INNER JOIN users u ON s.user_id = u.id
@@ -445,7 +458,7 @@ def get_sessions_for_trend(user_id: int) -> list:
     """Pitcher / Admin: all sessions oldest-first for trend charting."""
     conn = get_connection()
     rows = conn.execute("""
-        SELECT date, total_pitch, mistakes, accuracy, worst_joint, worst_severity
+        SELECT date, pitch_count, mistakes, accuracy, worst_joint, worst_severity
         FROM sessions
         WHERE user_id = ?
         ORDER BY date ASC
@@ -458,7 +471,7 @@ def get_coach_sessions_for_trend() -> list:
     conn = get_connection()
     rows = conn.execute("""
         SELECT
-            s.date, s.total_pitch, s.mistakes, s.accuracy,
+            s.date, s.pitch_count, s.mistakes, s.accuracy,
             s.worst_joint, s.worst_severity,
             u.first_name || ' ' || u.last_name AS pitcher_name
         FROM sessions s
