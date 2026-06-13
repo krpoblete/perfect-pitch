@@ -237,10 +237,10 @@ class PitchWorker(QThread):
         landmarker = mp_vision.PoseLandmarker.create_from_options(options)
 
         # Session log
-        from src.config import EXE_DIR
+        from src.config import APP_DATA_DIR
         session_start = datetime.now()
         session_slug = f"session_{session_start.strftime('%Y%m%d_%H%M%S')}_uid{self.user_id}"
-        session_dir = EXE_DIR / "output" / "artifacts" / session_slug
+        session_dir = APP_DATA_DIR / "output" / "artifacts" / session_slug
         session_dir.mkdir(parents=True, exist_ok=True)
         log_path = session_dir / f"{session_slug}.json"
         session_log = []

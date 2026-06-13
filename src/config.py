@@ -4,13 +4,17 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 if getattr(sys, "frozen", False):
-    # Folder containing the .exe
+    # Folder Containing the .exe
     EXE_DIR = Path(sys.executable).resolve().parent
-    # PyInstaller's temp extraction folder
+    # PyInstaller's Temp Extraction Folder
     BUNDLE_DIR = Path(sys._MEIPASS)
+    # Database and Output Go to AppData so the App Can Write Without Elevation
+    APP_DATA_DIR = Path(os.environ.get("APPDATA", EXE_DIR)) / "PerfectPitch"
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 else:
     EXE_DIR = Path(__file__).resolve().parent.parent
-    BUNDLE_DIR = Path(__file__).resolve().parent.parent
+    BUNDLE_DIR = EXE_DIR
+    APP_DATA_DIR = EXE_DIR  # dev mode: Write Alongside Project Root as Before
 
 # Load .env from the .exe folder
 load_dotenv(EXE_DIR / ".env")
@@ -26,7 +30,7 @@ POSE_MODEL_PATH = str(EXE_DIR / "pose_landmarker_heavy.task")
 
 # Database
 DB_NAME = os.getenv("DB_NAME", "perfect_pitch.db")
-DB_PATH = str(EXE_DIR / DB_NAME)
+DB_PATH = str(APP_DATA_DIR / DB_NAME)
 
 # App info
 APP_NAME = os.getenv("APP_NAME", "Perfect Pitch")

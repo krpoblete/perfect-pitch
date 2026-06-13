@@ -28,8 +28,6 @@ output/
 
 # Build artifacts
 *.egg-info/
+installer/
 dist/
 build/
-
-# Dev tools
-check_db.py
