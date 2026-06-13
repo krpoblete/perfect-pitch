@@ -39,7 +39,12 @@ def main():
     for styles_file in styles_files:
         path = os.path.join(styles_dir, styles_file)
         with open(path, 'r', encoding='utf-8') as f:
-            combined += f.read() + "\n"
+            content = f.read()
+        content = content.replace(
+            "url(assets/",
+            f"url({ASSETS_DIR.replace(os.sep, '/')}/",
+        )
+        combined += content + "\n"
     app.setStyleSheet(combined)
 
     # Initialize Database

@@ -1,18 +1,18 @@
-# Virtual environment
+# Virtual Environment
 venv/
 
-# Python cache
+# Python Cache
 __pycache__/
 *.pyc
 *.pyo
 
-# Environment variables
+# Environment Variables
 .env
 
 # Database
 *.db
 
-# Model & ML binaries
+# Model and ML Binaries
 models/
 pose_landmarker_heavy.task
 *.pt
@@ -20,13 +20,13 @@ pose_landmarker_heavy.task
 *.npy
 *.task
 
-# Output folder
+# Output Folder
 output/
 
 # IDE 
 .vscode/
 
-# Build artifacts
+# Build Artifacts
 *.egg-info/
 installer/
 dist/
