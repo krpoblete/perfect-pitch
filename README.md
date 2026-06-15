@@ -12,17 +12,20 @@ A desktop application for analyzing and managing baseball pitching sessions, bui
 - **Show/hide password** — Toggle visibility on all password fields across the auth window
 - **ML-powered pose analysis** — MediaPipe Pose + LSTM autoencoder evaluates pitching form per pitch
 - **Joint risk scoring** — 9 joints tracked (elbows, shoulders, hips, knees, pelvis) with 5 severity levels: Normal, Elevated, Moderate, High, Critical
-- **Live session capture** — Real-time camera feed with skeleton overlay, per-pitch verdict, and audio cues
+- **Weighted pitch tokens** — Incorrect Form pitches deduct 2 tokens from the daily pool; Correct Form pitches deduct 1, reflecting the greater physical strain of poor mechanics
+- **Live session capture** — Real-time camera feed with skeleton overlay, per-pitch verdict, early joint risk alerts, and audio cues
 - **Session summary** — Accuracy, pitch count, mistake count, worst joint callout, and combined skeleton PNG
-- **Dashboard** — Per-user performance overview across all sessions with history and skeleton viewer
-- **Pitcher management** — Coaches can view, search, and manage their assigned pitchers
+- **Performance trend chart** — Cross-session line chart showing accuracy, mistakes, and pitch count over time; Coach view aggregates all pitchers; severity-colored dots mark the worst joint per session
+- **Dashboard** — Per-user performance overview across all sessions with history table and skeleton viewer
+- **Pitcher management** — Coaches can view, search, manage their assigned pitchers, and view a per-pitcher trend dialog
 - **User management** — Admins can view all users and assign roles
-- **Account settings** — Users can update their profile, throwing hand, and pitch threshold (age-gated via USA Baseball limits)
+- **Account settings** — Users can update their profile, throwing hand, and pitch threshold (age-gated via USA Baseball limits); spinbox shows remaining pitches for the day, not the raw stored value
 - **Guided tour** — Role-aware interactive overlay that walks new users through the app on first login
 - **Soft delete & retention** — Deactivated accounts are purged after 90 days (Manila time, UTC+8)
 - **Dark theme** — Fully styled dark UI using PyQt6 and modular QSS stylesheets
 - **Frameless windows** — Custom minimize/close controls with themed confirmation dialogs
 - **Toast notifications** — Bottom-left toasts for errors, success, warnings, and info
+- **Windows installer** — Inno Setup installer (`perfect_pitch.iss`) produces `PerfectPitch_Setup.exe` for clean end-user installation with Start Menu entry, Desktop shortcut, and uninstaller
 
 ---
 
@@ -37,7 +40,7 @@ perfect-pitch/
 │   ├── sounds/
 │   │   ├── alert.mp3                   # Played on Incorrect Form verdict
 │   │   └── setgo.mp3                   # Played at session start
-│   ├── app_icon.ico
+│   ├── app_icon.ico                    # Multi-size app icon (16–256px)
 │   └── side-banner.png
 ├── src/
 │   ├── pages/
@@ -48,8 +51,8 @@ perfect-pitch/
 │   │   │   └── forgot_password_page.py
 │   │   ├── account_settings_page.py
 │   │   ├── camera_manager.py           # Camera probe, combo, preview, and guide card logic
-│   │   ├── dashboard_page.py
-│   │   ├── pitchers_page.py
+│   │   ├── dashboard_page.py           # Role-aware dashboard with performance trend chart
+│   │   ├── pitchers_page.py            # Pitcher roster table + per-pitcher trend dialog
 │   │   ├── session_summary.py          # Post-session summary dialog with skeleton viewer
 │   │   ├── start_session_page.py
 │   │   └── users_page.py
@@ -77,19 +80,23 @@ perfect-pitch/
 │   │   ├── hand_selector.py            # Reusable RHP / LHP toggle widget
 │   │   ├── password_input.py           # Password field with show/hide toggle
 │   │   ├── tour_overlay.py             # Guided-tour overlay with animated spotlight
+│   │   ├── trend_chart.py              # Shared QPainter trend chart (accuracy, mistakes, pitch count)
 │   │   └── window_buttons.py           # Minimize + close buttons for frameless windows
 │   ├── windows/
 │   │   ├── auth_window.py              # Frameless auth window (login / signup / forgot)
 │   │   └── main_window.py              # Frameless main window with sidebar nav
 │   ├── analyze.py                      # LSTM autoencoder model definition, feature extraction, scoring
-│   ├── config.py                       # Paths, env vars, app metadata
-│   ├── db.py                           # SQLite schema, migrations, CRUD helpers
+│   ├── config.py                       # Paths, env vars, app metadata; AppData routing for frozen builds
+│   ├── db.py                           # SQLite schema, migrations, CRUD helpers, trend queries
 │   ├── live_capture.py                 # MediaPipe pose loop, skeleton drawing, session JSON writer
 │   ├── pitch_summary.py                # CLI tool — summarizes session JSON(s) and builds combined skeleton PNG
 │   └── pitch_worker.py                 # QThread wrapper around live_capture; emits Qt signals
 ├── .env
 ├── .gitignore
 ├── main.py
+├── perfect_pitch.iss                   # Inno Setup installer script
+├── perfect_pitch.spec                  # PyInstaller build spec
+├── version_info.txt                    # Windows version resource (Task Manager process name)
 └── requirements.txt
 ```
 
@@ -98,7 +105,7 @@ perfect-pitch/
 ## Requirements
 
 - Python 3.11+
-- Windows (frameless window support via `pywin32` and `PyQt6-Frameless-Window`)
+- Windows 10 or 11 (frameless window support via `pywin32` and `PyQt6-Frameless-Window`)
 - A webcam or OBS Virtual Camera (DirectShow-compatible)
 - CUDA-capable GPU recommended for real-time inference (falls back to CPU)
 
@@ -106,21 +113,26 @@ perfect-pitch/
 
 ## Installation (End Users)
 
-If you just want to run Perfect Pitch without setting up a development environment, use the pre-built release from Google Drive.
+If you just want to run Perfect Pitch without setting up a development environment, use the pre-built installer from Google Drive.
 
 ### 1. Download the latest release
 
-Go to the [**PerfectPitch - Download**](https://drive.google.com/drive/folders/1BJ7cG4cKgKWUxfNPDsFahZPtDnHK8tWS?usp=sharing) folder on Google Drive and download `PerfectPitch.zip`. This archive is the full app with the ML files (`models/` and `pose_landmarker_heavy.task`) are already bundled inside, so no extra steps are needed.
+Go to the [**PerfectPitch - Download**](https://drive.google.com/drive/folders/1BJ7cG4cKgKWUxfNPDsFahZPtDnHK8tWS?usp=sharing) folder on Google Drive and download `PerfectPitch_Setup.exe`.
 
-### 2. Extract the zip
+### 2. Run the installer
 
-Extract the zip anywhere on your machine (e.g. `C:\Program Files\PerfectPitch\`). Keep all files together since the `.exe` depends on the folders alongside it.
+Double-click `PerfectPitch_Setup.exe`. The installer:
+- Installs to `%LocalAppData%\Programs\PerfectPitch\` (no admin rights required)
+- Creates a Desktop shortcut and a Start Menu entry
+- Registers an uninstaller in Add/Remove Programs
 
 ### 3. Launch the app
 
-Double-click `PerfectPitch.exe`. On first launch the database is created automatically and seeded with a default Admin account. See [Default Admin Account](#default-admin-account) below.
+Open Perfect Pitch from the Desktop shortcut or Start Menu. On first launch the database is created automatically and seeded with a default Admin account. See [Default Admin Account](#default-admin-account) below.
 
-> **Windows SmartScreen** may warn about an unrecognized app. Click **More info → Run anyway** to proceed.
+> **Windows SmartScreen** may warn about an unrecognized app. Click **More info → Run anyway** to proceed. The app is not code-signed; this warning is expected for unsigned executables.
+
+> **User data location** — The database (`perfect_pitch.db`) and all session output files are stored in `%AppData%\PerfectPitch\`, not in the install folder. This ensures the app can always write its data without requiring elevated permissions.
 
 ---
 
@@ -162,11 +174,11 @@ APP_NAME=Perfect Pitch
 APP_VERSION=1.0.0
 ```
 
-> This is optional for local development because all three values have hardcoded fallback defaults in `config.py`. It is included as a convenience for future developers who may want to swap the database name or app metadata without touching source code.
+> This is optional for local development because all three values have hardcoded fallback defaults in `config.py`.
 
 ### 5. Add ML model files
 
-The heavy and sensitive files are stored in the [**PerfectPitch - Dev Files**](https://drive.google.com/drive/folders/15rqmS4fGAuyg3RTfMKbMtbCnNChKaRiD?usp=sharing) folder on Google Drive (private). Download them individually and place each in the project root where they are excluded from version control.
+The heavy and sensitive files are stored in the [**PerfectPitch - Dev Files**](https://drive.google.com/drive/folders/15rqmS4fGAuyg3RTfMKbMtbCnNChKaRiD?usp=sharing) folder on Google Drive (private). Download them individually and place each in the project root.
 
 | File | Purpose |
 |------|---------|
@@ -179,6 +191,37 @@ The heavy and sensitive files are stored in the [**PerfectPitch - Dev Files**](h
 ```powershell
 python main.py
 ```
+
+---
+
+## Building a Release
+
+### PyInstaller (required first)
+
+```powershell
+pyinstaller perfect_pitch.spec
+```
+
+Output: `dist\PerfectPitch\`. After building, copy the ML files into the output folder:
+
+```powershell
+copy pose_landmarker_heavy.task dist\PerfectPitch\
+xcopy models dist\PerfectPitch\models\ /E /I
+```
+
+### Inno Setup installer (optional)
+
+Requires [Inno Setup 6](https://jrsoftware.org/isdl.php) to be installed.
+
+Open `perfect_pitch.iss` in Inno Setup Compiler and press **F9**, or run:
+
+```powershell
+iscc perfect_pitch.iss
+```
+
+Output: `installer\PerfectPitch_Setup.exe`
+
+> **Do not commit `dist\` or `installer\` to version control** — both are build artifacts. Distribute `PerfectPitch_Setup.exe` via Google Drive.
 
 ---
 
@@ -202,16 +245,36 @@ Perfect Pitch uses a two-stage pipeline to evaluate pitching mechanics:
 1. **Pose estimation** — MediaPipe Pose Landmarker (`pose_landmarker_heavy.task`) extracts 33 body landmarks per frame at up to 1080p.
 2. **Feature extraction** — Joint angles are computed for 9 key joints across a 60-frame window and resampled/smoothed.
 3. **LSTM Autoencoder** — Trained on correct-form pitches. At inference, reconstruction error (MSE) is compared against a learned threshold. Pitches exceeding the threshold are flagged as **Incorrect Form**.
-4. **Joint risk scoring** — Per-joint risk scores are divided by individual thresholds and mapped to severity levels (Normal → Critical). The worst joint is highlighted in the session summary.
+4. **Joint risk scoring** — Per-joint risk scores are divided by individual thresholds and mapped to severity levels (Normal → Critical). The worst joint is highlighted in the session summary and stored in the database for trend charting.
 5. **Skeleton visualization** — A combined skeleton PNG is generated by compositing the 9 per-joint severity images from `assets/skeletons/`.
 
 The model bundle `(model, scaler, threshold, joint_thresholds)` is loaded once at startup and passed through the window chain to avoid reloading between sessions.
 
 ---
 
+## Pitch Token System
+
+Each pitcher has a daily pitch pool governed by three values:
+
+| Value | Source | Meaning |
+|---|---|---|
+| `recommended_cap` | `pitch_rules.get_pitch_limit(dob)` | USA Baseball age-appropriate hard ceiling — never stored |
+| `pitch_threshold` | `users.pitch_threshold` in DB | User's saved personal daily limit |
+| `used_today` | `SUM(sessions.total_pitch)` for today | Tokens already consumed today |
+
+**Token cost per pitch:**
+- Correct Form → deducts **1 token**
+- Incorrect Form → deducts **2 tokens** (reflects greater physical strain)
+
+`sessions.total_pitch` stores the weighted token cost (`pitch_count + mistakes`). `sessions.pitch_count` stores the true number of pitches thrown and is used for all display purposes (Dashboard, history table, trend chart).
+
+The Account Settings spinbox displays **remaining pitches** (`pitch_threshold − used_today`), not the raw stored value. On save, the absolute threshold is reconstructed as `spinbox_value + used_today`, capped at `recommended_cap`. The spinbox replenishes automatically at midnight Manila time (UTC+8) via a 60-second QTimer.
+
+---
+
 ## Pitch Count Limits
 
-Age-gated pitch thresholds follow USA Baseball guidelines and are enforced via `src/utils/pitch_rules.py` — the source for all pitch limit logic across the app.
+Age-gated pitch thresholds follow USA Baseball guidelines and are enforced via `src/utils/pitch_rules.py`.
 
 | Age Range    | Daily Limit |
 |--------------|-------------|
@@ -224,6 +287,24 @@ Pitchers' thresholds are set automatically on signup based on their date of birt
 
 ---
 
+## Performance Trend Chart
+
+The Dashboard includes a cross-session performance trend chart rendered with pure QPainter (no matplotlib dependency). It displays:
+
+- **Bars** — true pitch count per session (right Y-axis, integer-snapped scale)
+- **Green line** — accuracy percentage (left Y-axis, 0–100%)
+- **Red dashed line** — mistake count per session
+- **Dots** — one per session on the accuracy line, colored by worst joint severity on the Dashboard (plain green in the per-pitcher trend dialog)
+
+Implemented in `src/widgets/trend_chart.py` as a shared `TrendChart` widget used by both `dashboard_page.py` and `pitchers_page.py`.
+
+**Role behaviour:**
+- **Pitcher** — personal sessions, plain green dots
+- **Coach** — combined sessions across all active pitchers, severity-colored dots; per-pitcher detail via "View →" on pitcher overview cards
+- **Admin** — personal sessions (for Start Session debugging), severity-colored dots
+
+---
+
 ## Severity Levels
 
 | Level    | Ratio (risk / threshold) | Color    |
@@ -233,6 +314,8 @@ Pitchers' thresholds are set automatically on signup based on their date of birt
 | Moderate | 1.25 – 1.5               | Orange   |
 | High     | 1.5 – 2.0                | Orange+  |
 | Critical | ≥ 2.0                    | Red      |
+
+The worst joint per session is stored in `sessions.worst_joint` and `sessions.worst_severity` and used to color trend chart dots on the Dashboard.
 
 ---
 
@@ -279,6 +362,7 @@ Names entered during signup and profile updates follow these rules:
 | `numpy`                     | Numerical computation                      |
 | `pandas`                    | Feature tabulation                         |
 | `scikit-learn`              | Scaler loading                             |
+| `matplotlib`                | Required internally by MediaPipe           |
 | `sounddevice`               | Audio playback (alert / set-go sounds)     |
 | `soundfile`                 | MP3/WAV decoding for sounddevice           |
 
@@ -292,4 +376,5 @@ The following are intentionally excluded from version control:
 - `.env`, `*.db`
 - `models/`, `pose_landmarker_heavy.task`, `*.pt`, `*.pkl`, `*.npy`, `*.task`
 - `output/`
-- `.vscode/`, `dist/`, `build/`
+- `installer/`, `dist/`, `build/`
+- `.vscode/`
